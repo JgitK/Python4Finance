@@ -41,10 +41,8 @@ cat("\n--- First page preview ---\n")
 cat(substr(pdf_text[1], 1, 500), "\n")
 cat("...\n\n")
 
-# CUSTOMIZE THIS SECTION based on your PDF structure
-# This is a generic parser - you'll need to adjust based on actual PDF format
-
-# Example: If PDF has tabular data with CUSIP and Security Name
+# Parse FT Wilshire PDF with specific format:
+# Security ID | Sec Name | Quantity | Current Price | Cost | Market Value (Local) | Market Value (Base)
 parse_wilshire_pdf <- function(pdf_pages) {
 
   # Combine all pages
@@ -53,32 +51,40 @@ parse_wilshire_pdf <- function(pdf_pages) {
   # Split into lines
   lines <- strsplit(all_text, "\n")[[1]]
 
-  # Remove empty lines and trim whitespace
-  lines <- str_trim(lines[lines != ""])
+  # CUSIP pattern (9-character alphanumeric at start of line)
+  cusip_pattern <- "^([0-9A-Z]{9})\\s+"
 
-  # CUSTOMIZE: Extract CUSIP pattern (9-character alphanumeric)
-  # Pattern for CUSIP: 6 alphanumeric + 2 alphanumeric + 1 check digit
-  cusip_pattern <- "[0-9A-Z]{9}"
-
-  # Extract lines containing CUSIPs
+  # Filter lines that start with a CUSIP
   data_lines <- lines[str_detect(lines, cusip_pattern)]
 
-  # CUSTOMIZE: Parse based on your PDF structure
-  # Example assuming format: "SECURITY NAME    CUSIP"
-  # You may need to adjust this regex based on actual PDF layout
-
+  # Parse each line
   parsed_data <- data.frame(
     raw_line = data_lines,
     stringsAsFactors = FALSE
   ) %>%
     mutate(
-      # Extract CUSIP (9 characters)
-      cusip = str_extract(raw_line, cusip_pattern),
-      # Extract everything before CUSIP as security name
-      security_name = str_trim(str_remove(raw_line, cusip_pattern))
+      # Extract CUSIP (first 9 characters)
+      cusip = str_extract(raw_line, "^[0-9A-Z]{9}"),
+
+      # Remove CUSIP from line to get remaining fields
+      remainder = str_trim(str_remove(raw_line, "^[0-9A-Z]{9}")),
+
+      # Extract security name (everything before the first numeric field)
+      # Security name ends when we hit multiple spaces followed by a number
+      security_name = str_trim(str_extract(remainder, "^[^0-9]+(?=\\s+[0-9])")),
+
+      # If security name extraction fails, use a simpler approach
+      # (take everything up to 2+ consecutive spaces followed by digits)
+      security_name = ifelse(
+        is.na(security_name) | security_name == "",
+        str_trim(str_extract(remainder, "^.+?(?=\\s{2,}[0-9])")),
+        security_name
+      )
     ) %>%
     filter(!is.na(cusip)) %>%
-    select(security_name, cusip) %>%
+    select(cusip, security_name) %>%
+    # Clean up security names (remove extra whitespace)
+    mutate(security_name = str_squish(security_name)) %>%
     distinct()
 
   return(parsed_data)
