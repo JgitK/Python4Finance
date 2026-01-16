@@ -8,10 +8,12 @@
 if (!require("dplyr", quietly = TRUE)) install.packages("dplyr")
 if (!require("purrr", quietly = TRUE)) install.packages("purrr")
 if (!require("lubridate", quietly = TRUE)) install.packages("lubridate")
+if (!require("tidyr", quietly = TRUE)) install.packages("tidyr")
 
 library(dplyr)
 library(purrr)
 library(lubridate)
+library(tidyr)
 
 # ============================================================================
 # CONFIGURATION
