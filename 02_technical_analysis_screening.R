@@ -280,10 +280,10 @@ top_20_overall <- performance_data %>%
   head(20)
 
 cat("\n  Top 20 Performers (All Sectors):\n")
-print(top_20_overall %>%
-        select(ticker, sector, cumulative_return_1y, sharpe_ratio, daily_volatility) %>%
-        mutate(cumulative_return_1y = sprintf("%.2f%%", 100 * cumulative_return_1y)),
-      n = 20)
+top_20_display <- top_20_overall %>%
+  select(ticker, sector, cumulative_return_1y, sharpe_ratio, daily_volatility) %>%
+  mutate(cumulative_return_1y = sprintf("%.2f%%", 100 * cumulative_return_1y))
+print(as.data.frame(top_20_display), row.names = FALSE)
 
 # Summary statistics for candidates
 cat("\n  Candidate Portfolio Statistics:\n")
