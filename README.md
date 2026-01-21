@@ -1,386 +1,316 @@
 # 📊 Portfolio Strategy Framework
 
-**Systematic Long-Term Investment Strategy with Comprehensive Validation**
+**Systematic Long-Term Investment Strategy with R and Python Implementations**
 
-A complete end-to-end portfolio optimization framework that combines technical analysis, correlation-based diversification, Modern Portfolio Theory, and robust validation techniques.
-
----
-
-## 🎯 What This Framework Does
-
-This framework helps you:
-
-1. **Screen stocks** using technical indicators (RSI, MACD, Ichimoku)
-2. **Diversify** by selecting low-correlation stocks
-3. **Optimize** portfolio weights to maximize Sharpe ratio
-4. **Backtest** on historical data
-5. **Validate** your strategy's robustness across multiple dimensions
-
-The key insight: It tests if your **PROCESS** is robust, not just one lucky portfolio.
+This repository contains complete implementations of a portfolio optimization framework in both **R** (primary) and **Python** (alternative).
 
 ---
 
-## 📦 Components
+## 📁 Repository Structure
 
-### Core Modules
-
-| Module | Description |
-|--------|-------------|
-| `module_1_data_collection.py` | Downloads historical stock data (yfinance) |
-| `module_2_technical_screening.py` | Filters stocks using RSI, MACD, Ichimoku |
-| `module_3_correlation_analysis.py` | Selects low-correlation stocks for diversification |
-| `module_5_portfolio_optimization.py` | Optimizes weights using Modern Portfolio Theory |
-| `module_6_backtest_engine.py` | Backtests portfolios with realistic assumptions |
-
-### Validation & Testing
-
-| File | Description |
-|------|-------------|
-| `validation_framework.py` | Multi-timeframe, walk-forward, Monte Carlo validation |
-| `run_complete_strategy.py` | Integrates all modules, runs full validation |
-| `test_strategy_synthetic.py` | Tests workflow with synthetic data (no API needed) |
-| `demo_validation.py` | Demonstration of validation framework |
-
-### User Interface
-
-| File | Description |
-|------|-------------|
-| `app.py` | Modern Streamlit dashboard with interactive charts |
-| `STREAMLIT_GUIDE.md` | User guide for the UI |
+```
+Python4Finance/
+├── R Workflow (Primary - Use This!)
+│   ├── 01_download_stock_data.R
+│   ├── 02_technical_analysis_screening.R
+│   ├── 03_correlation_analysis.R
+│   ├── 04_ichimoku_validation.R
+│   ├── 05_portfolio_optimization.R
+│   ├── 06_backtest_validation.R
+│   ├── utils_data_loader.R
+│   ├── diagnose_backtest.R
+│   └── MODULE_*_README.md (documentation)
+│
+├── python_implementation/ (Alternative Implementation)
+│   ├── module_*.py (Python modules)
+│   ├── run_complete_strategy.py
+│   ├── app.py (Streamlit UI)
+│   ├── validation_framework.py
+│   └── requirements.txt
+│
+└── Data Files
+    ├── Wilshire-5000-Stocks.csv
+    ├── stock_sectors.csv
+    └── Various exchange data files
+```
 
 ---
 
-## 🚀 Quick Start
+## 🎯 Quick Start with R
 
-### 1. Install Dependencies
+### 1. Install R Packages
+
+```R
+install.packages(c(
+  "quantmod",      # Stock data download
+  "TTR",           # Technical indicators
+  "tidyverse",     # Data manipulation
+  "PerformanceAnalytics",  # Portfolio metrics
+  "PortfolioAnalytics",    # Optimization
+  "ROI",           # Optimization engine
+  "ROI.plugin.glpk"  # Solver
+))
+```
+
+### 2. Run the Workflow
+
+Execute the modules in sequence:
 
 ```bash
+# 1. Download stock data (creates stocks/ directory)
+Rscript 01_download_stock_data.R
+
+# 2. Screen stocks using technical analysis
+Rscript 02_technical_analysis_screening.R
+
+# 3. Select low-correlation stocks
+Rscript 03_correlation_analysis.R
+
+# 4. Validate with Ichimoku signals
+Rscript 04_ichimoku_validation.R
+
+# 5. Optimize portfolio weights
+Rscript 05_portfolio_optimization.R
+
+# 6. Backtest the results
+Rscript 06_backtest_validation.R
+```
+
+### 3. Check Results
+
+Results are saved in the `analysis/` directory:
+- `technical_candidates.rds` - Stocks passing technical screening
+- `low_correlation_candidates.rds` - Diversified stock selection
+- `ichimoku_validated.rds` - Final validated candidates
+- `final_portfolio.rds` - **Your optimized portfolio!**
+- Backtest results and performance metrics
+
+---
+
+## 📖 R Workflow Overview
+
+### Module 1: Download Stock Data
+- Loads Wilshire 5000 universe
+- Downloads 2 years of historical data using `quantmod`
+- Caches data locally for performance
+- **Output:** `stocks/*.rds` files
+
+### Module 2: Technical Screening
+- Calculates RSI, MACD, Ichimoku indicators
+- Filters for bullish signals
+- Removes weak momentum stocks
+- **Output:** ~50-200 candidates
+
+### Module 3: Correlation Analysis
+- Calculates correlation matrix
+- Selects low-correlation stocks (diversification)
+- Greedy algorithm for optimal selection
+- **Output:** ~10-20 stocks
+
+### Module 4: Ichimoku Validation
+- Validates bullish Ichimoku cloud signals
+- Checks price above cloud, TK cross, cloud color
+- **Output:** ~10-15 validated stocks
+
+### Module 5: Portfolio Optimization
+- Calculates optimal weights using Modern Portfolio Theory
+- Maximizes Sharpe ratio
+- Generates efficient frontier
+- **Output:** Optimized portfolio with weights
+
+### Module 6: Backtest Validation
+- Tests portfolio on historical data
+- Calculates Sharpe ratio, returns, drawdown
+- Compares to S&P 500 benchmark
+- **Output:** Performance metrics and validation
+
+---
+
+## 📚 Documentation
+
+Each R module has detailed documentation:
+
+| File | Description |
+|------|-------------|
+| `MODULE_1_README.md` | Stock data acquisition system |
+| `MODULE_2_README.md` | Technical analysis screening |
+| `MODULE_3_README.md` | Correlation analysis & diversification |
+| `MODULE_4_README.md` | Ichimoku technical validation |
+| `MODULE_5_README.md` | Portfolio optimization |
+| `MODULE_6_README.md` | Backtesting & validation |
+| `PORTFOLIO_OPTIMIZATION_README.md` | Comprehensive MPT guide |
+
+---
+
+## 🐍 Python Implementation (Optional)
+
+If you prefer Python, there's a complete alternative implementation in `python_implementation/`:
+
+```bash
+cd python_implementation/
 pip install -r requirements.txt
-```
-
-**Required packages:**
-- pandas
-- numpy
-- scipy
-- scikit-learn
-- yfinance
-- streamlit
-- plotly
-
-### 2. Test the Workflow (No Internet Required)
-
-```bash
-python test_strategy_synthetic.py
-```
-
-This runs the complete workflow with synthetic data to verify everything works.
-
-### 3. Run with Real Data
-
-```bash
-# Single strategy instance
 python run_complete_strategy.py
-
-# Full validation (multi-timeframe, walk-forward, Monte Carlo)
-python run_complete_strategy.py --validate
 ```
 
-### 4. Launch the UI
+Features:
+- Same workflow as R version
+- Modern Streamlit UI (`streamlit run app.py`)
+- Comprehensive validation framework
+- Multi-timeframe, walk-forward, Monte Carlo testing
 
-```bash
-streamlit run app.py
-```
-
-Then navigate to the **🔬 Robustness Testing** page to see validation results.
+See `python_implementation/README.md` for details.
 
 ---
 
-## 🔬 Validation Methodology
+## 🔧 Utility Scripts
 
-This framework validates your strategy across **three critical dimensions**:
-
-### 1. Multi-Timeframe Analysis
-Tests if the strategy works across different time periods:
-- 6 months
-- 1 year
-- 2 years
-- 5 years
-- 10 years
-
-**Purpose:** Detect if strategy is overfitted to recent market conditions.
-
-### 2. Walk-Forward Validation
-The gold standard for testing robustness:
-
-```
-Window 1: Train 2020-2021 → Test 2022 → Sharpe 1.2
-Window 2: Train 2021-2022 → Test 2023 → Sharpe 0.9
-Window 3: Train 2022-2023 → Test 2024 → Sharpe 1.1
-```
-
-**Purpose:** Prove the PROCESS consistently works, not just one portfolio instance.
-
-### 3. Monte Carlo Parameter Sensitivity
-Runs 50-500 simulations with randomized parameters:
-- RSI threshold: 60-80
-- Correlation cutoff: 0.3-0.5
-- Number of stocks: 8-12
-
-**Purpose:** Ensure strategy isn't overfitted to "magic number" parameters.
-
-### Robustness Score (0-100)
-
-The framework combines all three tests into a single score:
-
-- **70-100**: STRONG - Ready for live trading
-- **50-70**: MODERATE - Needs refinement
-- **30-50**: WEAK - Significant improvement needed
-- **0-30**: FAIL - Reconsider approach
+### R Utilities
+- `utils_data_loader.R` - Helper functions for loading stock data
+- `diagnose_backtest.R` - Diagnostic tool for data availability
+- `load_wilshire_data.R` - Wilshire 5000 index loader
+- `add_sector_data.R` - Sector classification enrichment
 
 ---
 
-## 📖 Workflow Overview
+## 📊 Expected Results
 
-### Complete Strategy Pipeline
-
-```
-1. Data Collection
-   ├─ Load stock universe (Wilshire 5000 / S&P 500)
-   └─ Download 2 years of historical data
-
-2. Technical Screening
-   ├─ Calculate RSI, MACD, Ichimoku
-   ├─ Filter bullish signals
-   └─ ~50-200 candidates pass
-
-3. Correlation Analysis
-   ├─ Calculate correlation matrix
-   ├─ Select low-correlation stocks
-   └─ ~10-15 stocks selected
-
-4. Portfolio Optimization
-   ├─ Calculate expected returns & covariance
-   ├─ Maximize Sharpe ratio
-   └─ Optimal weights calculated
-
-5. Backtesting
-   ├─ Test on 6mo, 1yr, 2yr, 5yr, 10yr
-   ├─ Calculate Sharpe, returns, drawdown
-   └─ Compare to benchmark (S&P 500)
-
-6. Validation
-   ├─ Multi-timeframe consistency check
-   ├─ Walk-forward analysis
-   ├─ Monte Carlo parameter sensitivity
-   └─ Generate robustness score
-```
-
----
-
-## 🎨 Streamlit UI Features
-
-The interactive dashboard includes:
-
-- **📊 Multi-Timeframe Comparison**: Visual comparison across time periods
-- **🔄 Walk-Forward Results**: Performance across rolling windows
-- **🎲 Monte Carlo Distribution**: Histogram of parameter sensitivity
-- **📈 Interactive Charts**: Plotly charts with zoom, pan, export
-- **🎯 Robustness Gauge**: 0-100 score with color-coded assessment
-- **📄 Export Reports**: Download full validation reports
-
----
-
-## 📋 Example Output
-
-```
-======================================================================
-PORTFOLIO STRATEGY VALIDATION REPORT
-======================================================================
-
-🎯 ROBUSTNESS SCORE: 78.5/100
-📊 RECOMMENDATION: STRONG - Ready for live trading
-
-----------------------------------------------------------------------
-MULTI-TIMEFRAME ANALYSIS
-----------------------------------------------------------------------
-6mo        | Sharpe:   1.45 | Return:   8.2% | MaxDD:  -12.3%
-1yr        | Sharpe:   1.32 | Return:  14.5% | MaxDD:  -18.5%
-2yr        | Sharpe:   1.28 | Return:  28.7% | MaxDD:  -22.1%
-5yr        | Sharpe:   1.41 | Return:  82.4% | MaxDD:  -28.4%
-
-----------------------------------------------------------------------
-WALK-FORWARD ANALYSIS
-----------------------------------------------------------------------
-WF_Window_1     | Sharpe:   1.25 | Return:   12.3%
-WF_Window_2     | Sharpe:   1.08 | Return:    9.7%
-WF_Window_3     | Sharpe:   1.35 | Return:   15.2%
-WF_Window_4     | Sharpe:   1.42 | Return:   16.8%
-
-Average Walk-Forward Sharpe: 1.28
-
-----------------------------------------------------------------------
-MONTE CARLO ANALYSIS
-----------------------------------------------------------------------
-Simulations run:        100
-Profitable:             86.0%
-Positive Sharpe:        84.0%
-Average Sharpe:         1.15
-Sharpe 25th-75th %ile:  0.89 to 1.42
-```
-
----
-
-## 🎓 Key Concepts
-
-### Why Multi-Timeframe Analysis?
-
-Different time ranges capture different market dynamics:
-
-| Timeframe | What It Captures |
-|-----------|------------------|
-| 6 months | Recent momentum, current regime |
-| 1-2 years | Business cycles, seasonal patterns |
-| 5-10 years | Full market cycles, long-term trends |
-
-**Robust strategies work across ALL timeframes.**
-
-### Why Walk-Forward Validation?
-
-Traditional backtesting tests your portfolio on the same data used to create it (look-ahead bias).
-
-Walk-forward validation:
-- Trains on historical data
-- Tests on unseen future data
-- Rolls forward through time
-- **Tests the PROCESS, not just one instance**
-
-### Why Monte Carlo?
-
-If your strategy only works with very specific parameters (e.g., RSI=35 but fails at RSI=36), it's overfitted.
-
-Monte Carlo tests 100s of parameter combinations to ensure robustness.
-
----
-
-## 🛠️ Customization
-
-### Adjust Strategy Parameters
-
-Edit `run_complete_strategy.py`:
-
-```python
-params = {
-    'universe': 'sp500',  # or 'wilshire5000'
-    'rsi_threshold': 70,  # RSI overbought threshold
-    'correlation_threshold': 0.4,  # Max allowed correlation
-    'target_stocks': 10,  # Number of stocks in portfolio
-    'risk_free_rate': 0.02  # Risk-free rate for Sharpe
-}
-```
-
-### Modify Validation Settings
-
-Edit `run_complete_strategy.py` in `run_full_validation()`:
-
-```python
-# Multi-timeframe periods
-timeframes = {
-    '6mo': 180,
-    '1yr': 365,
-    '2yr': 730,
-    '5yr': 1825
-}
-
-# Walk-forward configuration
-train_period_days = 365  # 1 year training
-test_period_days = 90    # 3 months testing
-step_size_days = 90      # Roll forward 3 months
-
-# Monte Carlo simulations
-num_simulations = 100
-parameter_ranges = {
-    'rsi_threshold': (60, 80),
-    'target_stocks': (8, 12),
-    'correlation_threshold': (0.3, 0.5)
-}
-```
-
----
-
-## 📊 Performance Benchmarks
-
-Based on S&P 500 universe (2020-2025):
+Based on typical runs with S&P 500 universe:
 
 | Metric | Expected Range |
 |--------|----------------|
 | Sharpe Ratio | 0.8 - 1.5 |
 | Annual Return | 10% - 20% |
 | Max Drawdown | -15% to -30% |
-| Win Rate | 45% - 65% |
 | Stocks Selected | 8 - 12 |
+| Correlation (avg) | < 0.4 |
+
+---
+
+## ⚙️ Customization
+
+### Adjust Parameters in Each Module
+
+**Module 2 (Technical Screening):**
+```R
+rsi_period <- 14
+rsi_threshold <- 30
+macd_fast <- 12
+macd_slow <- 26
+```
+
+**Module 3 (Correlation):**
+```R
+correlation_threshold <- 0.4
+target_portfolio_size <- 10
+```
+
+**Module 5 (Optimization):**
+```R
+risk_free_rate <- 0.02
+target_return <- 0.12
+max_position_size <- 0.25
+```
+
+---
+
+## 🚨 Troubleshooting
+
+### Issue: Stock downloads fail
+**Solution:** Check internet connection, wait for rate limiting
+
+### Issue: Not enough candidates after screening
+**Solution:** Lower RSI threshold or extend lookback period
+
+### Issue: Optimization fails
+**Solution:** Ensure at least 5-8 stocks, check for NA values in data
+
+### Issue: Missing packages
+**Solution:** Run `install.packages()` for required packages
+
+---
+
+## 📅 Workflow Timeline
+
+- **First Run:** ~30-60 minutes (includes data download)
+- **Subsequent Runs:** ~5-10 minutes (uses cached data)
+- **Monthly Rebalancing:** ~5 minutes (update data + reoptimize)
+
+---
+
+## 🎓 Learning Resources
+
+### R-Specific
+- [quantmod documentation](https://www.quantmod.com/)
+- [PerformanceAnalytics guide](https://cran.r-project.org/web/packages/PerformanceAnalytics/)
+- [Modern Portfolio Theory tutorial](https://bookdown.org/)
+
+### General Finance
+- Modern Portfolio Theory (MPT)
+- Sharpe Ratio optimization
+- Technical analysis basics
+- Risk-adjusted returns
 
 ---
 
 ## ⚠️ Important Notes
 
-### When to Use This Framework
+### When to Rerun
 
-✅ **Good for:**
-- Long-term investing (months to years)
-- Systematic portfolio construction
-- Data-driven decision making
-- Testing strategy robustness
-
-❌ **Not designed for:**
-- Day trading or scalping
-- Manual chart reading
-- High-frequency trading
-- Options/derivatives strategies
+1. **Monthly:** Reoptimize portfolio weights
+2. **Quarterly:** Full workflow from scratch
+3. **After major market events:** Revalidate strategy
+4. **Annual:** Review and adjust parameters
 
 ### Limitations
 
-1. **Past performance ≠ future results**: Validation reduces overfitting but doesn't guarantee future success
-2. **Market regime changes**: Strategy may need revalidation after major market shifts
-3. **Transaction costs**: Backtests don't include commissions/slippage
-4. **Data quality**: Results depend on data accuracy
+- Past performance ≠ future results
+- Transaction costs not included in backtests
+- Assumes liquid markets (may not work for small caps)
+- Technical indicators are backward-looking
 
-### Recommended Usage
+### Best Practices
 
-1. **Validate thoroughly ONCE** (5+ years of data)
-2. **Use the process** to select current portfolios
-3. **Revalidate** quarterly or after major market events
-4. **Paper trade** 2-3 months before going live
-5. **Start small** (10-25% of intended capital)
-
----
-
-## 🤝 Next Steps
-
-1. **Test with synthetic data**: `python test_strategy_synthetic.py`
-2. **Run on real data**: `python run_complete_strategy.py`
-3. **Full validation**: `python run_complete_strategy.py --validate`
-4. **Explore UI**: `streamlit run app.py`
-5. **Paper trade** if robustness score > 70
-6. **Go live** with small capital after 2-3 months
+1. Paper trade before going live
+2. Start with small capital (10-25% of total)
+3. Monitor vs S&P 500 benchmark
+4. Set stop-loss limits
+5. Rebalance quarterly
 
 ---
 
-## 📚 Additional Resources
+## 🤝 Recommended Approach
 
-- `STREAMLIT_GUIDE.md` - UI user guide
-- `MODULE_*_README.md` - Individual module documentation (R versions)
-- `PORTFOLIO_OPTIMIZATION_README.md` - MPT theory background
+**For R Users (Recommended):**
+1. Use the R workflow at the root level
+2. Ignore `python_implementation/` folder
+3. Follow the module documentation
+
+**For Python Users:**
+1. Use `python_implementation/` folder
+2. Requires yfinance, pandas, numpy, scipy
+3. Optional Streamlit UI available
+
+**For Both:**
+- Study the MODULE_README files to understand the methodology
+- Customize parameters to your risk tolerance
+- Validate before live trading
 
 ---
 
-## 📝 License
+## 📝 Version History
 
-This framework is for educational purposes. Use at your own risk.
+- **v1.0** - Complete R workflow (6 modules)
+- **v1.1** - Added Python implementation
+- **v1.2** - Organized into separate folders
 
 ---
 
-**Built with:** Python 3.11+ | pandas | numpy | scipy | streamlit | plotly
+## 📄 License
 
-**Version:** 1.0.0
+Educational purposes only. Use at your own risk.
+
+---
+
+**Built with R and Python**
 
 **Last Updated:** January 2026
