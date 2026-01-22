@@ -38,9 +38,15 @@ portfolio <- run_strategy_for_period(
 )
 
 cat("\nPortfolio stocks:\n")
+# Use equal weights if no weight column exists
+if ("weight" %in% names(portfolio)) {
+  weights <- portfolio$weight
+} else {
+  weights <- rep(1 / length(portfolio$ticker), length(portfolio$ticker))
+}
 print(data.frame(
   ticker = portfolio$ticker,
-  weight = portfolio$weight
+  weight = weights
 ))
 
 # Test 2: Backtest for 6 months

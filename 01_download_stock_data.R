@@ -26,7 +26,7 @@ TICKER_FALLBACK <- "Nasdaq.csv"                    # Fallback if primary not fou
 SECTOR_DATA <- "big_stock_sectors.csv"             # Sector classifications
 
 # Download parameters
-LOOKBACK_YEARS <- 2                                 # Years of historical data
+LOOKBACK_YEARS <- 5                                 # Years of historical data
 MIN_VOLUME <- 100000                                # Minimum avg daily volume
 MIN_MARKET_CAP <- 500e6                            # Minimum market cap ($500M)
 RETRY_ATTEMPTS <- 3                                # Number of retry attempts
@@ -361,7 +361,7 @@ for (sector_name in sectors_list) {
     }
 
     # Be polite to Yahoo Finance - rate limiting
-    Sys.sleep(0.5)
+    Sys.sleep(0.25)
 
     # Periodic progress update
     if (i %% 25 == 0) {
