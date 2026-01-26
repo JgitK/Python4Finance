@@ -1,0 +1,64 @@
+
+=== MODULE 2: TECHNICAL ANALYSIS SUMMARY ===
+Generated: 2026-01-20 21:13:29
+
+SCREENING PARAMETERS:
+- Analysis period: 252 trading days (~1 year)
+- Minimum data requirement: 400 trading days
+- Minimum average volume: 1e+05 shares/day
+- Maximum daily volatility: 5.0%
+- Top performers per sector: 10
+
+INPUT DATA:
+- Total stocks downloaded: 2727
+- Stocks meeting minimum data: 2727
+- Stocks after screening: 1637
+
+CANDIDATE SELECTION:
+- Total candidates: 129
+- Sectors represented: 13
+- Average 1-year return: 152.96%
+- Average Sharpe ratio: 0.64
+- Average daily volatility: 3.06%
+
+SECTOR BREAKDOWN:
+# A tibble: 13 × 5
+   sector                 count avg_return min_return max_return
+   <chr>                  <int>      <dbl>      <dbl>      <dbl>
+ 1 Basic Materials           10      3.75       2.69        6.41
+ 2 Technology                10      3.43       2.04        6.72
+ 3 Industrials               10      2.38       1.39        3.94
+ 4 Health Care               10      1.94       1.48        2.54
+ 5 Consumer Discretionary    10      1.88       1.19        4.29
+ 6 Finance                   10      1.41       1.19        1.91
+ 7 Telecommunications        10      0.956      0.327       2.81
+ 8 Utilities                 10      0.934      0.523       1.92
+ 9 Real Estate               10      0.846      0.497       1.94
+10 Energy                    10      0.831      0.435       1.57
+11 Unknown                    9      0.741     -0.121       3.79
+12 Consumer Staples          10      0.474      0.277       1.03
+13 Miscellaneous             10      0.239     -0.484       1.14
+
+TOP 10 PERFORMERS:
+ ticker                 sector return_pct
+     PL             Technology    671.58%
+    ASM        Basic Materials    641.05%
+   VSAT             Technology    511.72%
+   USAS        Basic Materials    476.00%
+    ALM        Basic Materials    475.12%
+   SATS Consumer Discretionary    428.60%
+     HL            Industrials    393.55%
+   ARMN                Unknown    378.84%
+   SBSW        Basic Materials    371.07%
+    WDC             Technology    368.89%
+
+FILES GENERATED:
+- Candidates: analysis/candidate_stocks.csv
+- Full performance data: analysis/performance_summary.csv
+- Bollinger Bands data: analysis/bollinger_bands_data.rds
+
+NEXT STEPS:
+- Run Module 3 for correlation analysis
+- Select 9-12 stocks with low correlation
+- Apply Ichimoku analysis for validation
+

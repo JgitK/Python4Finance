@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio Optimizer</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Plotly.js for interactive charts -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>Portfolio Optimizer</h1>
+            <p class="subtitle">12-stock optimized portfolio based on Sharpe ratio analysis</p>
+        </header>
+
+        <!-- Investment Input -->
+        <section class="input-section">
+            <label for="amount">Investment Amount ($)</label>
+            <div class="input-row">
+                <input type="number" id="amount" placeholder="3500" min="100" step="100">
+                <button id="calculate-btn">Calculate Allocation</button>
+            </div>
+        </section>
+
+        <!-- Results Section (hidden until calculated) -->
+        <section id="results" class="results-section hidden">
+            <!-- Summary Stats -->
+            <div class="summary">
+                <div class="stat">
+                    <span class="stat-value" id="total-invested">$0</span>
+                    <span class="stat-label">Invested</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="cash-remaining">$0</span>
+                    <span class="stat-label">Cash Left</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="efficiency">0%</span>
+                    <span class="stat-label">Efficiency</span>
+                </div>
+            </div>
+
+            <!-- Portfolio Table -->
+            <h2>Your Allocation <span class="click-hint">(click ticker for chart)</span></h2>
+            <table id="portfolio-table">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Sector</th>
+                        <th>Shares</th>
+                        <th>Price</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Filled by JavaScript -->
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Bench Section -->
+        <section id="bench-section" class="bench-section hidden">
+            <h2>The Bench <span class="click-hint">(click ticker for chart)</span></h2>
+            <p class="bench-description">
+                These stocks are ready to replace any position you sell.
+                When a stock gains 15-20%, consider selling and promoting one from the bench.
+            </p>
+            <table id="bench-table">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Sector</th>
+                        <th>Sharpe Ratio</th>
+                        <th>Price</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Filled by JavaScript -->
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <!-- Chart Modal -->
+    <div id="chart-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="chart-title">Loading...</h2>
+                <button id="close-modal" class="close-btn">&times;</button>
+            </div>
+
+            <!-- Chart Container -->
+            <div id="ichimoku-chart"></div>
+
+            <!-- Date Range Slider -->
+            <div class="chart-controls">
+                <label for="date-range">Date Range:</label>
+                <input type="range" id="date-range" min="30" max="252" value="120">
+                <span id="date-range-label">120 days</span>
+            </div>
+
+            <!-- Ichimoku Strategy Guide -->
+            <div class="strategy-guide">
+                <h3>Ichimoku Cloud Strategy Guide</h3>
+                <div class="signal-grid">
+                    <div class="signal bullish">
+                        <strong>Bullish Signals (BUY)</strong>
+                        <ul>
+                            <li><b>Price above cloud:</b> Strong uptrend confirmed</li>
+                            <li><b>TK Cross (Tenkan > Kijun):</b> Momentum shift upward</li>
+                            <li><b>Green cloud ahead:</b> Future support is bullish</li>
+                            <li><b>Chikou above price:</b> Current strength vs 26 days ago</li>
+                        </ul>
+                    </div>
+                    <div class="signal bearish">
+                        <strong>Bearish Signals (SELL/AVOID)</strong>
+                        <ul>
+                            <li><b>Price below cloud:</b> Strong downtrend</li>
+                            <li><b>TK Cross (Tenkan < Kijun):</b> Momentum fading</li>
+                            <li><b>Red cloud ahead:</b> Future resistance is bearish</li>
+                            <li><b>Chikou below price:</b> Weakness vs 26 days ago</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="signal neutral">
+                    <strong>Neutral/Caution</strong>
+                    <p>Price inside the cloud = consolidation zone. Wait for breakout before acting.
+                    Thin clouds are easier to break; thick clouds provide stronger support/resistance.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script src="/static/chart.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+
+=== MODULE 3: CORRELATION ANALYSIS SUMMARY ===
+Generated: 2026-01-20 21:15:29
+
+SELECTION PARAMETERS:
+- Target portfolio size: 12 stocks
+- Maximum correlation threshold: 0.50
+- Minimum sectors required: 6
+- Maximum stocks per sector: 3
+- Sharpe ratio weighting: Yes
+
+INPUT DATA:
+- Candidate stocks analyzed: 129
+- Analysis period: 252 trading days (~1 year)
+- Correlation calculation method: Pearson
+
+SELECTION ALGORITHM:
+- Stage 1: Top performer from each of 6 major sectors
+- Stage 2: Greedy selection with sector constraints and Sharpe weighting
+
+FINAL PORTFOLIO:
+- Total stocks: 12
+- Sectors represented: 11
+- Average 1-year return: 143.4%
+- Average Sharpe ratio: 1.46
+- Average daily volatility: 3.14%
+
+CORRELATION METRICS:
+- Average pairwise correlation: 0.254
+- Median pairwise correlation: 0.213
+- Maximum pairwise correlation: 0.684
+- Minimum pairwise correlation: 0.006
+- Standard deviation: 0.166
+
+SECTOR BREAKDOWN:
+# A tibble: 11 × 2
+   sector                     n
+   <chr>                  <int>
+ 1 Industrials                2
+ 2 Basic Materials            1
+ 3 Consumer Discretionary     1
+ 4 Consumer Staples           1
+ 5 Energy                     1
+ 6 Finance                    1
+ 7 Health Care                1
+ 8 Miscellaneous              1
+ 9 Real Estate                1
+10 Technology                 1
+11 Unknown                    1
+
+PORTFOLIO COMPOSITION:
+# A tibble: 12 × 5
+   ticker sector                 return_pct sharpe_ratio avg_correlation
+   <chr>  <chr>                  <chr>             <dbl>           <dbl>
+ 1 AHR    Real Estate            80.1%             2.83            0.178
+ 2 GEV    Unknown                78.7%             1.97            0.359
+ 3 FIX    Industrials            141.0%            1.61            0.368
+ 4 CLS    Technology             204.1%            1.60            0.348
+ 5 DBD    Miscellaneous          67.1%             1.45            0.271
+ 6 BBVA   Finance                136.1%            1.31            0.216
+ 7 TFPM   Industrials            138.5%            1.23            0.181
+ 8 AGX    Consumer Discretionary 130.3%            1.21            0.342
+ 9 POWL   Energy                 77.3%             1.17            0.326
+10 LQDA   Health Care            233.9%            1.06            0.180
+11 IDR    Basic Materials        331.5%            1.05            0.164
+12 MAMA   Consumer Staples       102.5%            0.971           0.110
+
+CORRELATION QUALITY:
+Excellent - Very low correlation, maximum diversification
+
+FILES GENERATED:
+- Final portfolio: analysis/final_portfolio.csv
+- Correlation matrix: analysis/correlation_matrix.csv
+- Correlation heatmap: analysis/portfolio_correlation_heatmap.pdf
+
+NEXT STEPS:
+- Run Module 4 for Ichimoku technical validation
+- Review flagged stocks if any
+- Proceed to portfolio optimization (efficient frontier)
+

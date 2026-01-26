@@ -1,0 +1,91 @@
+
+=== MODULE 5: PORTFOLIO OPTIMIZATION SUMMARY ===
+Generated: 2026-01-20 21:17:00
+
+OPTIMIZATION PARAMETERS:
+- Number of portfolios simulated: 10,000
+- Risk-free rate: 4.50% (10-year Treasury)
+- Optimization period: 252 trading days (~1 year)
+- Investment amount: $10,000
+
+PORTFOLIO COMPOSITION:
+- Number of stocks: 12
+- Tickers: AHR, GEV, FIX, CLS, DBD, BBVA, TFPM, AGX, POWL, LQDA, IDR, MAMA
+
+OPTIMAL PORTFOLIO (Maximum Sharpe Ratio):
+- Expected Annual Return: 103.07%
+- Expected Annual Risk (Std Dev): 26.48%
+- Sharpe Ratio: 3.723
+- Risk-adjusted performance: 3.7x better than risk-free rate
+
+COMPARISON TO ALTERNATIVES:
+
+Maximum Sharpe Ratio Portfolio:
+  Return: 103.07% | Risk: 26.48% | Sharpe: 3.723
+
+Minimum Variance Portfolio:
+  Return: 85.30% | Risk: 24.40% | Sharpe: 3.311
+
+Equal Weight Portfolio:
+  Return: 101.35% | Risk: 32.23% | Sharpe: 3.005
+
+Improvement vs Equal Weight:
+  Return: +1.72% | Risk: -5.75% | Sharpe: +0.718
+
+OPTIMAL WEIGHTS (Maximum Sharpe Ratio):
+ ticker                 sector weight_pct
+   BBVA                Finance     16.99%
+   TFPM            Industrials     16.57%
+    IDR        Basic Materials     13.56%
+    AHR            Real Estate     12.08%
+   MAMA       Consumer Staples     10.79%
+    DBD          Miscellaneous      9.82%
+    CLS             Technology      8.02%
+   LQDA            Health Care      5.87%
+    FIX            Industrials      2.55%
+    AGX Consumer Discretionary      1.44%
+   POWL                 Energy      1.17%
+    GEV                Unknown      1.15%
+
+DOLLAR ALLOCATION (for $10,000 investment):
+ ticker shares invested
+    AHR     25 $1200.25
+    GEV      0    $0.00
+    FIX      0    $0.00
+    CLS      2  $627.20
+    DBD     14  $978.74
+   BBVA     69 $1682.22
+   TFPM     44 $1627.56
+    AGX      0    $0.00
+   POWL      0    $0.00
+   LQDA     15  $568.95
+    IDR     30 $1330.80
+   MAMA     75 $1075.50
+
+ALLOCATION SUMMARY:
+- Total invested: $9091.22
+- Cash remaining: $908.78
+- Investment efficiency: 90.9%
+
+RISK METRICS:
+- Portfolio diversification: 12 stocks across 11 sectors
+- Average correlation: 0.254
+- Expected volatility: 26.48% annually
+
+FILES GENERATED:
+- Optimal weights: analysis/optimal_weights.csv
+- Dollar allocation: analysis/dollar_allocation.csv
+- Efficient frontier data: analysis/efficient_frontier.csv
+- Efficient frontier plot: analysis/efficient_frontier.png
+
+INTERPRETATION:
+- Sharpe Ratio > 1.0 is good, > 2.0 is excellent
+- Your portfolio Sharpe: 3.723 - Excellent
+- Expected return significantly exceeds risk-free rate
+- Diversification reduces risk while maintaining high returns
+
+NEXT STEPS:
+- Review dollar allocation and adjust investment amount if needed
+- Run Module 6 for backtesting validation
+- Consider rebalancing strategy for ongoing management
+
