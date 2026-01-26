@@ -1,116 +1,182 @@
 # ============================================================================
-# Weekly Portfolio Analysis Pipeline
+# Weekly Portfolio Update Pipeline
 # ============================================================================
-# Runs the full R analysis pipeline every Saturday at 6 AM UTC
-# This updates the portfolio selections with fresh market data.
+# Updates prices and signals for existing portfolio and bench stocks.
+# This is a QUICK update - not a full re-screening.
 #
 # Schedule: Every Saturday at 6:00 AM UTC
-#   - 10:00 PM Friday (Pacific)
-#   - 1:00 AM Saturday (Eastern)
 #
-# What it does:
-#   1. Downloads latest stock prices (5 years of data)
-#   2. Screens for high Sharpe ratio candidates
-#   3. Selects final 12-stock portfolio
-#   4. Validates with Ichimoku signals
-#   5. Calculates optimal weights
-#   6. Runs walk-forward validation
-#   7. Exports data for web app
+# For a FULL re-screening (new stock selection), run manually with:
+#   workflow_dispatch -> full_rescreen = true
 
-name: Weekly Portfolio Analysis
+name: Weekly Portfolio Update
 
 on:
-  # Run every Saturday at 6:00 AM UTC
   schedule:
-    - cron: '0 6 * * 6'
+    - cron: '0 6 * * 6'  # Every Saturday 6 AM UTC
 
-  # Also allow manual trigger from GitHub UI
   workflow_dispatch:
+    inputs:
+      full_rescreen:
+        description: 'Run full re-screening (downloads all stocks, takes ~2 hours)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
-  run-analysis:
+  update-portfolio:
     runs-on: ubuntu-latest
+    timeout-minutes: 30  # Quick update should be fast
 
     steps:
-      # Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Set up R environment
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
         with:
           r-version: '4.3.0'
 
-      # Cache R packages to speed up builds
       - name: Cache R packages
         uses: actions/cache@v3
         with:
           path: ${{ env.R_LIBS_USER }}
-          key: ${{ runner.os }}-r-${{ hashFiles('**/install_packages.R') }}
-          restore-keys: |
-            ${{ runner.os }}-r-
+          key: ${{ runner.os }}-r-packages-v1
+          restore-keys: ${{ runner.os }}-r-packages-
 
-      # Install system dependencies (needed for some R packages)
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev
 
-      # Install R packages
       - name: Install R packages
         run: |
           Rscript -e "
             install.packages(c(
-              'dplyr',
-              'tidyr',
-              'lubridate',
-              'ggplot2',
-              'quantmod',
-              'TTR',
-              'quadprog',
-              'gridExtra'
+              'dplyr', 'tidyr', 'lubridate', 'ggplot2',
+              'quantmod', 'TTR', 'quadprog'
             ), repos = 'https://cloud.r-project.org')
           "
 
-      # Run Module 1: Download stock data
-      - name: Module 1 - Download Stock Data
-        run: Rscript 01_download_stock_data.R
-        timeout-minutes: 60
+      # Quick update: Only download portfolio + bench stocks (22 stocks)
+      - name: Update portfolio stock prices
+        run: |
+          Rscript -e "
+            library(quantmod)
+            library(dplyr)
 
-      # Run Module 2: Screen candidates
-      - name: Module 2 - Screen Candidates
-        run: Rscript 02_screen_candidates.R
+            # Read current portfolio and bench
+            portfolio <- read.csv('webapp/db/seed_data/portfolio_stocks.csv')
+            bench <- read.csv('webapp/db/seed_data/bench_stocks.csv')
+            tickers <- c(portfolio\$ticker, bench\$ticker)
 
-      # Run Module 3: Select portfolio
-      - name: Module 3 - Select Portfolio
-        run: Rscript 03_select_portfolio.R
+            cat('Updating prices for', length(tickers), 'stocks...\n')
 
-      # Run Module 4: Ichimoku validation
-      - name: Module 4 - Ichimoku Validation
+            # Download fresh data for each
+            for (ticker in tickers) {
+              cat('  ', ticker, '...')
+              tryCatch({
+                data <- getSymbols(ticker, src = 'yahoo', auto.assign = FALSE,
+                                   from = Sys.Date() - 365*5)
+                saveRDS(data, paste0('stocks/', ticker, '.rds'))
+                cat(' OK\n')
+              }, error = function(e) {
+                cat(' FAILED\n')
+              })
+              Sys.sleep(0.5)
+            }
+          "
+
+      # Re-run Ichimoku validation with fresh data
+      - name: Update Ichimoku signals
         run: Rscript 04_ichimoku_validation.R
 
-      # Run Module 5: Portfolio optimization
-      - name: Module 5 - Portfolio Optimization
+      # Re-run portfolio optimization
+      - name: Update optimal weights
         run: Rscript 05_portfolio_optimization.R
 
-      # Run Module 6: Walk-forward validation
-      - name: Module 6 - Backtest Validation
-        run: Rscript 06_backtest_validation.R
-
-      # Export data for web app
+      # Export updated data for web app
       - name: Export data for web app
         run: |
           Rscript webapp/db/export_r_data.R
           Rscript webapp/db/export_ichimoku_data.R
 
-      # Commit updated data back to repo
+      # Commit changes
+      - name: Commit updated data
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add analysis/ webapp/db/seed_data/ metadata/ stocks/
+          git diff --staged --quiet || git commit -m "Weekly portfolio update - $(date +'%Y-%m-%d')"
+          git push
+
+  # Full re-screening job (only runs when manually triggered with full_rescreen=true)
+  full-rescreen:
+    if: ${{ github.event.inputs.full_rescreen == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180  # 3 hours for full download
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.3.0'
+
+      - name: Cache R packages
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.R_LIBS_USER }}
+          key: ${{ runner.os }}-r-packages-v1
+          restore-keys: ${{ runner.os }}-r-packages-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev
+
+      - name: Install R packages
+        run: |
+          Rscript -e "
+            install.packages(c(
+              'dplyr', 'tidyr', 'lubridate', 'ggplot2',
+              'quantmod', 'TTR', 'quadprog', 'gridExtra'
+            ), repos = 'https://cloud.r-project.org')
+          "
+
+      - name: Module 1 - Download ALL Stock Data
+        run: Rscript 01_download_stock_data.R
+        timeout-minutes: 120
+
+      - name: Module 2 - Screen Candidates
+        run: Rscript 02_screen_candidates.R
+
+      - name: Module 3 - Select Portfolio
+        run: Rscript 03_select_portfolio.R
+
+      - name: Module 4 - Ichimoku Validation
+        run: Rscript 04_ichimoku_validation.R
+
+      - name: Module 5 - Portfolio Optimization
+        run: Rscript 05_portfolio_optimization.R
+
+      - name: Module 6 - Backtest Validation
+        run: Rscript 06_backtest_validation.R
+
+      - name: Export data for web app
+        run: |
+          Rscript webapp/db/export_r_data.R
+          Rscript webapp/db/export_ichimoku_data.R
+
       - name: Commit updated analysis
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add analysis/
-          git add webapp/db/seed_data/
-          git add metadata/
-          git diff --staged --quiet || git commit -m "Weekly analysis update - $(date +'%Y-%m-%d')"
+          git add analysis/ webapp/db/seed_data/ metadata/
+          git diff --staged --quiet || git commit -m "Full portfolio re-screening - $(date +'%Y-%m-%d')"
           git push
