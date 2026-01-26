@@ -15,14 +15,14 @@ jobs:
         with:
           r-version: '4.3.0'
 
-      - name: Install quantmod
-        run: Rscript -e "install.packages('quantmod', repos='https://cloud.r-project.org')"
-
-      - name: Test downloading 3 stocks
+      - name: Install and test
         run: |
           Rscript -e "
+            # Install
+            install.packages('quantmod', repos='https://cloud.r-project.org')
             library(quantmod)
 
+            # Test
             test_tickers <- c('AAPL', 'MSFT', 'GOOGL')
 
             for (ticker in test_tickers) {
