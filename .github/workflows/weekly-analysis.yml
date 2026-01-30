@@ -80,9 +80,19 @@ jobs:
             for (ticker in tickers) {
               cat('  ', ticker, '...')
               tryCatch({
-                data <- getSymbols(ticker, src = 'yahoo', auto.assign = FALSE,
-                                   from = Sys.Date() - 365*5)
-                saveRDS(data, paste0('stocks/', ticker, '.rds'))
+                xts_data <- getSymbols(ticker, src = 'yahoo', auto.assign = FALSE,
+                                       from = Sys.Date() - 365*5)
+                # Convert xts to data.frame (expected by R scripts)
+                df <- data.frame(
+                  date = index(xts_data),
+                  open = as.numeric(Op(xts_data)),
+                  high = as.numeric(Hi(xts_data)),
+                  low = as.numeric(Lo(xts_data)),
+                  close = as.numeric(Cl(xts_data)),
+                  volume = as.numeric(Vo(xts_data)),
+                  adjusted = as.numeric(Ad(xts_data))
+                )
+                saveRDS(df, paste0('stocks/', ticker, '.rds'))
                 cat(' OK\n')
               }, error = function(e) {
                 cat(' FAILED\n')
