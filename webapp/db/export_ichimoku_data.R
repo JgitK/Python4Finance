@@ -12,8 +12,7 @@ cat("============================================================\n")
 cat("EXPORTING ICHIMOKU DATA FOR WEB APP\n")
 cat("============================================================\n\n")
 
-# Set working directory
-setwd("/Users/jackson/Desktop/Python4Finance")
+# Note: Run from project root directory
 
 # Load data loader utility
 source("utils_data_loader.R")

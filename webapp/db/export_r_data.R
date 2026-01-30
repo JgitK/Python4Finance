@@ -13,9 +13,7 @@ cat("============================================================\n")
 cat("EXPORTING R DATA TO CSV FOR PYTHON WEB APP\n")
 cat("============================================================\n\n")
 
-# Set working directory to project root
-# (adjust if running from different location)
-setwd("/Users/jackson/Desktop/Python4Finance")
+# Note: Run from project root directory
 
 # Create output directory
 output_dir <- "webapp/db/seed_data"
