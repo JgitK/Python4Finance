@@ -64,6 +64,7 @@ jobs:
       # Quick update: Only download portfolio + bench stocks (22 stocks)
       - name: Update portfolio stock prices
         run: |
+          mkdir -p stocks
           Rscript -e "
             library(quantmod)
             library(dplyr)
