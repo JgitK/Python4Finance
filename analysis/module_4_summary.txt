@@ -1,6 +1,6 @@
 
 === MODULE 4: ICHIMOKU TECHNICAL VALIDATION SUMMARY ===
-Generated: 2026-01-20 21:16:32
+Generated: 2026-01-31 16:49:47.543689
 
 ICHIMOKU PARAMETERS:
 - Conversion Line (Tenkan-sen): 9 periods
@@ -13,27 +13,27 @@ PORTFOLIO ANALYSIS:
 - Bullish signals: 8
 - Neutral signals: 4
 - Bearish signals: 0
-- Portfolio health score: 1.83 / 3.0
+- Portfolio health score: 1.92 / 3.0
 
 SIGNAL BREAKDOWN:
 
 BULLISH STOCKS:
  ticker                 sector score cumulative_return_1y
+    GEV                Unknown     3            0.7871437
     FIX            Industrials     3            1.4096785
     DBD          Miscellaneous     3            0.6708892
    BBVA                Finance     3            1.3608827
-   TFPM            Industrials     3            1.3851184
-    AGX Consumer Discretionary     3            1.3029262
    POWL                 Energy     3            0.7731508
-   LQDA            Health Care     2            2.3389086
-    IDR        Basic Materials     2            3.3151753
+   LQDA            Health Care     3            2.3389086
+   MAMA       Consumer Staples     3            1.0254238
+    AGX Consumer Discretionary     2            1.3029262
 
 NEUTRAL STOCKS:
- ticker           sector score cumulative_return_1y
-    GEV          Unknown     1            0.7871437
-   MAMA Consumer Staples     1            1.0254238
-    AHR      Real Estate    -1            0.8011348
-    CLS       Technology    -1            2.0414121
+ ticker          sector score cumulative_return_1y
+    CLS      Technology     1            2.0414121
+   TFPM     Industrials     1            1.3851184
+    AHR     Real Estate    -1            0.8011348
+    IDR Basic Materials    -1            3.3151753
 
 BEARISH STOCKS:
 (None)
