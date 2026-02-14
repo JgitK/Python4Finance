@@ -1,6 +1,6 @@
 
 === MODULE 5: PORTFOLIO OPTIMIZATION SUMMARY ===
-Generated: 2026-02-07 06:41:08.692229
+Generated: 2026-02-14 06:42:55.677958
 
 OPTIMIZATION PARAMETERS:
 - Number of portfolios simulated: 10,000
@@ -13,64 +13,64 @@ PORTFOLIO COMPOSITION:
 - Tickers: AHR, GEV, FIX, CLS, DBD, BBVA, TFPM, AGX, POWL, LQDA, IDR, MAMA
 
 OPTIMAL PORTFOLIO (Maximum Sharpe Ratio):
-- Expected Annual Return: 95.39%
-- Expected Annual Risk (Std Dev): 26.15%
-- Sharpe Ratio: 3.476
+- Expected Annual Return: 90.56%
+- Expected Annual Risk (Std Dev): 24.38%
+- Sharpe Ratio: 3.530
 - Risk-adjusted performance: 3.5x better than risk-free rate
 
 COMPARISON TO ALTERNATIVES:
 
 Maximum Sharpe Ratio Portfolio:
-  Return: 95.39% | Risk: 26.15% | Sharpe: 3.476
+  Return: 90.56% | Risk: 24.38% | Sharpe: 3.530
 
 Minimum Variance Portfolio:
-  Return: 83.43% | Risk: 23.71% | Sharpe: 3.329
+  Return: 83.46% | Risk: 23.66% | Sharpe: 3.337
 
 Equal Weight Portfolio:
-  Return: 99.05% | Risk: 30.47% | Sharpe: 3.103
+  Return: 99.27% | Risk: 30.42% | Sharpe: 3.115
 
 Improvement vs Equal Weight:
-  Return: -3.66% | Risk: -4.32% | Sharpe: +0.373
+  Return: -8.71% | Risk: -6.05% | Sharpe: +0.415
 
 OPTIMAL WEIGHTS (Maximum Sharpe Ratio):
  ticker                 sector weight_pct
-   BBVA                Finance     16.52%
-   TFPM            Industrials     14.42%
-   MAMA       Consumer Staples     12.27%
-   LQDA            Health Care     11.16%
-    AHR            Real Estate      7.97%
-    FIX            Industrials      7.97%
-   POWL                 Energy      7.22%
-    DBD          Miscellaneous      6.47%
-    AGX Consumer Discretionary      5.86%
-    IDR        Basic Materials      5.67%
-    GEV                Unknown      4.12%
-    CLS             Technology      0.36%
+    AHR            Real Estate     18.08%
+   TFPM            Industrials     16.04%
+    DBD          Miscellaneous     12.94%
+   BBVA                Finance      9.94%
+   MAMA       Consumer Staples      9.76%
+   POWL                 Energy      8.65%
+    IDR        Basic Materials      7.67%
+   LQDA            Health Care      6.34%
+    FIX            Industrials      3.79%
+    AGX Consumer Discretionary      3.65%
+    CLS             Technology      2.98%
+    GEV                Unknown      0.16%
 
 DOLLAR ALLOCATION (for $10,000 investment):
  ticker shares invested
-    AHR     16  $768.16
+    AHR     37 $1776.37
     GEV      0    $0.00
     FIX      0    $0.00
     CLS      0    $0.00
-    DBD      9  $629.19
-   BBVA     67 $1633.46
-   TFPM     38 $1405.62
-    AGX      1  $383.66
-   POWL      1  $419.98
-   LQDA     29 $1099.97
-    IDR     12  $532.32
-   MAMA     85 $1218.90
+    DBD     18 $1258.38
+   BBVA     40  $975.20
+   TFPM     43 $1590.57
+    AGX      0    $0.00
+   POWL      2  $839.96
+   LQDA     16  $606.88
+    IDR     17  $754.12
+   MAMA     68  $975.12
 
 ALLOCATION SUMMARY:
-- Total invested: $8091.26
-- Cash remaining: $1908.74
-- Investment efficiency: 80.9%
+- Total invested: $8776.60
+- Cash remaining: $1223.40
+- Investment efficiency: 87.8%
 
 RISK METRICS:
 - Portfolio diversification: 12 stocks across 11 sectors
 - Average correlation: 0.254
-- Expected volatility: 26.15% annually
+- Expected volatility: 24.38% annually
 
 FILES GENERATED:
 - Optimal weights: analysis/optimal_weights.csv
@@ -80,7 +80,7 @@ FILES GENERATED:
 
 INTERPRETATION:
 - Sharpe Ratio > 1.0 is good, > 2.0 is excellent
-- Your portfolio Sharpe: 3.476 - Excellent
+- Your portfolio Sharpe: 3.530 - Excellent
 - Expected return significantly exceeds risk-free rate
 - Diversification reduces risk while maintaining high returns
 
