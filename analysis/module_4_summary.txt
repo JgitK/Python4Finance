@@ -1,6 +1,6 @@
 
 === MODULE 4: ICHIMOKU TECHNICAL VALIDATION SUMMARY ===
-Generated: 2026-02-14 06:42:47.699292
+Generated: 2026-02-21 06:40:09.147805
 
 ICHIMOKU PARAMETERS:
 - Conversion Line (Tenkan-sen): 9 periods
@@ -10,10 +10,10 @@ ICHIMOKU PARAMETERS:
 
 PORTFOLIO ANALYSIS:
 - Total stocks validated: 12
-- Bullish signals: 8
+- Bullish signals: 7
 - Neutral signals: 2
-- Bearish signals: 2
-- Portfolio health score: 1.33 / 3.0
+- Bearish signals: 3
+- Portfolio health score: 1.00 / 3.0
 
 SIGNAL BREAKDOWN:
 
@@ -26,20 +26,20 @@ BULLISH STOCKS:
     AGX Consumer Discretionary     3            1.3029262
    POWL                 Energy     3            0.7731508
    MAMA       Consumer Staples     3            1.0254238
-   LQDA            Health Care     2            2.3389086
 
 NEUTRAL STOCKS:
  ticker      sector score cumulative_return_1y
-   BBVA     Finance     0             1.360883
-   TFPM Industrials    -1             1.385118
+   TFPM Industrials     1             1.385118
+   LQDA Health Care    -1             2.338909
 
 BEARISH STOCKS:
  ticker          sector score cumulative_return_1y
     CLS      Technology    -3             2.041412
+   BBVA         Finance    -3             1.360883
     IDR Basic Materials    -3             3.315175
 
 RECOMMENDATIONS:
-⚠ 2 stocks show bearish signals. Review these stocks:
+⚠ 3 stocks show bearish signals. Review these stocks:
   - Examine recent price action and news
   - Check if temporary dip or longer-term trend
   - Consider replacement candidates from Module 2 analysis/candidate_stocks.csv
