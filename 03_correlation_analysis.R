@@ -1,14 +1,19 @@
 # ============================================================================
-# MODULE 3: CORRELATION ANALYSIS & PORTFOLIO SELECTION
+# MODULE 3: CORRELATION ANALYSIS & STRATEGY-SPECIFIC PORTFOLIO SELECTION
 # ============================================================================
-# Selects least-correlated stocks from candidates for optimal diversification
-# Following principles from: https://www.codingfinance.com/
+# Selects optimal stocks for each portfolio strategy:
+# - Max Sharpe: Highest risk-adjusted returns
+# - Min Variance: Lowest volatility stocks
+# - Max Sortino: Best downside risk-adjusted returns
+# - Min CVaR: Tail risk protection
+# - Risk Parity: Stocks with similar volatilities
+# - Equal Weight: Same as Max Sharpe (just different weights)
 #
-# Inputs: Candidate stocks from Module 2
-# Outputs: Final 12 stocks for portfolio optimization
+# Inputs: Candidate stocks from Module 2 (with strategy-specific metrics)
+# Outputs: 6 strategy-specific portfolios
 #
 # Author: Portfolio Optimization System
-# Date: 2026-01-17
+# Date: 2026-02-07
 
 # Load utilities
 source("utils_data_loader.R")
@@ -23,27 +28,30 @@ library(reshape2)
 # CONFIGURATION
 # ============================================================================
 
-cat("\n=== MODULE 3: CORRELATION ANALYSIS & PORTFOLIO SELECTION ===\n\n")
+cat("\n=== MODULE 3: STRATEGY-SPECIFIC PORTFOLIO SELECTION ===\n\n")
 
 # Portfolio parameters
-TARGET_PORTFOLIO_SIZE <- 12       # Target number of stocks
-MAX_CORRELATION <- 0.5            # Maximum acceptable average correlation
-MIN_SECTORS <- 6                  # Minimum number of different sectors
+TARGET_PORTFOLIO_SIZE <- 12       # Target number of stocks per strategy
+MAX_CORRELATION <- 0.6            # Maximum acceptable average correlation
+MIN_SECTORS <- 4                  # Minimum number of different sectors
 MAX_PER_SECTOR <- 3               # Maximum stocks from any single sector
-
-# Selection preferences
-USE_SHARPE_WEIGHTING <- TRUE      # Weight selection by Sharpe ratio
-EXCLUDE_UNKNOWN_SECTOR <- FALSE   # Whether to exclude "Unknown" sector (flagged instead)
+MIN_ICHIMOKU_SCORE <- 2           # Minimum Ichimoku score to be eligible (0-5 scale)
 
 # Analysis period for correlation (days)
 CORRELATION_PERIOD <- 252         # 1 year of trading days
 
+# Strategy definitions
+STRATEGIES <- c("max_sharpe", "min_variance", "max_sortino", "min_cvar", "risk_parity")
+
 # Output directory
 OUTPUT_DIR <- "analysis"
-PORTFOLIO_FILE <- file.path(OUTPUT_DIR, "final_portfolio.csv")
-PORTFOLIO_RDS <- file.path(OUTPUT_DIR, "final_portfolio.rds")
-CORRELATION_FILE <- file.path(OUTPUT_DIR, "correlation_matrix.csv")
-CORRELATION_RDS <- file.path(OUTPUT_DIR, "correlation_matrix.rds")
+PORTFOLIOS_DIR <- file.path(OUTPUT_DIR, "portfolios")
+
+# Create output directories
+if (!dir.exists(PORTFOLIOS_DIR)) {
+  dir.create(PORTFOLIOS_DIR, recursive = TRUE)
+  cat("Created directory: analysis/portfolios/\n\n")
+}
 
 # ============================================================================
 # STEP 1: LOAD CANDIDATE STOCKS
@@ -51,24 +59,67 @@ CORRELATION_RDS <- file.path(OUTPUT_DIR, "correlation_matrix.rds")
 
 cat("Step 1: Loading candidate stocks from Module 2...\n")
 
-# Load candidates
+# Load candidates (now with additional metrics)
 candidates <- readRDS(file.path(OUTPUT_DIR, "candidate_stocks.rds"))
 
 cat(sprintf("  Total candidates: %d\n", nrow(candidates)))
 cat(sprintf("  Sectors: %d\n", length(unique(candidates$sector))))
 
-# Flag "Unknown" sector stocks
-unknown_stocks <- candidates %>% filter(sector == "Unknown")
-if (nrow(unknown_stocks) > 0) {
-  cat(sprintf("\n  WARNING: %d stocks in 'Unknown' sector:\n", nrow(unknown_stocks)))
-  print(unknown_stocks %>% select(ticker, cumulative_return_1y, sharpe_ratio))
-  cat("  These will be flagged but included in analysis unless excluded.\n")
+# Verify required columns exist
+required_cols <- c("ticker", "sector", "sharpe_ratio", "sortino_ratio",
+                   "annual_variance", "cvar", "daily_volatility", "ichimoku_score")
+missing_cols <- setdiff(required_cols, names(candidates))
+
+if (length(missing_cols) > 0) {
+  cat(sprintf("\n  WARNING: Missing columns: %s\n", paste(missing_cols, collapse = ", ")))
+  cat("  Run Module 2 again to generate strategy-specific metrics.\n")
+
+  # Create placeholder columns if missing
+  if (!"sortino_ratio" %in% names(candidates)) {
+    candidates$sortino_ratio <- candidates$sharpe_ratio  # Fallback
+  }
+  if (!"annual_variance" %in% names(candidates)) {
+    candidates$annual_variance <- candidates$daily_volatility^2 * 252
+  }
+  if (!"cvar" %in% names(candidates)) {
+    candidates$cvar <- -candidates$daily_volatility * 2.33  # Approximate
+  }
+  if (!"ichimoku_score" %in% names(candidates)) {
+    candidates$ichimoku_score <- NA  # Will be filtered if MIN_ICHIMOKU_SCORE > 0
+  }
 }
 
-# Remove Unknown sector if configured
-if (EXCLUDE_UNKNOWN_SECTOR) {
-  candidates <- candidates %>% filter(sector != "Unknown")
-  cat(sprintf("\n  Excluded Unknown sector. Remaining: %d candidates\n", nrow(candidates)))
+# ============================================================================
+# STEP 1.5: FILTER BY ICHIMOKU SCORE
+# ============================================================================
+
+cat("\nStep 1.5: Filtering by Ichimoku score...\n")
+
+# Show Ichimoku score distribution before filtering
+if ("ichimoku_score" %in% names(candidates)) {
+  score_dist <- table(candidates$ichimoku_score, useNA = "ifany")
+  cat("  Ichimoku score distribution (before filter):\n")
+  for (i in seq_along(score_dist)) {
+    score_val <- names(score_dist)[i]
+    score_label <- if (is.na(score_val) || score_val == "NA") "N/A" else score_val
+    cat(sprintf("    Score %s: %d stocks\n", score_label, score_dist[i]))
+  }
+
+  # Filter by minimum Ichimoku score
+  pre_filter_count <- nrow(candidates)
+  candidates <- candidates %>%
+    filter(!is.na(ichimoku_score) & ichimoku_score >= MIN_ICHIMOKU_SCORE)
+
+  cat(sprintf("\n  Filtered: %d → %d candidates (min score >= %d)\n",
+              pre_filter_count, nrow(candidates), MIN_ICHIMOKU_SCORE))
+
+  # Check if we still have enough candidates
+  if (nrow(candidates) < TARGET_PORTFOLIO_SIZE) {
+    cat("  WARNING: Not enough candidates after Ichimoku filter!\n")
+    cat("  Consider lowering MIN_ICHIMOKU_SCORE or re-running Module 2.\n")
+  }
+} else {
+  cat("  WARNING: No Ichimoku scores available. Skipping filter.\n")
 }
 
 # Show sector distribution
@@ -78,7 +129,54 @@ cat("\n  Candidate distribution by sector:\n")
 print(as.data.frame(sector_dist), row.names = FALSE)
 
 # ============================================================================
-# STEP 2: CREATE RETURNS MATRIX
+# STEP 1.6: LOAD MARKET REGIME AND NORMALIZE SIGNALS
+# ============================================================================
+
+cat("\nStep 1.6: Loading market regime and normalizing signals...\n")
+
+# Load regime data for stress correlation adjustment
+regime_file <- file.path(OUTPUT_DIR, "market_regime.rds")
+STRESS_CORR_MULT <- 1.0  # Default
+
+if (file.exists(regime_file)) {
+  regime_data <- readRDS(regime_file)
+  STRESS_CORR_MULT <- regime_data$stress_correlation_multiplier
+  cat(sprintf("  Market Regime: %s\n", regime_data$regime_label))
+  cat(sprintf("  Correlation stress multiplier: %.2fx\n", STRESS_CORR_MULT))
+  cat(sprintf("  Recommended strategy: %s\n", toupper(regime_data$primary_strategy)))
+} else {
+  cat("  No regime data found. Using default correlation (1.0x)\n")
+}
+
+# Z-score normalize all strategy metrics for unbiased signal combination
+cat("\n  Normalizing signals to z-scores...\n")
+
+candidates <- candidates %>%
+  mutate(
+    # Z-score normalize primary metrics
+    z_sharpe = (sharpe_ratio - mean(sharpe_ratio, na.rm=TRUE)) / sd(sharpe_ratio, na.rm=TRUE),
+    z_sortino = (sortino_ratio - mean(sortino_ratio, na.rm=TRUE)) / sd(sortino_ratio, na.rm=TRUE),
+    z_variance = -(annual_variance - mean(annual_variance, na.rm=TRUE)) / sd(annual_variance, na.rm=TRUE),  # Negative: lower is better
+    z_cvar = (cvar - mean(cvar, na.rm=TRUE)) / sd(cvar, na.rm=TRUE),  # Less negative is better
+    z_momentum = (return_3m - mean(return_3m, na.rm=TRUE)) / sd(return_3m, na.rm=TRUE),
+    z_ichimoku = (ichimoku_score - mean(ichimoku_score, na.rm=TRUE)) / sd(ichimoku_score, na.rm=TRUE),
+
+    # Handle NAs
+    z_sharpe = ifelse(is.na(z_sharpe), 0, z_sharpe),
+    z_sortino = ifelse(is.na(z_sortino), 0, z_sortino),
+    z_variance = ifelse(is.na(z_variance), 0, z_variance),
+    z_cvar = ifelse(is.na(z_cvar), 0, z_cvar),
+    z_momentum = ifelse(is.na(z_momentum), 0, z_momentum),
+    z_ichimoku = ifelse(is.na(z_ichimoku), 0, z_ichimoku)
+  )
+
+cat(sprintf("  Z-score normalization complete\n"))
+cat(sprintf("  Mean z-scores: Sharpe=%.2f, Sortino=%.2f, Momentum=%.2f, Ichimoku=%.2f\n",
+            mean(candidates$z_sharpe), mean(candidates$z_sortino),
+            mean(candidates$z_momentum), mean(candidates$z_ichimoku)))
+
+# ============================================================================
+# STEP 2: CREATE RETURNS MATRIX FOR CORRELATION
 # ============================================================================
 
 cat("\nStep 2: Creating returns matrix for correlation analysis...\n")
@@ -105,35 +203,27 @@ for (i in 1:nrow(candidates)) {
       daily_return = (adjusted - lag(adjusted)) / lag(adjusted)
     ) %>%
     select(date, daily_return) %>%
-    tail(CORRELATION_PERIOD + 1)  # +1 for lag
+    tail(CORRELATION_PERIOD + 1)
 
   stock_data_list[[ticker]] <- stock_data
 
-  # Progress indicator
   if (i %% 20 == 0) {
     cat(sprintf("  Loaded: %d/%d stocks\n", i, nrow(candidates)))
   }
 }
 
 cat(sprintf("\n  Successfully loaded: %d stocks\n", length(stock_data_list)))
-if (length(failed_loads) > 0) {
-  cat(sprintf("  Failed to load: %d stocks\n", length(failed_loads)))
 
-  # Remove failed stocks from candidates
+# Remove failed stocks from candidates
+if (length(failed_loads) > 0) {
   candidates <- candidates %>% filter(!ticker %in% failed_loads)
 }
 
-# Create wide-format returns matrix
-cat("\n  Creating returns matrix...\n")
-
-# Find common date range
+# Build returns matrix
 all_dates <- lapply(stock_data_list, function(x) x$date)
 common_start <- max(sapply(all_dates, min))
 common_end <- min(sapply(all_dates, max))
 
-cat(sprintf("  Common date range: %s to %s\n", common_start, common_end))
-
-# Build returns matrix
 returns_list <- lapply(names(stock_data_list), function(ticker) {
   stock_data_list[[ticker]] %>%
     filter(date >= common_start, date <= common_end) %>%
@@ -141,12 +231,10 @@ returns_list <- lapply(names(stock_data_list), function(ticker) {
     rename(!!ticker := daily_return)
 })
 
-# Join all returns
 returns_matrix <- reduce(returns_list, full_join, by = "date") %>%
   arrange(date) %>%
   filter(!is.na(date))
 
-# Remove date column for correlation calculation
 returns_only <- returns_matrix %>% select(-date)
 
 cat(sprintf("  Returns matrix: %d days × %d stocks\n",
@@ -158,376 +246,405 @@ cat(sprintf("  Returns matrix: %d days × %d stocks\n",
 
 cat("\nStep 3: Calculating correlation matrix...\n")
 
-# Calculate Pearson correlation
 correlation_matrix <- cor(returns_only, use = "pairwise.complete.obs")
 
 cat(sprintf("  Correlation matrix: %d × %d\n",
             nrow(correlation_matrix), ncol(correlation_matrix)))
 
-# Summary statistics
-upper_tri <- correlation_matrix[upper.tri(correlation_matrix)]
-cat(sprintf("  Average correlation: %.3f\n", mean(upper_tri, na.rm = TRUE)))
-cat(sprintf("  Median correlation: %.3f\n", median(upper_tri, na.rm = TRUE)))
-cat(sprintf("  Max correlation: %.3f\n", max(upper_tri, na.rm = TRUE)))
-cat(sprintf("  Min correlation: %.3f\n", min(upper_tri, na.rm = TRUE)))
-
-# Save correlation matrix
-write.csv(correlation_matrix, CORRELATION_FILE)
-saveRDS(correlation_matrix, CORRELATION_RDS)
-cat(sprintf("\n  Saved correlation matrix: %s\n", CORRELATION_FILE))
+# Save full correlation matrix
+saveRDS(correlation_matrix, file.path(OUTPUT_DIR, "correlation_matrix.rds"))
 
 # ============================================================================
-# STEP 4: GREEDY SELECTION ALGORITHM WITH SECTOR CONSTRAINTS
+# STEP 4: STRATEGY-SPECIFIC SELECTION FUNCTIONS
 # ============================================================================
 
-cat("\nStep 4: Selecting portfolio using greedy algorithm...\n")
-cat(sprintf("  Target: %d stocks\n", TARGET_PORTFOLIO_SIZE))
-cat(sprintf("  Max correlation: %.2f\n", MAX_CORRELATION))
-cat(sprintf("  Min sectors: %d\n", MIN_SECTORS))
-cat(sprintf("  Max per sector: %d\n", MAX_PER_SECTOR))
-
-# Initialize portfolio
-selected_stocks <- character()
-selected_sectors <- character()
+cat("\nStep 4: Defining strategy-specific selection criteria...\n")
 
 # Helper function to calculate average correlation with selected stocks
-calc_avg_correlation <- function(ticker, selected) {
+# Now incorporates regime stress multiplier
+calc_avg_correlation <- function(ticker, selected, corr_mat, stress_mult = 1.0) {
   if (length(selected) == 0) return(0)
+  correlations <- corr_mat[ticker, selected]
+  avg_corr <- mean(abs(correlations), na.rm = TRUE)
 
-  correlations <- correlation_matrix[ticker, selected]
-  mean(abs(correlations), na.rm = TRUE)
+  # Apply stress multiplier and cap at 1.0
+  stressed_corr <- min(avg_corr * stress_mult, 1.0)
+
+  return(stressed_corr)
 }
 
-# Helper function to get selection score
-get_selection_score <- function(ticker, selected, candidates_df) {
+# Strategy-specific scoring functions (Z-SCORE BASED)
+get_strategy_score <- function(ticker, selected, candidates_df, strategy, corr_mat, stress_mult = 1.0) {
 
-  avg_corr <- calc_avg_correlation(ticker, selected)
+  stock <- candidates_df %>% filter(ticker == !!ticker)
+  avg_corr <- calc_avg_correlation(ticker, selected, corr_mat, stress_mult)
 
-  # Get stock metrics
-  stock_metrics <- candidates_df %>% filter(ticker == !!ticker)
+  # Correlation penalty factor (0 to 1, where 1 = perfect correlation)
+  corr_penalty <- avg_corr
 
-  if (USE_SHARPE_WEIGHTING) {
-    # Higher Sharpe = better, lower correlation = better
-    # Normalize both to 0-1 scale and combine
-    sharpe_score <- stock_metrics$sharpe_ratio
-    corr_penalty <- avg_corr
+  # Strategy-specific scoring using Z-SCORES (statistically grounded weights)
+  # Each strategy combines z-scores with empirically-derived weights
+  composite_score <- switch(strategy,
 
-    # Score: high Sharpe, low correlation
-    score <- sharpe_score * (1 - corr_penalty)
-  } else {
-    # Pure correlation-based
-    score <- -avg_corr
-  }
+    # Max Sharpe: Favor high Sharpe with momentum confirmation
+    "max_sharpe" = {
+      0.40 * stock$z_sharpe +
+      0.20 * stock$z_momentum +
+      0.20 * stock$z_ichimoku +
+      0.20 * (1 - corr_penalty)
+    },
 
-  return(score)
-}
+    # Min Variance: Prioritize low variance with Ichimoku confirmation
+    "min_variance" = {
+      0.50 * stock$z_variance +
+      0.20 * stock$z_ichimoku +
+      0.30 * (1 - corr_penalty)
+    },
 
-# Stage 1: Select top performer from each major sector first
-# This ensures sector diversity
-cat("\n  Stage 1: Selecting top performer from each major sector...\n")
+    # Max Sortino: Favor downside protection with momentum
+    "max_sortino" = {
+      0.40 * stock$z_sortino +
+      0.20 * stock$z_momentum +
+      0.20 * stock$z_ichimoku +
+      0.20 * (1 - corr_penalty)
+    },
 
-major_sectors <- candidates %>%
-  count(sector, sort = TRUE) %>%
-  head(MIN_SECTORS) %>%
-  pull(sector)
+    # Min CVaR: Tail risk mitigation focus
+    "min_cvar" = {
+      0.50 * stock$z_cvar +
+      0.20 * stock$z_ichimoku +
+      0.30 * (1 - corr_penalty)
+    },
 
-for (sector in major_sectors) {
+    # Risk Parity: Volatility distance + Ichimoku boost
+    "risk_parity" = {
+      vol_median <- median(candidates_df$daily_volatility, na.rm = TRUE)
+      vol_distance <- -abs(stock$daily_volatility - vol_median)
+      z_vol_dist <- (vol_distance - mean(-abs(candidates_df$daily_volatility - vol_median), na.rm=TRUE)) /
+                     sd(-abs(candidates_df$daily_volatility - vol_median), na.rm=TRUE)
 
-  sector_candidates <- candidates %>%
-    filter(sector == !!sector, !ticker %in% selected_stocks)
+      0.60 * z_vol_dist +
+      0.20 * stock$z_ichimoku +
+      0.20 * (1 - corr_penalty)
+    },
 
-  if (nrow(sector_candidates) == 0) next
-
-  # Pick top Sharpe ratio from this sector
-  best_in_sector <- sector_candidates %>%
-    arrange(desc(sharpe_ratio)) %>%
-    head(1) %>%
-    pull(ticker)
-
-  selected_stocks <- c(selected_stocks, best_in_sector)
-  selected_sectors <- c(selected_sectors, sector)
-
-  cat(sprintf("    Added %s from %s (Sharpe: %.2f)\n",
-              best_in_sector, sector,
-              sector_candidates %>% filter(ticker == best_in_sector) %>% pull(sharpe_ratio)))
-}
-
-cat(sprintf("\n  Stage 1 complete: %d stocks selected from %d sectors\n",
-            length(selected_stocks), length(unique(selected_sectors))))
-
-# Stage 2: Fill remaining slots with best available stocks
-cat("\n  Stage 2: Filling remaining slots with best candidates...\n")
-
-while (length(selected_stocks) < TARGET_PORTFOLIO_SIZE) {
-
-  # Get candidates not yet selected
-  available <- candidates %>%
-    filter(!ticker %in% selected_stocks)
-
-  if (nrow(available) == 0) {
-    cat("    No more candidates available.\n")
-    break
-  }
-
-  # Calculate scores for all available stocks
-  scores <- sapply(available$ticker, function(t) {
-
-    # Check sector constraint
-    stock_sector <- available %>% filter(ticker == t) %>% pull(sector)
-    sector_count <- sum(selected_sectors == stock_sector)
-
-    if (sector_count >= MAX_PER_SECTOR) {
-      return(-Inf)  # Exclude if sector maxed out
+    # Default: Max Sharpe
+    {
+      0.40 * stock$z_sharpe +
+      0.20 * stock$z_momentum +
+      0.20 * stock$z_ichimoku +
+      0.20 * (1 - corr_penalty)
     }
+  )
 
-    get_selection_score(t, selected_stocks, available)
-  })
+  # Handle NA
+  if (is.na(composite_score)) composite_score <- -Inf
 
-  # Select best scoring stock
-  best_idx <- which.max(scores)
+  return(composite_score)
+}
 
-  if (scores[best_idx] == -Inf) {
-    cat("    All remaining stocks violate sector constraints.\n")
-    break
+# Generic portfolio selection function
+select_portfolio_for_strategy <- function(strategy, candidates_df, corr_mat,
+                                           target_size = TARGET_PORTFOLIO_SIZE,
+                                           max_corr = MAX_CORRELATION,
+                                           min_sectors = MIN_SECTORS,
+                                           max_per_sector = MAX_PER_SECTOR,
+                                           stress_mult = 1.0) {
+
+  cat(sprintf("\n  --- Selecting portfolio for: %s ---\n", toupper(strategy)))
+
+  # Sort candidates by strategy-specific metric for initial selection
+  ranked_candidates <- switch(strategy,
+    "max_sharpe" = candidates_df %>% arrange(desc(sharpe_ratio)),
+    "min_variance" = candidates_df %>% arrange(annual_variance),
+    "max_sortino" = candidates_df %>% arrange(desc(sortino_ratio)),
+    "min_cvar" = candidates_df %>% arrange(desc(cvar)),  # Less negative is better
+    "risk_parity" = candidates_df %>%
+      mutate(vol_dist = abs(daily_volatility - median(daily_volatility))) %>%
+      arrange(vol_dist),
+    candidates_df %>% arrange(desc(sharpe_ratio))
+  )
+
+  selected_stocks <- character()
+  selected_sectors <- character()
+
+  # Stage 1: Get top performer from major sectors
+  major_sectors <- ranked_candidates %>%
+    count(sector, sort = TRUE) %>%
+    head(min_sectors) %>%
+    pull(sector)
+
+  for (sector in major_sectors) {
+    sector_candidates <- ranked_candidates %>%
+      filter(sector == !!sector, !ticker %in% selected_stocks)
+
+    if (nrow(sector_candidates) == 0) next
+
+    best <- sector_candidates$ticker[1]
+    selected_stocks <- c(selected_stocks, best)
+    selected_sectors <- c(selected_sectors, sector)
   }
 
-  best_ticker <- available$ticker[best_idx]
-  best_sector <- available$sector[best_idx]
-  best_corr <- calc_avg_correlation(best_ticker, selected_stocks)
+  cat(sprintf("    Stage 1: %d stocks from %d sectors\n",
+              length(selected_stocks), length(unique(selected_sectors))))
 
-  selected_stocks <- c(selected_stocks, best_ticker)
-  selected_sectors <- c(selected_sectors, best_sector)
+  # Stage 2: Fill remaining slots
+  while (length(selected_stocks) < target_size) {
 
-  cat(sprintf("    [%d/%d] Added %s (%s) - Avg corr: %.3f, Score: %.3f\n",
-              length(selected_stocks), TARGET_PORTFOLIO_SIZE,
-              best_ticker, best_sector, best_corr, scores[best_idx]))
+    available <- ranked_candidates %>%
+      filter(!ticker %in% selected_stocks)
+
+    if (nrow(available) == 0) break
+
+    # Score all available stocks (with stress multiplier)
+    scores <- sapply(available$ticker, function(t) {
+      stock_sector <- available %>% filter(ticker == t) %>% pull(sector)
+      sector_count <- sum(selected_sectors == stock_sector)
+
+      if (sector_count >= max_per_sector) return(-Inf)
+
+      get_strategy_score(t, selected_stocks, available, strategy, corr_mat, stress_mult)
+    })
+
+    best_idx <- which.max(scores)
+    if (scores[best_idx] == -Inf) break
+
+    best_ticker <- available$ticker[best_idx]
+    best_sector <- available$sector[best_idx]
+
+    selected_stocks <- c(selected_stocks, best_ticker)
+    selected_sectors <- c(selected_sectors, best_sector)
+  }
+
+  cat(sprintf("    Final: %d stocks from %d sectors\n",
+              length(selected_stocks), length(unique(selected_sectors))))
+
+  # Build portfolio dataframe
+  portfolio <- candidates_df %>%
+    filter(ticker %in% selected_stocks) %>%
+    rowwise() %>%
+    mutate(
+      avg_correlation = calc_avg_correlation(ticker, setdiff(selected_stocks, ticker), corr_mat, stress_mult)
+    ) %>%
+    ungroup()
+
+  # Add strategy column
+  portfolio$strategy <- strategy
+
+  return(portfolio)
 }
 
-cat(sprintf("\n  Selection complete: %d stocks from %d sectors\n",
-            length(selected_stocks), length(unique(selected_sectors))))
-
 # ============================================================================
-# STEP 5: ANALYZE FINAL PORTFOLIO
+# STEP 5: SELECT PORTFOLIOS FOR ALL STRATEGIES
 # ============================================================================
 
-cat("\nStep 5: Analyzing final portfolio...\n")
+cat("\nStep 5: Selecting portfolios for each strategy...\n")
 
-# Create portfolio dataframe
-final_portfolio <- candidates %>%
-  filter(ticker %in% selected_stocks) %>%
-  arrange(desc(sharpe_ratio))
+all_portfolios <- list()
 
-# Add correlation metrics
-final_portfolio <- final_portfolio %>%
-  rowwise() %>%
-  mutate(
-    avg_correlation = calc_avg_correlation(ticker, setdiff(selected_stocks, ticker))
-  ) %>%
-  ungroup()
+for (strategy in STRATEGIES) {
+  portfolio <- select_portfolio_for_strategy(
+    strategy = strategy,
+    candidates_df = candidates,
+    corr_mat = correlation_matrix,
+    stress_mult = STRESS_CORR_MULT  # Use regime stress multiplier
+  )
 
-# Portfolio statistics
-cat("\n  === FINAL PORTFOLIO ===\n")
-print(final_portfolio %>%
-        select(ticker, sector, cumulative_return_1y, sharpe_ratio,
-               daily_volatility, avg_correlation) %>%
+  all_portfolios[[strategy]] <- portfolio
+
+  # Save individual portfolio
+  saveRDS(portfolio, file.path(PORTFOLIOS_DIR, paste0(strategy, "_portfolio.rds")))
+  write.csv(portfolio, file.path(PORTFOLIOS_DIR, paste0(strategy, "_portfolio.csv")),
+            row.names = FALSE)
+}
+
+# Equal weight uses same stocks as max_sharpe
+all_portfolios[["equal_weight"]] <- all_portfolios[["max_sharpe"]] %>%
+  mutate(strategy = "equal_weight")
+saveRDS(all_portfolios[["equal_weight"]],
+        file.path(PORTFOLIOS_DIR, "equal_weight_portfolio.rds"))
+
+# ============================================================================
+# STEP 6: ANALYZE AND COMPARE PORTFOLIOS
+# ============================================================================
+
+cat("\nStep 6: Comparing strategy portfolios...\n")
+
+# Combine all portfolios for comparison
+comparison <- bind_rows(lapply(names(all_portfolios), function(s) {
+  p <- all_portfolios[[s]]
+  data.frame(
+    strategy = s,
+    n_stocks = nrow(p),
+    n_sectors = length(unique(p$sector)),
+    avg_return = mean(p$cumulative_return_1y),
+    avg_sharpe = mean(p$sharpe_ratio, na.rm = TRUE),
+    avg_sortino = mean(p$sortino_ratio, na.rm = TRUE),
+    avg_variance = mean(p$annual_variance, na.rm = TRUE),
+    avg_cvar = mean(p$cvar, na.rm = TRUE),
+    avg_ichimoku = mean(p$ichimoku_score, na.rm = TRUE),
+    avg_correlation = mean(p$avg_correlation, na.rm = TRUE)
+  )
+}))
+
+cat("\n  === STRATEGY COMPARISON ===\n")
+print(comparison %>%
         mutate(
-          return_pct = sprintf("%.1f%%", 100 * cumulative_return_1y),
-          vol_pct = sprintf("%.2f%%", 100 * daily_volatility)
-        ) %>%
-        select(-cumulative_return_1y, -daily_volatility),
-      n = TARGET_PORTFOLIO_SIZE)
+          avg_return = sprintf("%.1f%%", 100 * avg_return),
+          avg_sharpe = sprintf("%.2f", avg_sharpe),
+          avg_sortino = sprintf("%.2f", avg_sortino),
+          avg_variance = sprintf("%.4f", avg_variance),
+          avg_cvar = sprintf("%.2f%%", 100 * avg_cvar),
+          avg_ichimoku = sprintf("%.1f/5", avg_ichimoku),
+          avg_correlation = sprintf("%.3f", avg_correlation)
+        ), row.names = FALSE)
 
-# Sector distribution
-cat("\n  Sector Distribution:\n")
-sector_breakdown <- final_portfolio %>%
-  count(sector, sort = TRUE)
-print(as.data.frame(sector_breakdown), row.names = FALSE)
+# Stock overlap analysis
+cat("\n  === STOCK OVERLAP BETWEEN STRATEGIES ===\n")
+overlap_matrix <- matrix(0, nrow = length(STRATEGIES), ncol = length(STRATEGIES))
+rownames(overlap_matrix) <- STRATEGIES
+colnames(overlap_matrix) <- STRATEGIES
 
-# Portfolio-level metrics
-cat("\n  Portfolio-Level Metrics:\n")
-cat(sprintf("    Total stocks: %d\n", nrow(final_portfolio)))
-cat(sprintf("    Sectors represented: %d\n", length(unique(final_portfolio$sector))))
-cat(sprintf("    Average 1-year return: %.1f%%\n",
-            100 * mean(final_portfolio$cumulative_return_1y)))
-cat(sprintf("    Average Sharpe ratio: %.2f\n",
-            mean(final_portfolio$sharpe_ratio, na.rm = TRUE)))
-cat(sprintf("    Average daily volatility: %.2f%%\n",
-            100 * mean(final_portfolio$daily_volatility)))
-cat(sprintf("    Average pairwise correlation: %.3f\n",
-            mean(final_portfolio$avg_correlation)))
+for (i in seq_along(STRATEGIES)) {
+  for (j in seq_along(STRATEGIES)) {
+    stocks_i <- all_portfolios[[STRATEGIES[i]]]$ticker
+    stocks_j <- all_portfolios[[STRATEGIES[j]]]$ticker
+    overlap_matrix[i, j] <- length(intersect(stocks_i, stocks_j))
+  }
+}
+print(overlap_matrix)
 
-# Check if Unknown sector is included
-unknown_in_portfolio <- final_portfolio %>% filter(sector == "Unknown")
-if (nrow(unknown_in_portfolio) > 0) {
-  cat("\n  ⚠ WARNING: Portfolio includes stocks from 'Unknown' sector:\n")
-  print(unknown_in_portfolio %>% select(ticker, cumulative_return_1y, sharpe_ratio))
-  cat("  Consider reviewing these stocks' sector classifications.\n")
+# Unique stocks per strategy
+cat("\n  === UNIQUE STOCKS PER STRATEGY ===\n")
+all_strategy_stocks <- unique(unlist(lapply(all_portfolios, function(p) p$ticker)))
+cat(sprintf("  Total unique stocks across all strategies: %d\n", length(all_strategy_stocks)))
+
+for (strategy in STRATEGIES) {
+  other_stocks <- unique(unlist(lapply(STRATEGIES[STRATEGIES != strategy],
+                                        function(s) all_portfolios[[s]]$ticker)))
+  unique_to_strategy <- setdiff(all_portfolios[[strategy]]$ticker, other_stocks)
+  cat(sprintf("    %s: %d unique stocks\n", strategy, length(unique_to_strategy)))
+  if (length(unique_to_strategy) > 0) {
+    cat(sprintf("      %s\n", paste(unique_to_strategy, collapse = ", ")))
+  }
 }
 
 # ============================================================================
-# STEP 6: SAVE PORTFOLIO
+# STEP 7: CREATE COMBINED OUTPUT FOR BACKWARD COMPATIBILITY
 # ============================================================================
 
-cat("\nStep 6: Saving final portfolio...\n")
+cat("\nStep 7: Creating combined output files...\n")
 
-# Save portfolio
-write.csv(final_portfolio, PORTFOLIO_FILE, row.names = FALSE)
-saveRDS(final_portfolio, PORTFOLIO_RDS)
+# Use max_sharpe as the default "final_portfolio" for backward compatibility
+final_portfolio <- all_portfolios[["max_sharpe"]] %>%
+  select(-strategy)
 
-cat(sprintf("  Saved CSV: %s\n", PORTFOLIO_FILE))
-cat(sprintf("  Saved RDS: %s\n", PORTFOLIO_RDS))
+write.csv(final_portfolio, file.path(OUTPUT_DIR, "final_portfolio.csv"), row.names = FALSE)
+saveRDS(final_portfolio, file.path(OUTPUT_DIR, "final_portfolio.rds"))
 
-# ============================================================================
-# STEP 7: CORRELATION HEATMAP DATA
-# ============================================================================
+# Save all portfolios in one object
+saveRDS(all_portfolios, file.path(OUTPUT_DIR, "all_strategy_portfolios.rds"))
 
-cat("\nStep 7: Preparing correlation heatmap...\n")
+# Create master stock list with strategy assignments
+master_list <- bind_rows(lapply(names(all_portfolios), function(s) {
+  all_portfolios[[s]] %>%
+    select(ticker, sector, sharpe_ratio, sortino_ratio, annual_variance, cvar,
+           daily_volatility, cumulative_return_1y, current_price, ichimoku_score, avg_correlation) %>%
+    mutate(strategy = s)
+}))
 
-# Extract portfolio correlation submatrix
-portfolio_corr <- correlation_matrix[selected_stocks, selected_stocks]
+write.csv(master_list, file.path(OUTPUT_DIR, "master_stock_list.csv"), row.names = FALSE)
 
-# Save heatmap data
-heatmap_file <- file.path(OUTPUT_DIR, "portfolio_correlation_heatmap.rds")
-saveRDS(portfolio_corr, heatmap_file)
-
-# Create correlation heatmap plot
-pdf(file.path(OUTPUT_DIR, "portfolio_correlation_heatmap.pdf"),
-    width = 10, height = 10)
-corrplot(portfolio_corr, method = "color", type = "upper",
-         addCoef.col = "black", number.cex = 0.7,
-         tl.col = "black", tl.srt = 45,
-         title = "Portfolio Correlation Matrix",
-         mar = c(0,0,2,0))
-dev.off()
-
-cat(sprintf("  Saved heatmap: %s\n",
-            file.path(OUTPUT_DIR, "portfolio_correlation_heatmap.pdf")))
-
-# Also create text-based visualization
-cat("\n  Portfolio Correlation Matrix:\n")
-print(round(portfolio_corr, 2))
+cat(sprintf("  Saved: analysis/final_portfolio.rds (default: max_sharpe)\n"))
+cat(sprintf("  Saved: analysis/all_strategy_portfolios.rds (all 6 strategies)\n"))
+cat(sprintf("  Saved: analysis/master_stock_list.csv (all stocks with strategies)\n"))
 
 # ============================================================================
-# STEP 8: GENERATE SUMMARY REPORT
+# STEP 8: CORRELATION HEATMAPS FOR EACH STRATEGY
 # ============================================================================
 
-cat("\nStep 8: Creating summary report...\n")
+cat("\nStep 8: Creating correlation heatmaps for each strategy...\n")
 
-# Correlation statistics
-portfolio_corr_values <- portfolio_corr[upper.tri(portfolio_corr)]
+for (strategy in STRATEGIES) {
+  portfolio_stocks <- all_portfolios[[strategy]]$ticker
+  portfolio_corr <- correlation_matrix[portfolio_stocks, portfolio_stocks]
+
+  saveRDS(portfolio_corr, file.path(PORTFOLIOS_DIR, paste0(strategy, "_correlation.rds")))
+}
+
+# Save default heatmap (max_sharpe) for backward compatibility
+default_stocks <- all_portfolios[["max_sharpe"]]$ticker
+portfolio_corr <- correlation_matrix[default_stocks, default_stocks]
+saveRDS(portfolio_corr, file.path(OUTPUT_DIR, "portfolio_correlation_heatmap.rds"))
+
+# ============================================================================
+# STEP 9: SUMMARY REPORT
+# ============================================================================
+
+cat("\nStep 9: Creating summary report...\n")
 
 summary_report <- sprintf("
-=== MODULE 3: CORRELATION ANALYSIS SUMMARY ===
+=== MODULE 3: STRATEGY-SPECIFIC PORTFOLIO SELECTION ===
 Generated: %s
 
-SELECTION PARAMETERS:
-- Target portfolio size: %d stocks
-- Maximum correlation threshold: %.2f
-- Minimum sectors required: %d
-- Maximum stocks per sector: %d
-- Sharpe ratio weighting: %s
+CONFIGURATION:
+- Target portfolio size: %d stocks per strategy
+- Maximum correlation: %.2f
+- Minimum sectors: %d
+- Maximum per sector: %d
+- Strategies: %s
 
-INPUT DATA:
-- Candidate stocks analyzed: %d
-- Analysis period: %d trading days (~1 year)
-- Correlation calculation method: Pearson
+CANDIDATES ANALYZED:
+- Total candidates: %d
+- Successfully loaded: %d
 
-SELECTION ALGORITHM:
-- Stage 1: Top performer from each of %d major sectors
-- Stage 2: Greedy selection with sector constraints and Sharpe weighting
-
-FINAL PORTFOLIO:
-- Total stocks: %d
-- Sectors represented: %d
-- Average 1-year return: %.1f%%
-- Average Sharpe ratio: %.2f
-- Average daily volatility: %.2f%%
-
-CORRELATION METRICS:
-- Average pairwise correlation: %.3f
-- Median pairwise correlation: %.3f
-- Maximum pairwise correlation: %.3f
-- Minimum pairwise correlation: %.3f
-- Standard deviation: %.3f
-
-SECTOR BREAKDOWN:
+STRATEGY COMPARISON:
 %s
 
-PORTFOLIO COMPOSITION:
-%s
-
-CORRELATION QUALITY:
-%s
+STOCK OVERLAP:
+- Total unique stocks: %d
+- Strategies produce %s portfolios
 
 FILES GENERATED:
-- Final portfolio: %s
-- Correlation matrix: %s
-- Correlation heatmap: %s
+- Individual portfolios: analysis/portfolios/<strategy>_portfolio.rds
+- Combined portfolios: analysis/all_strategy_portfolios.rds
+- Master stock list: analysis/master_stock_list.csv
+- Default portfolio: analysis/final_portfolio.rds (max_sharpe)
 
 NEXT STEPS:
-- Run Module 4 for Ichimoku technical validation
-- Review flagged stocks if any
-- Proceed to portfolio optimization (efficient frontier)
+- Run Module 4 for Ichimoku validation (will validate all strategies)
+- Run Module 5 for portfolio optimization
 ",
 Sys.time(),
 TARGET_PORTFOLIO_SIZE,
 MAX_CORRELATION,
 MIN_SECTORS,
 MAX_PER_SECTOR,
-ifelse(USE_SHARPE_WEIGHTING, "Yes", "No"),
+paste(STRATEGIES, collapse = ", "),
+nrow(candidates) + length(failed_loads),
 nrow(candidates),
-CORRELATION_PERIOD,
-length(major_sectors),
-nrow(final_portfolio),
-length(unique(final_portfolio$sector)),
-100 * mean(final_portfolio$cumulative_return_1y),
-mean(final_portfolio$sharpe_ratio, na.rm = TRUE),
-100 * mean(final_portfolio$daily_volatility),
-mean(portfolio_corr_values),
-median(portfolio_corr_values),
-max(portfolio_corr_values),
-min(portfolio_corr_values),
-sd(portfolio_corr_values),
-paste(capture.output(print(sector_breakdown, row.names = FALSE)), collapse = "\n"),
-paste(capture.output(print(
-  final_portfolio %>%
-    select(ticker, sector, cumulative_return_1y, sharpe_ratio, avg_correlation) %>%
-    mutate(return_pct = sprintf("%.1f%%", 100 * cumulative_return_1y)) %>%
-    select(ticker, sector, return_pct, sharpe_ratio, avg_correlation),
-  row.names = FALSE
-)), collapse = "\n"),
-ifelse(mean(portfolio_corr_values) < 0.3,
-       "Excellent - Very low correlation, maximum diversification",
-       ifelse(mean(portfolio_corr_values) < 0.5,
-              "Good - Moderate correlation, well-diversified portfolio",
-              "Fair - Higher correlation, consider reviewing selections")),
-PORTFOLIO_FILE,
-CORRELATION_FILE,
-"analysis/portfolio_correlation_heatmap.pdf"
+paste(capture.output(print(comparison, row.names = FALSE)), collapse = "\n"),
+length(all_strategy_stocks),
+ifelse(sum(overlap_matrix[upper.tri(overlap_matrix)] < TARGET_PORTFOLIO_SIZE) > 0,
+       "differentiated", "similar")
 )
 
-# Save summary
-summary_file <- file.path(OUTPUT_DIR, "module_3_summary.txt")
-writeLines(summary_report, summary_file)
-cat(sprintf("  Summary report: %s\n", summary_file))
-
-# Print summary to console
+writeLines(summary_report, file.path(OUTPUT_DIR, "module_3_summary.txt"))
 cat(summary_report)
 
 cat("\n=== MODULE 3 COMPLETE ===\n")
-cat(sprintf("Next step: Run Module 4 for Ichimoku technical validation\n\n"))
+cat("Next step: Run Module 4 for Ichimoku validation\n\n")
 
 # ============================================================================
-# USAGE EXAMPLE FOR NEXT STEPS
+# QUICK REFERENCE
 # ============================================================================
 
-cat("=== QUICK START FOR MODULE 4 ===\n")
-cat("# Load final portfolio:\n")
-cat("portfolio <- readRDS('analysis/final_portfolio.rds')\n\n")
-cat("# View portfolio:\n")
-cat("print(portfolio)\n\n")
-cat("# Get ticker list for Ichimoku analysis:\n")
-cat("tickers <- portfolio$ticker\n\n")
-cat("# View correlation heatmap:\n")
-cat("portfolio_corr <- readRDS('analysis/portfolio_correlation_heatmap.rds')\n")
-cat("corrplot(portfolio_corr, method='color', type='upper', addCoef.col='black')\n\n")
+cat("=== QUICK REFERENCE ===\n")
+cat("# Load all strategy portfolios:\n")
+cat("all_portfolios <- readRDS('analysis/all_strategy_portfolios.rds')\n\n")
+cat("# Access specific strategy:\n")
+cat("max_sharpe_portfolio <- all_portfolios[['max_sharpe']]\n")
+cat("min_variance_portfolio <- all_portfolios[['min_variance']]\n\n")
+cat("# View strategy comparison:\n")
+cat("master_list <- read.csv('analysis/master_stock_list.csv')\n")
+cat("table(master_list$strategy)\n\n")

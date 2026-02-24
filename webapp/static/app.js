@@ -11,6 +11,24 @@ const amountInput = document.getElementById('amount');
 const calculateBtn = document.getElementById('calculate-btn');
 const resultsSection = document.getElementById('results');
 const benchSection = document.getElementById('bench-section');
+const portfolioTypeSelect = document.getElementById('portfolio-type');
+const riskToleranceGroup = document.getElementById('risk-tolerance-group');
+const riskToleranceSlider = document.getElementById('risk-tolerance');
+const riskToleranceValue = document.getElementById('risk-tolerance-value');
+
+// Show/hide risk tolerance slider based on portfolio type
+portfolioTypeSelect.addEventListener('change', () => {
+    if (portfolioTypeSelect.value === 'custom') {
+        riskToleranceGroup.classList.remove('hidden');
+    } else {
+        riskToleranceGroup.classList.add('hidden');
+    }
+});
+
+// Update risk tolerance display
+riskToleranceSlider.addEventListener('input', () => {
+    riskToleranceValue.textContent = riskToleranceSlider.value + '%';
+});
 
 // Format currency
 function formatCurrency(amount) {
@@ -28,6 +46,7 @@ function formatPercent(decimal) {
 // Calculate and display portfolio allocation
 async function calculateAllocation() {
     const amount = parseFloat(amountInput.value);
+    const portfolioType = portfolioTypeSelect.value;
 
     // Validate input
     if (!amount || amount <= 0) {
@@ -40,8 +59,19 @@ async function calculateAllocation() {
     calculateBtn.textContent = 'Calculating...';
 
     try {
+        // Build API URL with parameters
+        let url = `${API_BASE}/api/portfolio?amount=${amount}`;
+
+        if (portfolioType === 'custom') {
+            // Use risk tolerance for custom blend
+            const riskTolerance = parseFloat(riskToleranceSlider.value) / 100;
+            url += `&risk_tolerance=${riskTolerance}`;
+        } else {
+            url += `&portfolio_type=${portfolioType}`;
+        }
+
         // Call our API
-        const response = await fetch(`${API_BASE}/api/portfolio?amount=${amount}`);
+        const response = await fetch(url);
 
         if (!response.ok) {
             throw new Error('Failed to calculate allocation');
@@ -85,10 +115,12 @@ async function calculateAllocation() {
     }
 }
 
-// Load and display bench stocks
+// Load and display bench stocks for current strategy
 async function loadBench() {
     try {
-        const response = await fetch(`${API_BASE}/api/bench`);
+        // Get current portfolio type for strategy-specific bench
+        const portfolioType = portfolioTypeSelect.value === 'custom' ? 'max_sharpe' : portfolioTypeSelect.value;
+        const response = await fetch(`${API_BASE}/api/bench?portfolio_type=${portfolioType}`);
 
         if (!response.ok) {
             throw new Error('Failed to load bench stocks');

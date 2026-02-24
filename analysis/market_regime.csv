@@ -1,0 +1,2 @@
+"date","regime","regime_label","confidence","confidence_label","vix","spy_above_200ma","yield_curve","credit","primary_strategy","secondary_strategy","avoid_strategy","correlation_multiplier","position_adjustment"
+2026-02-16,"BULL_LOW_VOL","Bull Market / Low Volatility",0.5,"LOW",21.2000007629395,TRUE,"FLAT","NEUTRAL","max_sharpe","max_sortino","min_variance",1,1

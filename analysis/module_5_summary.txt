@@ -1,91 +1,79 @@
 
-=== MODULE 5: PORTFOLIO OPTIMIZATION SUMMARY ===
-Generated: 2026-01-20 21:17:00
+=== MODULE 5: STRATEGY-SPECIFIC PORTFOLIO OPTIMIZATION ===
+Generated: 2026-02-23 17:48:07
 
 OPTIMIZATION PARAMETERS:
-- Number of portfolios simulated: 10,000
+- Number of portfolios simulated: 10,000 per strategy
 - Risk-free rate: 4.50% (10-year Treasury)
 - Optimization period: 252 trading days (~1 year)
 - Investment amount: $10,000
+- Strategies: max_sharpe, min_variance, max_sortino, min_cvar, risk_parity
 
-PORTFOLIO COMPOSITION:
-- Number of stocks: 12
-- Tickers: AHR, GEV, FIX, CLS, DBD, BBVA, TFPM, AGX, POWL, LQDA, IDR, MAMA
+NEW: STRATEGY-SPECIFIC STOCK SELECTION
+Each strategy now selects its own optimal stocks (different stocks per strategy)
 
-OPTIMAL PORTFOLIO (Maximum Sharpe Ratio):
-- Expected Annual Return: 103.07%
-- Expected Annual Risk (Std Dev): 26.48%
-- Sharpe Ratio: 3.723
-- Risk-adjusted performance: 3.7x better than risk-free rate
+STRATEGY COMPARISON:
+     Strategy Return  Risk Sharpe Sortino
+   max_sharpe 163.9% 40.2%   3.97    6.67
+ min_variance  56.4% 14.0%   3.71    6.10
+  max_sortino 163.1% 41.0%   3.87    6.51
+     min_cvar  93.8% 22.3%   4.01    7.17
+  risk_parity 136.6% 36.5%   3.62    5.86
 
-COMPARISON TO ALTERNATIVES:
+MAX SHARPE PORTFOLIO (Example):
+- Stocks: ALM, AU, MOD, POWL, NESR, BKD, FIX, DBD, AHR, LITE, BELFB, GEV
+- Expected Return: 163.87%
+- Expected Risk: 40.17%
+- Sharpe Ratio: 3.968
 
-Maximum Sharpe Ratio Portfolio:
-  Return: 103.07% | Risk: 26.48% | Sharpe: 3.723
+MIN VARIANCE PORTFOLIO:
+- Stocks: AU, VSEC, MNST, BUD, HSY, WWD, SHG, IONS, CTRE, GNL, VOD, GEF
+- Expected Return: 56.43%
+- Expected Risk: 13.99%
+- Sharpe Ratio: 3.712
 
-Minimum Variance Portfolio:
-  Return: 85.30% | Risk: 24.40% | Sharpe: 3.311
-
-Equal Weight Portfolio:
-  Return: 101.35% | Risk: 32.23% | Sharpe: 3.005
-
-Improvement vs Equal Weight:
-  Return: +1.72% | Risk: -5.75% | Sharpe: +0.718
-
-OPTIMAL WEIGHTS (Maximum Sharpe Ratio):
- ticker                 sector weight_pct
-   BBVA                Finance     16.99%
-   TFPM            Industrials     16.57%
-    IDR        Basic Materials     13.56%
-    AHR            Real Estate     12.08%
-   MAMA       Consumer Staples     10.79%
-    DBD          Miscellaneous      9.82%
-    CLS             Technology      8.02%
-   LQDA            Health Care      5.87%
-    FIX            Industrials      2.55%
-    AGX Consumer Discretionary      1.44%
-   POWL                 Energy      1.17%
-    GEV                Unknown      1.15%
-
-DOLLAR ALLOCATION (for $10,000 investment):
+DOLLAR ALLOCATION (Max Sharpe, for $10,000 investment):
  ticker shares invested
-    AHR     25 $1200.25
-    GEV      0    $0.00
+    ALM    117 $1724.58
+     AU     11 $1256.75
+    MOD      2  $452.72
+   POWL      1  $546.82
+   NESR     27  $658.80
+    BKD     50  $745.00
     FIX      0    $0.00
-    CLS      2  $627.20
-    DBD     14  $978.74
-   BBVA     69 $1682.22
-   TFPM     44 $1627.56
-    AGX      0    $0.00
-   POWL      0    $0.00
-   LQDA     15  $568.95
-    IDR     30 $1330.80
-   MAMA     75 $1075.50
+    DBD      2  $162.48
+    AHR      4  $207.72
+   LITE      3 $2003.31
+  BELFB      2  $470.08
+    GEV      0    $0.00
 
 ALLOCATION SUMMARY:
-- Total invested: $9091.22
-- Cash remaining: $908.78
-- Investment efficiency: 90.9%
-
-RISK METRICS:
-- Portfolio diversification: 12 stocks across 11 sectors
-- Average correlation: 0.254
-- Expected volatility: 26.48% annually
+- Total invested: $8228.26
+- Cash remaining: $1771.74
+- Investment efficiency: 82.3%
 
 FILES GENERATED:
-- Optimal weights: analysis/optimal_weights.csv
-- Dollar allocation: analysis/dollar_allocation.csv
-- Efficient frontier data: analysis/efficient_frontier.csv
-- Efficient frontier plot: analysis/efficient_frontier.png
+Per-Strategy:
+- analysis/weights/<strategy>_weights.csv
+- analysis/weights/<strategy>_allocation.csv
+- analysis/weights/<strategy>_frontier.rds
+
+Combined:
+- analysis/all_strategy_weights.csv (all strategies in one file)
+- analysis/optimal_weights.csv (legacy format)
+- analysis/efficient_frontier.csv
+- analysis/efficient_frontier.png
 
 INTERPRETATION:
-- Sharpe Ratio > 1.0 is good, > 2.0 is excellent
-- Your portfolio Sharpe: 3.723 - Excellent
-- Expected return significantly exceeds risk-free rate
-- Diversification reduces risk while maintaining high returns
+- Each strategy uses stocks best suited for its objective
+- Max Sharpe: High return per unit total risk
+- Min Variance: Lowest volatility stocks
+- Max Sortino: Best downside protection
+- Min CVaR: Protection against tail risk (worst days)
+- Risk Parity: Equal risk contribution from each stock
 
 NEXT STEPS:
-- Review dollar allocation and adjust investment amount if needed
 - Run Module 6 for backtesting validation
-- Consider rebalancing strategy for ongoing management
+- Use webapp to compare strategies and allocations
+- Consider strategy based on your risk tolerance
 

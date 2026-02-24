@@ -15,6 +15,13 @@
     var dateRangeSlider = document.getElementById('date-range');
     var dateRangeLabel = document.getElementById('date-range-label');
 
+    // Stock info elements
+    var stockInfoSection = document.getElementById('stock-info');
+    var stockDescription = document.getElementById('stock-description');
+    var stockSector = document.getElementById('stock-sector');
+    var stockIndustry = document.getElementById('stock-industry');
+    var stockMarketCap = document.getElementById('stock-market-cap');
+
     // Debug: log if elements are found
     console.log('Chart modal found:', !!chartModal);
     console.log('Close button found:', !!closeModalBtn);
@@ -154,6 +161,45 @@
         Plotly.newPlot(chartContainer, traces, layout, { responsive: true });
     }
 
+    // Fetch and display stock info
+    function fetchStockInfo(ticker) {
+        // Reset to loading state
+        if (stockDescription) stockDescription.textContent = 'Loading company info...';
+        if (stockSector) stockSector.textContent = '';
+        if (stockIndustry) stockIndustry.textContent = '';
+        if (stockMarketCap) stockMarketCap.textContent = '';
+
+        fetch('/api/stock/' + ticker + '/info')
+            .then(function(response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.json();
+            })
+            .then(function(info) {
+                console.log('Got stock info:', info.company_name);
+                if (stockDescription) {
+                    // Truncate description if too long
+                    var desc = info.description;
+                    if (desc.length > 300) {
+                        desc = desc.substring(0, 300) + '...';
+                    }
+                    stockDescription.textContent = desc;
+                }
+                if (stockSector && info.sector !== 'N/A') {
+                    stockSector.textContent = info.sector;
+                }
+                if (stockIndustry && info.industry !== 'N/A') {
+                    stockIndustry.textContent = info.industry;
+                }
+                if (stockMarketCap && info.market_cap_formatted !== 'N/A') {
+                    stockMarketCap.textContent = 'Market Cap: ' + info.market_cap_formatted;
+                }
+            })
+            .catch(function(error) {
+                console.error('Stock info fetch error:', error);
+                if (stockDescription) stockDescription.textContent = 'Unable to load company information.';
+            });
+    }
+
     // Open chart for a ticker
     function openChart(ticker) {
         console.log('Opening chart for', ticker);
@@ -167,7 +213,10 @@
         chartModal.classList.remove('hidden');
         chartTitle.textContent = 'Loading ' + ticker + '...';
 
-        // Fetch data
+        // Fetch stock info in parallel
+        fetchStockInfo(ticker);
+
+        // Fetch chart data
         fetch('/api/stock/' + ticker + '/ichimoku')
             .then(function(response) {
                 if (!response.ok) throw new Error('HTTP ' + response.status);

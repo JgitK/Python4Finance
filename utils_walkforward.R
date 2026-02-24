@@ -115,6 +115,96 @@ calculate_technical_indicators_asof <- function(ticker, sector, as_of_date) {
 
 
 # ============================================================================
+# FUNCTION: Calculate Ichimoku score as of a date (NO LOOK-AHEAD BIAS)
+# ============================================================================
+
+calculate_ichimoku_score_asof <- function(ticker, as_of_date) {
+  stock_data <- load_stock_as_of(ticker, as_of_date)
+  if (is.null(stock_data) || nrow(stock_data) < 78) return(NA)  # Need 52+26
+
+  stock_data <- stock_data %>% arrange(date)
+  n <- nrow(stock_data)
+
+  # Calculate Ichimoku components (same logic as Module 2)
+  high_9 <- runMax(stock_data$high, n = 9)
+  low_9 <- runMin(stock_data$low, n = 9)
+  high_26 <- runMax(stock_data$high, n = 26)
+  low_26 <- runMin(stock_data$low, n = 26)
+  high_52 <- runMax(stock_data$high, n = 52)
+  low_52 <- runMin(stock_data$low, n = 52)
+
+  tenkan <- (high_9 + low_9) / 2
+  kijun <- (high_26 + low_26) / 2
+  senkou_a <- (tenkan + kijun) / 2
+  senkou_b <- (high_52 + low_52) / 2
+
+  current_price <- stock_data$adjusted[n]
+  cloud_idx <- n - 26
+  if (cloud_idx <= 0) return(NA)
+
+  score <- 0
+
+  # 1. Price above cloud
+  cloud_top <- max(senkou_a[cloud_idx], senkou_b[cloud_idx], na.rm = TRUE)
+  if (!is.na(cloud_top) && current_price > cloud_top) score <- score + 1
+
+  # 2. TK bullish cross
+  if (!is.na(tenkan[n]) && !is.na(kijun[n]) && tenkan[n] > kijun[n]) score <- score + 1
+
+  # 3. Green cloud (Span A > Span B)
+  if (!is.na(senkou_a[cloud_idx]) && !is.na(senkou_b[cloud_idx]) &&
+      senkou_a[cloud_idx] > senkou_b[cloud_idx]) score <- score + 1
+
+  # 4. Chikou above historical price
+  if (cloud_idx > 0 && current_price > stock_data$adjusted[cloud_idx]) score <- score + 1
+
+  # 5. Future cloud green
+  future_green <- !is.na(senkou_a[n]) && !is.na(senkou_b[n]) && senkou_a[n] > senkou_b[n]
+  if (future_green) score <- score + 1
+
+  return(score)
+}
+
+# ============================================================================
+# FUNCTION: Detect survivorship bias
+# ============================================================================
+
+detect_survivorship_bias <- function(selection_date, tickers) {
+  # For each ticker selected at selection_date, check if data extends
+  # to the end of the holding period. If a stock's data ends before
+  # the backtest end date, it may have been delisted.
+
+  warnings <- character()
+
+  for (ticker in tickers) {
+    stock_data <- load_stock(ticker)
+    if (is.null(stock_data)) {
+      warnings <- c(warnings, sprintf("%s: No data at all (possible delisting)", ticker))
+      next
+    }
+
+    last_date <- max(stock_data$date)
+    if (last_date < Sys.Date() - 30) {
+      warnings <- c(warnings, sprintf("%s: Data ends %s (possible delisting/acquisition)",
+                                       ticker, last_date))
+    }
+  }
+
+  if (length(warnings) > 0) {
+    cat("\n  SURVIVORSHIP BIAS WARNINGS:\n")
+    for (w in warnings) cat(sprintf("    %s\n", w))
+    cat(sprintf("  %d of %d stocks may have survivorship issues\n",
+                length(warnings), length(tickers)))
+  }
+
+  return(list(
+    n_warnings = length(warnings),
+    warnings = warnings,
+    bias_risk = length(warnings) / length(tickers)
+  ))
+}
+
+# ============================================================================
 # FUNCTION: Select portfolio as of a date (Modules 2-3 combined)
 # ============================================================================
 
@@ -132,12 +222,33 @@ select_portfolio_asof <- function(selection_date, verbose = TRUE) {
     cat("(Using ONLY data available at that time - no future information)\n\n")
   }
 
-  # Load metadata (this is static info about tickers/sectors)
-  download_log <- read.csv("metadata/download_log.csv", stringsAsFactors = FALSE)
+  # Get list of available stocks from stocks/ directory
+  stock_files <- list.files("stocks/", pattern = "\\.rds$", full.names = FALSE)
+  tickers <- gsub("\\.rds$", "", stock_files)
 
-  valid_stocks <- download_log %>%
-    filter(success == TRUE, rows >= MIN_TRADING_DAYS) %>%
-    select(ticker, sector)
+  # Try to load sector information from download_log or master_stock_list
+  sector_map <- data.frame(ticker = character(), sector = character(), stringsAsFactors = FALSE)
+
+  if (file.exists("metadata/download_log.csv")) {
+    tryCatch({
+      log_df <- read.csv("metadata/download_log.csv", stringsAsFactors = FALSE)
+      sector_map <- log_df %>% select(ticker, sector) %>% distinct()
+    }, error = function(e) {})
+  }
+
+  if (file.exists("analysis/master_stock_list.csv")) {
+    tryCatch({
+      master_df <- read.csv("analysis/master_stock_list.csv", stringsAsFactors = FALSE)
+      master_sectors <- master_df %>% select(ticker, sector) %>% distinct()
+      sector_map <- bind_rows(sector_map, master_sectors) %>% distinct()
+    }, error = function(e) {})
+  }
+
+  # Create valid_stocks dataframe
+  valid_stocks <- data.frame(ticker = tickers, stringsAsFactors = FALSE)
+  valid_stocks <- valid_stocks %>%
+    left_join(sector_map, by = "ticker") %>%
+    mutate(sector = ifelse(is.na(sector), "Unknown", sector))
 
   if (verbose) cat(sprintf("Step 1: Analyzing %d stocks...\n", nrow(valid_stocks)))
 
@@ -183,6 +294,26 @@ select_portfolio_asof <- function(selection_date, verbose = TRUE) {
     warning("Not enough stocks pass filters")
     return(NULL)
   }
+
+  # -------------------------------------------------------------------------
+  # STEP 2.5: Calculate Ichimoku scores (NO LOOK-AHEAD)
+  # -------------------------------------------------------------------------
+
+  if (verbose) cat("\nStep 2.5: Calculating Ichimoku scores (as of selection date)...\n")
+
+  ichimoku_scores <- sapply(screened$ticker, function(t) {
+    calculate_ichimoku_score_asof(t, selection_date)
+  })
+
+  screened$ichimoku_score <- ichimoku_scores
+
+  # Filter by minimum Ichimoku score (matching Module 3 behavior)
+  MIN_ICHIMOKU_SCORE <- 2
+  screened <- screened %>%
+    filter(!is.na(ichimoku_score) & ichimoku_score >= MIN_ICHIMOKU_SCORE)
+
+  if (verbose) cat(sprintf("  After Ichimoku filter (>= %d): %d stocks\n",
+                           MIN_ICHIMOKU_SCORE, nrow(screened)))
 
   # -------------------------------------------------------------------------
   # STEP 3: Rank by sector and select top N (Module 2 logic)
@@ -248,6 +379,17 @@ select_portfolio_asof <- function(selection_date, verbose = TRUE) {
 
   if (verbose) cat("\nStep 4: Selecting final portfolio...\n")
 
+  # Z-score normalize signals for unbiased scoring (matching improved Module 3)
+  candidates <- candidates %>%
+    mutate(
+      z_sharpe = (sharpe_ratio - mean(sharpe_ratio, na.rm=TRUE)) / sd(sharpe_ratio, na.rm=TRUE),
+      z_momentum = (return_3m - mean(return_3m, na.rm=TRUE)) / sd(return_3m, na.rm=TRUE),
+      z_ichimoku = (ichimoku_score - mean(ichimoku_score, na.rm=TRUE)) / sd(ichimoku_score, na.rm=TRUE),
+      z_sharpe = ifelse(is.na(z_sharpe), 0, z_sharpe),
+      z_momentum = ifelse(is.na(z_momentum), 0, z_momentum),
+      z_ichimoku = ifelse(is.na(z_ichimoku), 0, z_ichimoku)
+    )
+
   selected_stocks <- character()
   selected_sectors <- character()
 
@@ -293,9 +435,13 @@ select_portfolio_asof <- function(selection_date, verbose = TRUE) {
       if (sector_count >= MAX_PER_SECTOR) return(-Inf)
 
       avg_corr <- calc_avg_corr(t, selected_stocks)
-      sharpe <- available %>% filter(ticker == t) %>% pull(sharpe_ratio)
+      stock <- available %>% filter(ticker == t)
 
-      sharpe * (1 - avg_corr)
+      # Z-score based composite (max_sharpe style weighting)
+      0.40 * stock$z_sharpe +
+      0.20 * stock$z_momentum +
+      0.20 * stock$z_ichimoku +
+      0.20 * (1 - avg_corr)
     })
 
     best_idx <- which.max(scores)
@@ -449,6 +595,13 @@ run_walkforward_test <- function(selection_date, backtest_end = Sys.Date()) {
     return(list(error = "Failed to select portfolio"))
   }
 
+  # Step 1.5: Check for survivorship bias
+  cat("\n============================================================\n")
+  cat("SURVIVORSHIP BIAS CHECK\n")
+  cat("============================================================\n")
+
+  survivorship_check <- detect_survivorship_bias(selection_date, portfolio$ticker)
+
   # Step 2: Backtest forward (out-of-sample)
   cat("\n============================================================\n")
   cat("OUT-OF-SAMPLE BACKTEST\n")
@@ -459,6 +612,22 @@ run_walkforward_test <- function(selection_date, backtest_end = Sys.Date()) {
     start_date = selection_date + 1,  # Day after selection
     end_date = backtest_end
   )
+
+  # Apply survivorship bias discount to returns
+  SURVIVORSHIP_DISCOUNT <- 0.01  # 1% annual discount (academic estimate)
+  years <- as.numeric(backtest_end - selection_date) / 365
+  bias_discount <- survivorship_check$bias_risk * SURVIVORSHIP_DISCOUNT * years
+
+  if (bias_discount > 0) {
+    backtest$total_return_adjusted <- backtest$total_return - bias_discount
+    backtest$bias_discount_applied <- bias_discount
+    cat(sprintf("\n  Survivorship bias discount applied: %.2f%%\n", bias_discount * 100))
+  } else {
+    backtest$total_return_adjusted <- backtest$total_return
+    backtest$bias_discount_applied <- 0
+  }
+
+  backtest$survivorship_bias_risk <- survivorship_check$bias_risk
 
   # Summary
   cat("\n============================================================\n")
@@ -475,7 +644,8 @@ run_walkforward_test <- function(selection_date, backtest_end = Sys.Date()) {
   return(list(
     selection_date = selection_date,
     portfolio = portfolio,
-    backtest = backtest
+    backtest = backtest,
+    survivorship_bias_risk = survivorship_check$bias_risk
   ))
 }
 
@@ -515,9 +685,11 @@ run_multi_period_walkforward <- function(selection_dates, holding_period = 180) 
         end_date = end_date,
         n_stocks = nrow(result$portfolio),
         total_return = result$backtest$total_return,
+        total_return_adjusted = result$backtest$total_return_adjusted,
         sharpe_ratio = result$backtest$sharpe_ratio,
         max_drawdown = result$backtest$max_drawdown,
-        num_days = result$backtest$num_days
+        num_days = result$backtest$num_days,
+        survivorship_bias_risk = result$survivorship_bias_risk
       )
 
     }, error = function(e) {

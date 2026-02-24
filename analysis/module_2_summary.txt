@@ -1,6 +1,6 @@
 
 === MODULE 2: TECHNICAL ANALYSIS SUMMARY ===
-Generated: 2026-01-20 21:13:29
+Generated: 2026-02-23 17:46:20
 
 SCREENING PARAMETERS:
 - Analysis period: 252 trading days (~1 year)
@@ -10,47 +10,47 @@ SCREENING PARAMETERS:
 - Top performers per sector: 10
 
 INPUT DATA:
-- Total stocks downloaded: 2727
-- Stocks meeting minimum data: 2727
-- Stocks after screening: 1637
+- Total stocks downloaded: 2734
+- Stocks meeting minimum data: 2734
+- Stocks after screening: 1702
 
 CANDIDATE SELECTION:
-- Total candidates: 129
+- Total candidates: 128
 - Sectors represented: 13
-- Average 1-year return: 152.96%
-- Average Sharpe ratio: 0.64
-- Average daily volatility: 3.06%
+- Average 1-year return: 158.86%
+- Average Sharpe ratio: 0.71
+- Average daily volatility: 2.98%
 
 SECTOR BREAKDOWN:
 # A tibble: 13 × 5
    sector                 count avg_return min_return max_return
    <chr>                  <int>      <dbl>      <dbl>      <dbl>
- 1 Basic Materials           10      3.75       2.69        6.41
- 2 Technology                10      3.43       2.04        6.72
- 3 Industrials               10      2.38       1.39        3.94
- 4 Health Care               10      1.94       1.48        2.54
- 5 Consumer Discretionary    10      1.88       1.19        4.29
- 6 Finance                   10      1.41       1.19        1.91
- 7 Telecommunications        10      0.956      0.327       2.81
- 8 Utilities                 10      0.934      0.523       1.92
- 9 Real Estate               10      0.846      0.497       1.94
-10 Energy                    10      0.831      0.435       1.57
-11 Unknown                    9      0.741     -0.121       3.79
-12 Consumer Staples          10      0.474      0.277       1.03
-13 Miscellaneous             10      0.239     -0.484       1.14
+ 1 Basic Materials           10      3.49      2.49         5.33
+ 2 Technology                10      3.08      1.80         4.42
+ 3 Industrials               10      2.54      1.75         3.33
+ 4 Consumer Discretionary    10      1.83      1.08         2.79
+ 5 Health Care               10      1.75      1.38         2.45
+ 6 Telecommunications        10      1.53      0.479        7.32
+ 7 Utilities                 10      1.20      0.621        2.74
+ 8 Finance                   10      1.19      0.885        2.36
+ 9 Energy                    10      1.16      0.750        1.64
+10 Unknown                    8      0.957    -0.332        4.17
+11 Real Estate               10      0.764     0.501        1.29
+12 Consumer Staples          10      0.684     0.402        1.25
+13 Miscellaneous             10      0.356    -0.0230       1.19
 
 TOP 10 PERFORMERS:
- ticker                 sector return_pct
-     PL             Technology    671.58%
-    ASM        Basic Materials    641.05%
-   VSAT             Technology    511.72%
-   USAS        Basic Materials    476.00%
-    ALM        Basic Materials    475.12%
-   SATS Consumer Discretionary    428.60%
-     HL            Industrials    393.55%
-   ARMN                Unknown    378.84%
-   SBSW        Basic Materials    371.07%
-    WDC             Technology    368.89%
+ ticker             sector return_pct
+   LITE Telecommunications    732.42%
+    ASM    Basic Materials    533.33%
+   USAS    Basic Materials    448.07%
+   LASR         Technology    441.68%
+    WDC         Technology    426.44%
+   ARMN            Unknown    417.49%
+     AG    Basic Materials    412.16%
+   VSAT         Technology    402.16%
+    ALM    Basic Materials    385.27%
+     HL        Industrials    333.03%
 
 FILES GENERATED:
 - Candidates: analysis/candidate_stocks.csv

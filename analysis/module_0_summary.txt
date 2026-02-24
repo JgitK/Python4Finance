@@ -1,0 +1,46 @@
+
+=== MODULE 0: MARKET REGIME DETECTION ===
+Generated: 2026-02-16 18:21:57
+
+CURRENT REGIME: Bull Market / Low Volatility
+Confidence: 50% (LOW)
+Strong uptrend with calm markets. Favorable for aggressive strategies.
+
+INDICATOR DASHBOARD:
+- VIX:          21.2 (RISING)
+- SPY Trend:    ABOVE 200MA by 5.1%
+- SPY Momentum: -0.2% (3-month)
+- Breadth:      BROAD
+- Yield Curve:  FLAT
+- Credit:       NEUTRAL
+
+SCORING:
+- Bull/Bear Score: +0.38 (positive = bull)
+- Volatility Score: +0.12 (positive = high vol)
+
+STRATEGY RECOMMENDATIONS:
+- Primary Strategy:   MAX_SHARPE
+- Secondary Strategy: MAX_SORTINO
+- Avoid:             MIN_VARIANCE
+- Rationale: Strong markets favor return maximization. Low vol means risk metrics are favorable.
+
+RISK ADJUSTMENTS:
+- Correlation stress multiplier: 1.00x
+  (Multiply pairwise correlations by this factor for stress testing)
+- Position size adjustment: 100%
+  (Reduce total portfolio allocation in risky regimes)
+
+HOW TO USE:
+1. Module 3 will use stress_correlation_multiplier to adjust its
+   correlation penalty during stock selection
+2. Module 5 will use position_size_adjustment to scale the
+   dollar allocation
+3. The primary_strategy recommendation guides which optimization
+   objective to emphasize
+4. Walk-forward backtest (Module 6) now classifies regime at each
+   historical selection date for regime-aware testing
+
+NEXT STEPS:
+- Run Module 2 for technical screening
+- Regime classification will be used by Modules 3, 5, and 6
+

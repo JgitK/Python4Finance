@@ -12,29 +12,46 @@ from pathlib import Path
 # Path to Ichimoku data files
 ICHIMOKU_DIR = Path(__file__).parent.parent / "db" / "seed_data" / "ichimoku"
 
-# Valid tickers (loaded from portfolio + bench)
+# Valid tickers (loaded from all strategy portfolios + bench)
+STRATEGY_FILE = Path(__file__).parent.parent / "db" / "seed_data" / "strategy_portfolios.csv"
 PORTFOLIO_FILE = Path(__file__).parent.parent / "db" / "seed_data" / "portfolio_stocks.csv"
 BENCH_FILE = Path(__file__).parent.parent / "db" / "seed_data" / "bench_stocks.csv"
+STRATEGY_BENCH_FILE = Path(__file__).parent.parent / "db" / "seed_data" / "strategy_bench_stocks.csv"
 
 
 def get_valid_tickers():
     """
-    Get list of valid tickers (portfolio + bench stocks).
+    Get list of valid tickers (all strategy portfolios + all bench stocks).
     This prevents users from requesting arbitrary tickers.
     """
     tickers = set()
 
-    # Load portfolio tickers
-    with open(PORTFOLIO_FILE, 'r') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            tickers.add(row['ticker'])
+    # Load strategy portfolio tickers (new format)
+    if STRATEGY_FILE.exists():
+        with open(STRATEGY_FILE, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                tickers.add(row['ticker'])
 
-    # Load bench tickers
-    with open(BENCH_FILE, 'r') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            tickers.add(row['ticker'])
+    # Load strategy bench tickers
+    if STRATEGY_BENCH_FILE.exists():
+        with open(STRATEGY_BENCH_FILE, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                tickers.add(row['ticker'])
+
+    # Also load legacy files for backward compatibility
+    if PORTFOLIO_FILE.exists():
+        with open(PORTFOLIO_FILE, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                tickers.add(row['ticker'])
+
+    if BENCH_FILE.exists():
+        with open(BENCH_FILE, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                tickers.add(row['ticker'])
 
     return tickers
 

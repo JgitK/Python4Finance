@@ -1,6 +1,6 @@
 
 === MODULE 4: ICHIMOKU TECHNICAL VALIDATION SUMMARY ===
-Generated: 2026-01-20 21:16:32
+Generated: 2026-02-23 17:46:45
 
 ICHIMOKU PARAMETERS:
 - Conversion Line (Tenkan-sen): 9 periods
@@ -9,31 +9,88 @@ ICHIMOKU PARAMETERS:
 - Displacement: 26 periods
 
 PORTFOLIO ANALYSIS:
-- Total stocks validated: 12
-- Bullish signals: 8
-- Neutral signals: 4
+- Total stocks validated: 34
+- Bullish signals: 34
+- Neutral signals: 0
 - Bearish signals: 0
-- Portfolio health score: 1.83 / 3.0
+- Portfolio health score: 3.00 / 3.0
 
 SIGNAL BREAKDOWN:
 
 BULLISH STOCKS:
- ticker                 sector score cumulative_return_1y
-    FIX            Industrials     3            1.4096785
-    DBD          Miscellaneous     3            0.6708892
-   BBVA                Finance     3            1.3608827
-   TFPM            Industrials     3            1.3851184
-    AGX Consumer Discretionary     3            1.3029262
-   POWL                 Energy     3            0.7731508
-   LQDA            Health Care     2            2.3389086
-    IDR        Basic Materials     2            3.3151753
+ ticker                 sector directional_score ichimoku_score
+    ALM        Basic Materials                 3              5
+     AU        Basic Materials                 3              5
+    MOD Consumer Discretionary                 3              4
+   POWL                 Energy                 3              5
+   NESR                 Energy                 3              5
+    BKD            Health Care                 3              5
+    FIX            Industrials                 3              5
+    DBD          Miscellaneous                 3              5
+    AHR            Real Estate                 3              4
+   LITE     Telecommunications                 3              5
+  BELFB                Unknown                 3              5
+    GEV                Unknown                 3              5
+   VSEC Consumer Discretionary                 3              5
+   MNST       Consumer Staples                 3              5
+    BUD       Consumer Staples                 3              5
+    HSY       Consumer Staples                 3              5
+    WWD                 Energy                 3              5
+    SHG                Finance                 3              5
+   IONS            Health Care                 3              5
+   CTRE            Real Estate                 3              5
+    GNL            Real Estate                 3              5
+    VOD     Telecommunications                 3              5
+    GEF                Unknown                 3              5
+    AGX Consumer Discretionary                 3              4
+   CECO            Industrials                 3              5
+     HG                Unknown                 3              5
+   FIVE Consumer Discretionary                 3              5
+    VAL                 Energy                 3              4
+    TER            Industrials                 3              5
+   CSTM            Industrials                 3              5
+    WDC             Technology                 3              5
+     MU             Technology                 3              5
+   LRCX             Technology                 3              5
+     FN              Utilities                 3              5
+ cumulative_return_1y
+            3.8526750
+            2.7286520
+            1.4508445
+            1.6352535
+            1.5820106
+            1.8113206
+            2.7188180
+            0.7573004
+            0.9023243
+            7.3242335
+            1.8697326
+            1.2298560
+            1.3002366
+            0.6407444
+            0.5072106
+            0.4024282
+            1.0810686
+            1.1547950
+            1.6025039
+            0.6076146
+            0.5011706
+            0.9658997
+            0.2508225
+            2.0453389
+            2.1843169
+            0.6398923
+            1.3248125
+            1.1372768
+            1.8332816
+            1.7532469
+            4.2643621
+            3.0225984
+            1.8547352
+            1.2677933
 
 NEUTRAL STOCKS:
- ticker           sector score cumulative_return_1y
-    GEV          Unknown     1            0.7871437
-   MAMA Consumer Staples     1            1.0254238
-    AHR      Real Estate    -1            0.8011348
-    CLS       Technology    -1            2.0414121
+(None)
 
 BEARISH STOCKS:
 (None)

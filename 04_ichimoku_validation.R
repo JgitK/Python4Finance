@@ -47,17 +47,41 @@ if (!dir.exists(ICHIMOKU_DIR)) {
 }
 
 # ============================================================================
-# STEP 1: LOAD FINAL PORTFOLIO
+# STEP 1: LOAD ALL STRATEGY PORTFOLIOS
 # ============================================================================
 
-cat("Step 1: Loading final portfolio from Module 3...\n")
+cat("Step 1: Loading portfolios from all strategies...\n")
 
-# Load portfolio
+# Load all strategy portfolios
+all_portfolios <- readRDS(file.path(OUTPUT_DIR, "all_strategy_portfolios.rds"))
+
+# Get unique stocks across all strategies (now with ichimoku_score from Module 2)
+all_stocks <- bind_rows(lapply(names(all_portfolios), function(strategy) {
+  all_portfolios[[strategy]] %>%
+    select(ticker, sector, cumulative_return_1y, sharpe_ratio, current_price,
+           any_of("ichimoku_score")) %>%
+    mutate(strategy = strategy)
+})) %>%
+  distinct(ticker, .keep_all = TRUE)
+
+# Check if ichimoku_score exists from Module 2
+has_precomputed_score <- "ichimoku_score" %in% names(all_stocks)
+if (has_precomputed_score) {
+  cat(sprintf("  Pre-computed Ichimoku scores found (from Module 2): %d stocks\n",
+              sum(!is.na(all_stocks$ichimoku_score))))
+  cat(sprintf("  Average pre-computed score: %.2f/5\n",
+              mean(all_stocks$ichimoku_score, na.rm = TRUE)))
+} else {
+  cat("  Note: No pre-computed Ichimoku scores. Run Module 2 to generate.\n")
+}
+
+# Also load legacy portfolio for backward compatibility
 portfolio <- readRDS(file.path(OUTPUT_DIR, "final_portfolio.rds"))
 
-cat(sprintf("  Portfolio stocks: %d\n", nrow(portfolio)))
+cat(sprintf("  Unique stocks across all strategies: %d\n", nrow(all_stocks)))
+cat(sprintf("  Strategies analyzed: %s\n", paste(names(all_portfolios), collapse = ", ")))
 cat("\n  Stocks to analyze:\n")
-print(portfolio %>% select(ticker, sector, cumulative_return_1y, sharpe_ratio))
+print(all_stocks %>% select(ticker, sector, strategy) %>% head(20))
 
 # ============================================================================
 # STEP 2: CALCULATE ICHIMOKU INDICATORS
@@ -106,13 +130,13 @@ calculate_ichimoku <- function(stock_data) {
   return(stock_data)
 }
 
-# Calculate Ichimoku for all portfolio stocks
+# Calculate Ichimoku for ALL unique stocks across strategies
 ichimoku_data <- list()
 
-for (i in 1:nrow(portfolio)) {
-  ticker <- portfolio$ticker[i]
+for (i in 1:nrow(all_stocks)) {
+  ticker <- all_stocks$ticker[i]
 
-  cat(sprintf("  [%d/%d] Processing %s...\n", i, nrow(portfolio), ticker))
+  cat(sprintf("  [%d/%d] Processing %s...\n", i, nrow(all_stocks), ticker))
 
   # Load stock data
   stock_data <- load_stock(ticker)
@@ -267,19 +291,32 @@ for (ticker in names(ichimoku_data)) {
   eval_result <- evaluate_ichimoku(stock_data, ticker)
   evaluations[[ticker]] <- eval_result
 
-  cat(sprintf("  %s: %s (Score: %d)\n",
-              ticker, eval_result$signal, eval_result$score))
+  # Get pre-computed score if available
+  precomputed <- if (has_precomputed_score) {
+    all_stocks %>% filter(ticker == !!ticker) %>% pull(ichimoku_score)
+  } else NA
+
+  precomp_str <- if (!is.na(precomputed)) sprintf(" [Module 2: %d/5]", precomputed) else ""
+
+  cat(sprintf("  %s: %s (Dir: %d)%s\n",
+              ticker, eval_result$signal, eval_result$score, precomp_str))
 }
 
 # Convert to dataframe
 validation_results <- bind_rows(evaluations)
 
-# Merge with portfolio data
-validation_full <- portfolio %>%
+# Merge with all stocks data
+validation_full <- all_stocks %>%
   left_join(validation_results, by = "ticker") %>%
   arrange(desc(score))
 
+# Rename to distinguish between Module 4 directional score and Module 2 selection score
+validation_full <- validation_full %>%
+  rename(directional_score = score)
+
 cat("\n  Evaluation complete.\n")
+cat("  Note: 'ichimoku_score' = Module 2 selection score (0-5 bullish signals)\n")
+cat("        'directional_score' = Module 4 signal (-3 to +3, bearish to bullish)\n")
 
 # ============================================================================
 # STEP 4: GENERATE ICHIMOKU PLOTS
@@ -410,7 +447,7 @@ cat(sprintf("  Bearish: %d stocks\n", nrow(bearish)))
 cat("\n  BULLISH STOCKS (Strong Technical Confirmation):\n")
 if (nrow(bullish) > 0) {
   print(bullish %>%
-          select(ticker, sector, signal, score, price_vs_cloud, tk_cross) %>%
+          select(ticker, sector, signal, directional_score, ichimoku_score, price_vs_cloud, tk_cross) %>%
           as.data.frame(),
         row.names = FALSE)
 } else {
@@ -420,7 +457,7 @@ if (nrow(bullish) > 0) {
 cat("\n  NEUTRAL STOCKS (Mixed Signals):\n")
 if (nrow(neutral) > 0) {
   print(neutral %>%
-          select(ticker, sector, signal, score, price_vs_cloud, tk_cross) %>%
+          select(ticker, sector, signal, directional_score, ichimoku_score, price_vs_cloud, tk_cross) %>%
           as.data.frame(),
         row.names = FALSE)
 } else {
@@ -430,7 +467,7 @@ if (nrow(neutral) > 0) {
 cat("\n  BEARISH STOCKS (Concerning Technical Signals):\n")
 if (nrow(bearish) > 0) {
   print(bearish %>%
-          select(ticker, sector, signal, score, price_vs_cloud, tk_cross) %>%
+          select(ticker, sector, signal, directional_score, ichimoku_score, price_vs_cloud, tk_cross) %>%
           as.data.frame(),
         row.names = FALSE)
 
@@ -443,7 +480,7 @@ if (nrow(bearish) > 0) {
 }
 
 # Portfolio health score
-health_score <- sum(validation_full$score, na.rm = TRUE) / nrow(validation_full)
+health_score <- sum(validation_full$directional_score, na.rm = TRUE) / nrow(validation_full)
 cat(sprintf("\n  Portfolio Technical Health Score: %.2f (out of 3.0)\n", health_score))
 
 if (health_score >= 1.5) {
@@ -517,19 +554,19 @@ nrow(bearish),
 health_score,
 ifelse(nrow(bullish) > 0,
        paste(capture.output(print(bullish %>%
-                                  select(ticker, sector, score, cumulative_return_1y) %>%
+                                  select(ticker, sector, directional_score, ichimoku_score, cumulative_return_1y) %>%
                                   as.data.frame(), row.names = FALSE)),
              collapse = "\n"),
        "(None)"),
 ifelse(nrow(neutral) > 0,
        paste(capture.output(print(neutral %>%
-                                  select(ticker, sector, score, cumulative_return_1y) %>%
+                                  select(ticker, sector, directional_score, ichimoku_score, cumulative_return_1y) %>%
                                   as.data.frame(), row.names = FALSE)),
              collapse = "\n"),
        "(None)"),
 ifelse(nrow(bearish) > 0,
        paste(capture.output(print(bearish %>%
-                                  select(ticker, sector, score, cumulative_return_1y) %>%
+                                  select(ticker, sector, directional_score, ichimoku_score, cumulative_return_1y) %>%
                                   as.data.frame(), row.names = FALSE)),
              collapse = "\n"),
        "(None)"),

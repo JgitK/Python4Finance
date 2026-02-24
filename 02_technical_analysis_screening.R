@@ -34,6 +34,10 @@ MAX_VOLATILITY <- 0.05        # Maximum daily volatility (5%)
 BB_PERIOD <- 20               # 20-day moving average
 BB_SD <- 2                    # Standard deviations
 
+# Risk metrics parameters
+CVAR_ALPHA <- 0.05            # CVaR at 5% level (worst 5% of days)
+RISK_FREE_RATE <- 0.045       # Annual risk-free rate for Sortino calculation
+
 # Output files
 OUTPUT_DIR <- "analysis"
 CANDIDATES_FILE <- file.path(OUTPUT_DIR, "candidate_stocks.csv")
@@ -52,15 +56,35 @@ if (!dir.exists(OUTPUT_DIR)) {
 
 cat("Step 1: Loading stock metadata...\n")
 
-# Load download log to get sector information
-download_log <- read.csv("metadata/download_log.csv", stringsAsFactors = FALSE)
+# Scan stocks/ directory for actual .rds files (more robust than relying on download log)
+stock_files <- list.files("stocks", pattern = "\\.rds$", full.names = FALSE)
+available_tickers <- gsub("\\.rds$", "", stock_files)
 
-# Filter to successful downloads only
-successful_stocks <- download_log %>%
-  filter(success == TRUE) %>%
-  select(ticker, sector, rows)
+cat(sprintf("  Found %d stock files in stocks/ directory\n", length(available_tickers)))
 
-cat(sprintf("  Successfully downloaded stocks: %d\n", nrow(successful_stocks)))
+# Load filtered_tickers.csv for sector information
+filtered_tickers <- read.csv("metadata/filtered_tickers.csv", stringsAsFactors = FALSE)
+
+# Build successful_stocks from actual files + sector info
+successful_stocks <- data.frame(
+  ticker = available_tickers,
+  stringsAsFactors = FALSE
+) %>%
+  left_join(
+    filtered_tickers %>% select(ticker, sector),
+    by = "ticker"
+  ) %>%
+  mutate(sector = ifelse(is.na(sector), "Unknown", sector))
+
+# Get row counts by loading each file (or estimate from file size)
+# For speed, we'll check file existence and assume valid data
+successful_stocks$rows <- sapply(successful_stocks$ticker, function(t) {
+  tryCatch({
+    nrow(readRDS(file.path("stocks", paste0(t, ".rds"))))
+  }, error = function(e) 0)
+})
+
+cat(sprintf("  Successfully loaded metadata: %d stocks\n", nrow(successful_stocks)))
 cat(sprintf("  Sectors represented: %d\n", length(unique(successful_stocks$sector))))
 
 # Filter by minimum data requirement
@@ -126,7 +150,39 @@ calculate_technical_indicators <- function(ticker, sector) {
     return_6m <- prod(1 + tail(stock_data$daily_return, 126), na.rm = TRUE) - 1  # 6 months
     return_3m <- prod(1 + tail(stock_data$daily_return, 63), na.rm = TRUE) - 1   # 3 months
 
-    # Return summary metrics
+    # === STRATEGY-SPECIFIC METRICS ===
+
+    # Annualized variance (for Min Variance strategy)
+    annual_variance <- var(stock_data$daily_return, na.rm = TRUE) * 252
+
+    # Downside deviation (for Sortino strategy)
+    # Only considers returns below the risk-free rate
+    daily_rf <- RISK_FREE_RATE / 252
+    downside_returns <- stock_data$daily_return[!is.na(stock_data$daily_return)]
+    downside_returns <- downside_returns - daily_rf
+    downside_returns <- pmin(downside_returns, 0)  # Keep only negative deviations
+    downside_deviation <- sqrt(mean(downside_returns^2)) * sqrt(252)  # Annualized
+
+    # Sortino ratio
+    annual_return <- mean(stock_data$daily_return, na.rm = TRUE) * 252
+    sortino_ratio <- if (downside_deviation > 0) {
+      (annual_return - RISK_FREE_RATE) / downside_deviation
+    } else {
+      NA
+    }
+
+    # CVaR / Expected Shortfall (for Min CVaR strategy)
+    # Average return in the worst CVAR_ALPHA% of days
+    sorted_returns <- sort(stock_data$daily_return[!is.na(stock_data$daily_return)])
+    cutoff_idx <- floor(length(sorted_returns) * CVAR_ALPHA)
+    if (cutoff_idx > 0) {
+      cvar_daily <- mean(sorted_returns[1:cutoff_idx])
+      cvar_annual <- cvar_daily * sqrt(252)  # Approximate annualization
+    } else {
+      cvar_annual <- NA
+    }
+
+    # Return summary metrics with all strategy-specific columns
     return(data.frame(
       ticker = ticker,
       sector = sector,
@@ -134,7 +190,11 @@ calculate_technical_indicators <- function(ticker, sector) {
       return_6m = return_6m,
       return_3m = return_3m,
       daily_volatility = daily_volatility,
+      annual_variance = annual_variance,
       sharpe_ratio = sharpe_ratio,
+      sortino_ratio = sortino_ratio,
+      downside_deviation = downside_deviation,
+      cvar = cvar_annual,
       avg_volume = avg_volume,
       bb_position = bb_position,
       current_price = latest$adjusted,
@@ -176,6 +236,148 @@ for (i in 1:nrow(valid_stocks)) {
 performance_data <- bind_rows(all_metrics)
 
 cat(sprintf("\n  Successfully analyzed: %d stocks\n", nrow(performance_data)))
+
+# ============================================================================
+# STEP 2.5: CALCULATE ICHIMOKU SCORES
+# ============================================================================
+
+cat("\nStep 2.5: Calculating Ichimoku Cloud scores...\n")
+
+# Ichimoku parameters (standard settings)
+ICHIMOKU_TENKAN <- 9     # Conversion line period
+ICHIMOKU_KIJUN <- 26     # Base line period
+ICHIMOKU_SENKOU_B <- 52  # Senkou Span B period
+ICHIMOKU_SHIFT <- 26     # Cloud shift / Chikou shift
+
+# Function to calculate Ichimoku score for a stock
+calculate_ichimoku_score <- function(ticker) {
+
+  stock_data <- load_stock(ticker)
+
+  if (is.null(stock_data) || nrow(stock_data) < ICHIMOKU_SENKOU_B + ICHIMOKU_SHIFT) {
+    return(data.frame(ticker = ticker, ichimoku_score = NA, stringsAsFactors = FALSE))
+  }
+
+  tryCatch({
+    # Sort by date
+    stock_data <- stock_data %>% arrange(date)
+    n <- nrow(stock_data)
+
+    # Calculate rolling highs and lows using runMax/runMin from TTR
+    high_9 <- runMax(stock_data$high, n = ICHIMOKU_TENKAN)
+    low_9 <- runMin(stock_data$low, n = ICHIMOKU_TENKAN)
+    high_26 <- runMax(stock_data$high, n = ICHIMOKU_KIJUN)
+    low_26 <- runMin(stock_data$low, n = ICHIMOKU_KIJUN)
+    high_52 <- runMax(stock_data$high, n = ICHIMOKU_SENKOU_B)
+    low_52 <- runMin(stock_data$low, n = ICHIMOKU_SENKOU_B)
+
+    # Tenkan-sen (Conversion Line): (9-period high + 9-period low) / 2
+    tenkan <- (high_9 + low_9) / 2
+
+    # Kijun-sen (Base Line): (26-period high + 26-period low) / 2
+    kijun <- (high_26 + low_26) / 2
+
+    # Senkou Span A: (Tenkan + Kijun) / 2
+    senkou_a <- (tenkan + kijun) / 2
+
+    # Senkou Span B: (52-period high + 52-period low) / 2
+    senkou_b <- (high_52 + low_52) / 2
+
+    # Current values (latest complete day)
+    current_price <- stock_data$adjusted[n]
+    current_tenkan <- tenkan[n]
+    current_kijun <- kijun[n]
+
+    # Cloud values at current position (shifted 26 periods ago for current cloud)
+    # Senkou Span A/B are calculated today but represent cloud 26 days ahead
+    # So current cloud was calculated 26 days ago
+    cloud_idx <- n - ICHIMOKU_SHIFT
+    if (cloud_idx > 0) {
+      current_senkou_a <- senkou_a[cloud_idx]
+      current_senkou_b <- senkou_b[cloud_idx]
+    } else {
+      # Not enough history for cloud
+      return(data.frame(ticker = ticker, ichimoku_score = NA, stringsAsFactors = FALSE))
+    }
+
+    # Future cloud (today's calculation = cloud 26 days from now)
+    future_senkou_a <- senkou_a[n]
+    future_senkou_b <- senkou_b[n]
+
+    # Historical price for Chikou comparison (26 days ago)
+    chikou_compare_idx <- n - ICHIMOKU_SHIFT
+    historical_price <- if (chikou_compare_idx > 0) stock_data$adjusted[chikou_compare_idx] else NA
+
+    # Cloud expansion check - compare width now vs width 5 days ago
+    cloud_width_now <- abs(current_senkou_a - current_senkou_b)
+    cloud_idx_5d_ago <- cloud_idx - 5
+    if (cloud_idx_5d_ago > 0) {
+      cloud_width_5d_ago <- abs(senkou_a[cloud_idx_5d_ago] - senkou_b[cloud_idx_5d_ago])
+      cloud_expanding <- cloud_width_now > cloud_width_5d_ago
+    } else {
+      cloud_expanding <- FALSE
+    }
+
+    # === CALCULATE 5-POINT SCORE ===
+    score <- 0
+
+    # 1. Price above cloud (+1)
+    cloud_top <- max(current_senkou_a, current_senkou_b)
+    if (!is.na(cloud_top) && current_price > cloud_top) {
+      score <- score + 1
+    }
+
+    # 2. TK bullish: Tenkan > Kijun (+1)
+    if (!is.na(current_tenkan) && !is.na(current_kijun) && current_tenkan > current_kijun) {
+      score <- score + 1
+    }
+
+    # 3. Green cloud: Span A > Span B (+1)
+    if (!is.na(current_senkou_a) && !is.na(current_senkou_b) && current_senkou_a > current_senkou_b) {
+      score <- score + 1
+    }
+
+    # 4. Chikou above historical price (+1)
+    if (!is.na(historical_price) && current_price > historical_price) {
+      score <- score + 1
+    }
+
+    # 5. Cloud expanding OR future cloud is green (+1)
+    future_cloud_green <- !is.na(future_senkou_a) && !is.na(future_senkou_b) && future_senkou_a > future_senkou_b
+    if (cloud_expanding || future_cloud_green) {
+      score <- score + 1
+    }
+
+    return(data.frame(
+      ticker = ticker,
+      ichimoku_score = score,
+      stringsAsFactors = FALSE
+    ))
+
+  }, error = function(e) {
+    warning(sprintf("Ichimoku error for %s: %s", ticker, e$message))
+    return(data.frame(ticker = ticker, ichimoku_score = NA, stringsAsFactors = FALSE))
+  })
+}
+
+# Calculate Ichimoku scores for all analyzed stocks
+ichimoku_scores <- bind_rows(lapply(performance_data$ticker, calculate_ichimoku_score))
+
+# Merge Ichimoku scores into performance data
+performance_data <- performance_data %>%
+  left_join(ichimoku_scores, by = "ticker")
+
+# Report distribution
+score_dist <- table(performance_data$ichimoku_score, useNA = "ifany")
+cat("  Ichimoku score distribution:\n")
+for (i in seq_along(score_dist)) {
+  score_val <- names(score_dist)[i]
+  score_label <- if (is.na(score_val) || score_val == "NA") "N/A" else score_val
+  cat(sprintf("    Score %s: %d stocks\n", score_label, score_dist[i]))
+}
+
+avg_score <- mean(performance_data$ichimoku_score, na.rm = TRUE)
+cat(sprintf("  Average Ichimoku score: %.2f\n", avg_score))
 
 # ============================================================================
 # STEP 3: APPLY SCREENING FILTERS
@@ -295,6 +497,8 @@ cat(sprintf("    Avg Sharpe ratio: %.2f\n",
             mean(top_performers$sharpe_ratio, na.rm = TRUE)))
 cat(sprintf("    Avg daily volatility: %.2f%%\n",
             100 * mean(top_performers$daily_volatility)))
+cat(sprintf("    Avg Ichimoku score: %.2f/5\n",
+            mean(top_performers$ichimoku_score, na.rm = TRUE)))
 
 # Return distribution
 return_quantiles <- quantile(top_performers$cumulative_return_1y,

@@ -18,11 +18,35 @@
 
         <!-- Investment Input -->
         <section class="input-section">
-            <label for="amount">Investment Amount ($)</label>
-            <div class="input-row">
+            <div class="input-group">
+                <label for="amount">Investment Amount ($)</label>
                 <input type="number" id="amount" placeholder="3500" min="100" step="100">
-                <button id="calculate-btn">Calculate Allocation</button>
             </div>
+
+            <div class="input-group">
+                <label for="portfolio-type">Portfolio Strategy</label>
+                <select id="portfolio-type">
+                    <option value="max_sharpe">Max Sharpe Ratio (Aggressive)</option>
+                    <option value="min_variance">Min Variance (Conservative)</option>
+                    <option value="max_sortino">Max Sortino (Downside Protection)</option>
+                    <option value="min_cvar">Min CVaR (Tail Risk Protection)</option>
+                    <option value="risk_parity">Risk Parity (Balanced Risk)</option>
+                    <option value="equal_weight">Equal Weight (Simple)</option>
+                    <option value="custom">Custom Blend...</option>
+                </select>
+            </div>
+
+            <div id="risk-tolerance-group" class="input-group hidden">
+                <label for="risk-tolerance">Risk Tolerance</label>
+                <div class="slider-row">
+                    <span class="slider-label">Conservative</span>
+                    <input type="range" id="risk-tolerance" min="0" max="100" value="70">
+                    <span class="slider-label">Aggressive</span>
+                    <span id="risk-tolerance-value" class="slider-value">70%</span>
+                </div>
+            </div>
+
+            <button id="calculate-btn">Calculate Allocation</button>
         </section>
 
         <!-- Results Section (hidden until calculated) -->
@@ -82,6 +106,21 @@
                 </tbody>
             </table>
         </section>
+
+        <!-- Efficient Frontier Section -->
+        <section class="efficient-frontier-section">
+            <h2>Efficient Frontier</h2>
+            <p class="frontier-description">
+                10,000 simulated portfolios showing the risk vs. return tradeoff.
+                The optimal portfolio maximizes risk-adjusted returns (Sharpe ratio).
+            </p>
+            <div id="frontier-chart"></div>
+            <div id="frontier-legend" class="frontier-legend">
+                <span class="legend-item"><span class="legend-dot optimal"></span> Optimal Portfolio (Max Sharpe)</span>
+                <span class="legend-item"><span class="legend-dot min-var"></span> Minimum Variance Portfolio</span>
+                <span class="legend-item"><span class="legend-line cml"></span> Capital Market Line</span>
+            </div>
+        </section>
     </div>
 
     <!-- Chart Modal -->
@@ -90,6 +129,16 @@
             <div class="modal-header">
                 <h2 id="chart-title">Loading...</h2>
                 <button id="close-modal" class="close-btn">&times;</button>
+            </div>
+
+            <!-- Stock Info Section -->
+            <div id="stock-info" class="stock-info">
+                <p id="stock-description" class="stock-description">Loading company info...</p>
+                <div class="stock-meta">
+                    <span id="stock-sector" class="stock-tag"></span>
+                    <span id="stock-industry" class="stock-tag"></span>
+                    <span id="stock-market-cap" class="stock-tag"></span>
+                </div>
             </div>
 
             <!-- Chart Container -->
@@ -136,5 +185,6 @@
 
     <script src="/static/app.js"></script>
     <script src="/static/chart.js"></script>
+    <script src="/static/frontier.js"></script>
 </body>
 </html>

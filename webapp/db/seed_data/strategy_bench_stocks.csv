@@ -1,0 +1,61 @@
+"strategy","ticker","sector","sharpe_ratio","current_price"
+"max_sharpe","STRL","Industrials",1.42790728753718,435.5
+"max_sharpe","IDCC","Miscellaneous",1.22664613978964,358.5
+"max_sharpe","BBVA","Finance",1.21648248302128,23.5100002288818
+"max_sharpe","AGX","Consumer Discretionary",1.21595597904871,437.609985351562
+"max_sharpe","CECO","Industrials",1.17970344654168,78.7799987792969
+"max_sharpe","HG","Unknown",1.13588949287776,30.4200000762939
+"max_sharpe","LAUR","Real Estate",1.13071738618717,32.8300018310547
+"max_sharpe","TTMI","Technology",1.12643143934154,107.930000305176
+"max_sharpe","STX","Technology",1.1026931505229,411.109985351562
+"max_sharpe","SII","Finance",1.06390866138795,143.979995727539
+"min_variance","AHR","Real Estate",2.85153850394531,51.9300003051758
+"min_variance","GEV","Unknown",2.10451853271678,830.340026855469
+"min_variance","FIX","Industrials",1.69821325648481,1462.22998046875
+"min_variance","DBD","Miscellaneous",1.55483690197959,81.2399978637695
+"min_variance","NESR","Energy",1.47572994896728,24.3999996185303
+"min_variance","STRL","Industrials",1.42790728753718,435.5
+"min_variance","BELFB","Unknown",1.26514231498431,235.039993286133
+"min_variance","POWL","Energy",1.25300987909557,546.820007324219
+"min_variance","MOD","Consumer Discretionary",1.23709800565304,226.360000610352
+"min_variance","IDCC","Miscellaneous",1.22664613978964,358.5
+"max_sortino","STRL","Industrials",1.42790728753718,435.5
+"max_sortino","MOD","Consumer Discretionary",1.23709800565304,226.360000610352
+"max_sortino","IDCC","Miscellaneous",1.22664613978964,358.5
+"max_sortino","BBVA","Finance",1.21648248302128,23.5100002288818
+"max_sortino","HG","Unknown",1.13588949287776,30.4200000762939
+"max_sortino","LAUR","Real Estate",1.13071738618717,32.8300018310547
+"max_sortino","TTMI","Technology",1.12643143934154,107.930000305176
+"max_sortino","STX","Technology",1.1026931505229,411.109985351562
+"max_sortino","SII","Finance",1.06390866138795,143.979995727539
+"max_sortino","VSEC","Consumer Discretionary",1.05242676826197,227.779998779297
+"min_cvar","AHR","Real Estate",2.85153850394531,51.9300003051758
+"min_cvar","GEV","Unknown",2.10451853271678,830.340026855469
+"min_cvar","FIX","Industrials",1.69821325648481,1462.22998046875
+"min_cvar","DBD","Miscellaneous",1.55483690197959,81.2399978637695
+"min_cvar","NESR","Energy",1.47572994896728,24.3999996185303
+"min_cvar","STRL","Industrials",1.42790728753718,435.5
+"min_cvar","BELFB","Unknown",1.26514231498431,235.039993286133
+"min_cvar","POWL","Energy",1.25300987909557,546.820007324219
+"min_cvar","MOD","Consumer Discretionary",1.23709800565304,226.360000610352
+"min_cvar","IDCC","Miscellaneous",1.22664613978964,358.5
+"risk_parity","AHR","Real Estate",2.85153850394531,51.9300003051758
+"risk_parity","GEV","Unknown",2.10451853271678,830.340026855469
+"risk_parity","FIX","Industrials",1.69821325648481,1462.22998046875
+"risk_parity","DBD","Miscellaneous",1.55483690197959,81.2399978637695
+"risk_parity","STRL","Industrials",1.42790728753718,435.5
+"risk_parity","BELFB","Unknown",1.26514231498431,235.039993286133
+"risk_parity","POWL","Energy",1.25300987909557,546.820007324219
+"risk_parity","MOD","Consumer Discretionary",1.23709800565304,226.360000610352
+"risk_parity","IDCC","Miscellaneous",1.22664613978964,358.5
+"risk_parity","BBVA","Finance",1.21648248302128,23.5100002288818
+"equal_weight","STRL","Industrials",1.42790728753718,435.5
+"equal_weight","IDCC","Miscellaneous",1.22664613978964,358.5
+"equal_weight","BBVA","Finance",1.21648248302128,23.5100002288818
+"equal_weight","AGX","Consumer Discretionary",1.21595597904871,437.609985351562
+"equal_weight","CECO","Industrials",1.17970344654168,78.7799987792969
+"equal_weight","HG","Unknown",1.13588949287776,30.4200000762939
+"equal_weight","LAUR","Real Estate",1.13071738618717,32.8300018310547
+"equal_weight","TTMI","Technology",1.12643143934154,107.930000305176
+"equal_weight","STX","Technology",1.1026931505229,411.109985351562
+"equal_weight","SII","Finance",1.06390866138795,143.979995727539

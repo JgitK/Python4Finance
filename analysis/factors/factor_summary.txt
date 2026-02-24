@@ -1,0 +1,44 @@
+
+=== MODULE 7: FACTOR DECOMPOSITION ANALYSIS ===
+Generated: 2026-02-23 17:49:14
+
+PORTFOLIO ANALYZED: MAX_SHARPE strategy
+Stocks: ALM, AU, MOD, POWL, NESR, BKD, FIX, DBD, AHR, LITE, BELFB, GEV
+
+REGRESSION MODEL:
+portfolio_excess ~ mkt_rf + SMB + HML + MOM
+
+RESULTS:
+─────────────────────────────────────────────────
+ALPHA (Stock-Picking Skill):
+  Daily Alpha:       +0.5828% (+58.28 bps)
+  Annualized Alpha:  +146.87%
+  t-statistic:       5.57
+  p-value:           0.0000
+  Significance:      SIGNIFICANT POSITIVE
+
+FACTOR EXPOSURES (Betas):
+  MKT_RF: 1.157 (t=10.62, p=0.0000) *
+  SMB: 0.732 (t=4.52, p=0.0000) *
+  HML: -0.275 (t=-1.64, p=0.1021) 
+  MOM: 1.107 (t=5.73, p=0.0000) *
+
+MODEL FIT:
+  R-squared:         57.54%
+  Adjusted R²:       56.85%
+  Residual Std Err:  0.0166
+
+INTERPRETATION:
+57.5% of portfolio variance explained by known risk factors
+42.5% is stock-specific (idiosyncratic risk)
+Significant positive alpha of 146.87% per year suggests genuine skill
+
+CONCLUSION:
+VALIDATED: Strategy shows genuine alpha beyond factor exposures.
+This suggests the portfolio selection methodology has predictive power.
+
+FILES GENERATED:
+- Factor regression model: analysis/factors/factor_model.rds
+- Factor results table:    analysis/factors/factor_results.csv
+- Factor time series:      analysis/factors/factor_data.csv
+
