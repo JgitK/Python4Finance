@@ -93,10 +93,17 @@ NEUTRAL STOCKS:
 (None)
 
 BEARISH STOCKS:
-(None)
+ ticker          sector score cumulative_return_1y
+    CLS      Technology    -3             2.041412
+   BBVA         Finance    -3             1.360883
+    IDR Basic Materials    -3             3.315175
 
 RECOMMENDATIONS:
-✓ No bearish signals detected. Portfolio shows positive technical momentum.
+⚠ 3 stocks show bearish signals. Review these stocks:
+  - Examine recent price action and news
+  - Check if temporary dip or longer-term trend
+  - Consider replacement candidates from Module 2 analysis/candidate_stocks.csv
+  - Bearish signals don't always mean sell - use judgment
 
 ICHIMOKU INTERPRETATION GUIDE:
 - Bullish: Price above cloud, Conversion > Base, Green cloud
