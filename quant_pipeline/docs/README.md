@@ -8,6 +8,7 @@ This folder records why it changed and what the results showed.
 | [decisions.md](decisions.md) | One entry for each important decision. | You, after each decision. |
 | [results_log.md](results_log.md) | One row for each pipeline run. | `run_pipeline.py` adds the row. You write the note. |
 | [open_questions.md](open_questions.md) | The problems and questions that are not solved. | You, when you find or solve one. |
+| [handoff.md](handoff.md) | The state of the project and the rules of work, for a new chat. | You, at the end of each session. |
 
 ## How to use it
 
