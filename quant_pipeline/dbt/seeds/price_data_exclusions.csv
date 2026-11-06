@@ -1,0 +1,2 @@
+ticker,reason
+PARA,The nasdaq API returns a different security for PARA: close up to 1139000 and median volume 87. Paramount left the index on 2025-08-08 and trades as PSKY.

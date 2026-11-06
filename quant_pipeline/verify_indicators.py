@@ -87,6 +87,20 @@ def load_tables(con) -> dict[str, pd.DataFrame]:
 # Independent pandas recomputation per ticker.
 # ---------------------------------------------------------------------------
 
+def exact_rolling_mean_std(series: pd.Series,
+                           window: int) -> tuple[pd.Series, pd.Series]:
+    """Return the mean and the sample std of each full window, exactly."""
+    values = series.to_numpy(dtype=float)
+    mean = np.full(len(values), np.nan)
+    std = np.full(len(values), np.nan)
+    if len(values) >= window:
+        windows = np.lib.stride_tricks.sliding_window_view(values, window)
+        mean[window - 1:] = windows.mean(axis=1)
+        std[window - 1:] = windows.std(axis=1, ddof=1)
+    return (pd.Series(mean, index=series.index),
+            pd.Series(std, index=series.index))
+
+
 def pandas_indicators(prices: pd.DataFrame) -> pd.DataFrame:
     """Rebuild the indicators for one ticker with pandas."""
     p = prices.sort_values("price_date").set_index("price_date").copy()
@@ -96,9 +110,10 @@ def pandas_indicators(prices: pd.DataFrame) -> pd.DataFrame:
     raw_return = close.pct_change()
     p["ret"] = raw_return.where(raw_return.abs() <= CORP_ACTION_LIMIT)
 
-    # Bollinger Bands need a full 20-day window.
-    mb = close.rolling(20).mean()
-    sd = close.rolling(20).std(ddof=1)
+    # Bollinger Bands need a full 20-day window. Calculate each window
+    # directly. The pandas rolling std uses a running sum, and a very large
+    # price makes that sum drift.
+    mb, sd = exact_rolling_mean_std(close, 20)
     p["mb"], p["ub"], p["lb"] = mb, mb + 2 * sd, mb - 2 * sd
 
     # Ichimoku lines.

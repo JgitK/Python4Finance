@@ -25,6 +25,8 @@ deduped as (
         ) as row_num
     from source
     where close > 0
+        -- Drop a ticker whose price history belongs to a different security.
+        and ticker not in (select ticker from {{ ref('price_data_exclusions') }})
 )
 
 select

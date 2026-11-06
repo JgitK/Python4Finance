@@ -129,8 +129,8 @@ python -m pytest
 cd dbt && dbt build --profiles-dir .
 ```
 
-The dbt layer has 8 unit tests for the return, score, screen, membership,
-and coverage logic.
+The dbt layer has 9 unit tests for the return, score, screen, membership,
+coverage, and exclusion logic.
 Three of these tests put a large future value in the input. They make sure
 that an earlier row does not change.
 It also has schema tests for not-null, unique, and relationship rules.
@@ -173,6 +173,12 @@ Run it after a dbt build. It needs the warehouse file.
   that does not trade now, for example after a takeover or a bankruptcy.
   The screen cannot select such a stock. The pipeline counts these stocks
   on each selection date. See `output/universe_coverage.csv`.
+- A ticker can name a different security after a company leaves. The
+  nasdaq API then returns the history of the wrong security. The
+  `price_data_exclusions` seed lists such tickers with the reason, and the
+  staging model drops them. A warning test finds an index member with a
+  median volume under 1,000 shares. At this time, the seed lists PARA.
+- The nasdaq API has no data for BF.B. The coverage report counts it.
 - A renamed stock is a removal and an addition in the membership data. On
   the dates before the rename, the old ticker has no prices, so the
   coverage report counts it as dropped.

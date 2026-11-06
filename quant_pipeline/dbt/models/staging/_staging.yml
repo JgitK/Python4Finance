@@ -53,3 +53,26 @@ models:
         data_tests: [not_null]
       - name: start_date
         data_tests: [not_null]
+
+unit_tests:
+  - name: test_stg_prices_drops_excluded_tickers
+    description: >
+      Some price histories belong to a different security, for example after
+      a ticker is used again. The exclusions seed lists these tickers. The
+      staging model drops all of their rows.
+    model: stg_prices
+    given:
+      # The source is a Parquet file, not a table, so this input is SQL with types.
+      - input: source('raw', 'prices')
+        format: sql
+        rows: |
+          select 'GOOD' as ticker, date '2024-01-02' as date, 10.0 as open,
+                 11.0 as high, 9.0 as low, 10.0 as close, 1000000::bigint as volume
+          union all
+          select 'REUSED', date '2024-01-02', 9000.0, 9000.0, 9000.0, 9000.0, 80::bigint
+      - input: ref('price_data_exclusions')
+        rows:
+          - {ticker: REUSED, reason: "The ticker now names a different security."}
+    expect:
+      rows:
+        - {ticker: GOOD, price_date: "2024-01-02", close: 10}

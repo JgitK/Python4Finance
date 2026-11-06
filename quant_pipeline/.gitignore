@@ -15,6 +15,9 @@ dbt/.user.yml
 # Pipeline outputs.
 output/
 
+# The root .gitignore ignores every data/ folder. Keep this one: it holds
+# the raw prices that dbt reads.
+!data/
 # The download cache. quant.ingest can make it again.
 data/cache/
 # A temporary price file for development.

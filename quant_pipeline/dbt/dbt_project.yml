@@ -58,6 +58,10 @@ seeds:
         ticker: varchar
         start_date: date
         end_date: date
+    price_data_exclusions:
+      +column_types:
+        ticker: varchar
+        reason: varchar
     stock_sectors:
       +column_types:
         ticker: varchar
