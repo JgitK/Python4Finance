@@ -21,8 +21,14 @@ import sys
 
 import numpy as np
 import pandas as pd
+import yaml
 
+import run_pipeline
 from quant import backtest, pipeline, universe, warehouse
+
+# Read the screen settings from the dbt project, so the two sides agree.
+with open(warehouse.DEFAULT_WAREHOUSE.parent / "dbt_project.yml") as _handle:
+    DBT_VARS = yaml.safe_load(_handle)["vars"]
 
 # How close two numbers must be to count as equal.
 ATOL = 1e-6
@@ -217,6 +223,68 @@ def verify_corporate_actions_neutralized(tables: dict[str, pd.DataFrame]) -> Non
 
 
 # ---------------------------------------------------------------------------
+# Point-in-time screen check.
+# ---------------------------------------------------------------------------
+
+def pandas_screen_as_of(prices: pd.DataFrame, sector_of: dict[str, str],
+                        date: pd.Timestamp) -> set[str]:
+    """Rebuild the screen on a date with pandas.
+
+    First remove every price after the date. Then calculate each gate from
+    the data that is left. Because of this, the screen cannot use future data.
+    """
+    v = DBT_VARS
+    past = prices[prices["price_date"] <= date]
+    rows = []
+    for tk, p in past.groupby("ticker"):
+        if tk not in sector_of:
+            continue
+        mine = pandas_indicators(p)
+        # dbt has no metrics row on a date that has no return.
+        if pd.isna(mine["ret"].iloc[-1]):
+            continue
+        recent = mine.dropna(subset=["ret"]).tail(v["analysis_window"])
+        r = recent["ret"]
+        annual_vol = r.std(ddof=1) * math.sqrt(v["trading_days_per_year"])
+        sharpe = ((r.mean() * v["trading_days_per_year"] - v["risk_free_rate"])
+                  / annual_vol)
+        last = mine.iloc[-1]
+        score = (int(last["close"] > last["span_a"])
+                 + int(last["close"] > last["span_b"])
+                 + int(last["conv"] > last["base"])
+                 + int(last["span_a"] > last["span_b"])
+                 + int(last["close"] > last["base"]))
+        rows.append({"ticker": tk, "sector": sector_of[tk], "sharpe": sharpe,
+                     "passed": len(p) >= v["min_trading_days"]
+                     and recent["volume"].mean() >= v["min_avg_volume"]
+                     and r.std(ddof=1) <= v["max_daily_volatility"]
+                     and score >= v["min_ichimoku_score"]})
+    frame = pd.DataFrame(rows)
+    frame = frame[frame["passed"]].sort_values("sharpe", ascending=False)
+    top = frame.groupby("sector").head(v["top_n_per_sector"])
+    return set(top["ticker"])
+
+
+def verify_screen_history(con, tables: dict[str, pd.DataFrame]) -> None:
+    """Compare the screen history to a pandas screen on truncated data."""
+    returns, history = run_pipeline.load_backtest_inputs(con)
+    sector_of = warehouse.read_sector_map(con)
+    today = set(warehouse.read_candidates(con)["ticker"])
+    dates = run_pipeline.choose_selection_dates(returns.index)
+
+    all_match = True
+    for date in dates:
+        dbt_screen = set(pipeline.candidates_as_of(history, date))
+        mine = pandas_screen_as_of(tables["prices"], sector_of, date)
+        all_match = all_match and dbt_screen == mine
+        print(f"      {date.date()}: {len(dbt_screen)} stocks pass, "
+              f"{len(dbt_screen ^ mine)} differ from pandas, "
+              f"{len(dbt_screen ^ today)} differ from today's screen")
+    check("screen history matches a pandas screen on truncated data",
+          all_match and len(dates) > 0, f"{len(dates)} selection dates")
+
+
+# ---------------------------------------------------------------------------
 # Portfolio stats cross-check.
 # ---------------------------------------------------------------------------
 
@@ -256,12 +324,10 @@ def verify_portfolio_stats(con) -> None:
 def verify_no_look_ahead(con) -> None:
     """Prove that future returns cannot change the weights of a past build."""
     sector_of = warehouse.read_sector_map(con)
-    candidates = warehouse.read_candidates(con)
-    returns = warehouse.read_returns_matrix(
-        con, candidates["ticker"].tolist() + [universe.BENCHMARK]
-    )
+    returns, history = run_pipeline.load_backtest_inputs(con)
     params = pipeline.PortfolioParams(n_portfolios=1500, seed=42)
-    build = pipeline.make_builder(sector_of, params, universe.BENCHMARK)
+    build = pipeline.make_builder(sector_of, params, universe.BENCHMARK,
+                                  screen_history=history)
 
     selection_date = returns.index[-(backtest_holding() + 1)]
     base = backtest.backtest_window(returns, selection_date, backtest_holding(),
@@ -270,7 +336,7 @@ def verify_no_look_ahead(con) -> None:
     # Put absurd returns on every day after the selection date.
     tampered = returns.copy()
     future = tampered.index > selection_date
-    tampered.loc[future, tampered.columns[0]] = 5.0
+    tampered.loc[future, :] = 5.0
     tamper = backtest.backtest_window(tampered, selection_date, backtest_holding(),
                                       build, universe.BENCHMARK)["weights"]
 
@@ -280,7 +346,7 @@ def verify_no_look_ahead(con) -> None:
 
 def backtest_holding() -> int:
     """Return the holding period of the backtest."""
-    return 180
+    return run_pipeline.HOLDING_PERIOD
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +367,8 @@ def main() -> int:
     verify_risk_metrics(tables)
     print("\n== Data quality ==")
     verify_corporate_actions_neutralized(tables)
+    print("\n== Point-in-time screen ==")
+    verify_screen_history(con, tables)
     print("\n== Stats checks ==")
     verify_portfolio_stats(con)
     verify_no_look_ahead(con)

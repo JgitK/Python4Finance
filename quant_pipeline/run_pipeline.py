@@ -5,7 +5,8 @@ The steps are:
   2. Read the screened candidates and the returns from the warehouse.
   3. Select a diversified set of stocks and find the Max Sharpe weights.
   4. Change the weights to whole shares for a fixed budget.
-  5. Backtest the method with a walk-forward test against SPY.
+  5. Backtest the method with a walk-forward test against SPY. On each
+     past date, the backtest uses only the screen of that date.
   6. Write the results to the output folder.
 
 Run this file from the quant_pipeline folder. Use --skip-dbt to reuse the
@@ -47,6 +48,19 @@ def choose_selection_dates(index: pd.DatetimeIndex) -> list[pd.Timestamp]:
     return [index[pos] for pos in positions if pos > 260]
 
 
+def load_backtest_inputs(con) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Read the inputs of the backtest.
+
+    Return the returns of every stock and the benchmark, and the screen
+    history. Do not start from the stocks that pass the screen today.
+    Today's screen uses data from the holding periods of the backtest.
+    On each selection date, the backtest uses the screen of that date.
+    """
+    returns = warehouse.read_returns_matrix(con)
+    history = warehouse.read_screen_history(con)
+    return returns, history
+
+
 def main() -> None:
     """Run the pipeline and write the results."""
     parser = argparse.ArgumentParser(description="Run the quant pipeline.")
@@ -72,6 +86,7 @@ def main() -> None:
     returns = warehouse.read_returns_matrix(
         con, candidate_tickers + [universe.BENCHMARK]
     )
+    backtest_returns, screen_history = load_backtest_inputs(con)
     con.close()
 
     print(f"Step 2: read {len(candidate_tickers)} candidates and "
@@ -92,13 +107,14 @@ def main() -> None:
     selected_prices = {ticker: prices[ticker] for ticker in selected}
     plan = allocate.allocation_summary(weights, selected_prices, args.investment)
 
-    # Step 5: backtest the method. The candidates come from today's screen, so
-    # this step has a selection bias. See the README notes.
-    build = pipeline.make_builder(sector_of, params, universe.BENCHMARK)
-    selection_dates = choose_selection_dates(returns.index)
+    # Step 5: backtest the method. On each selection date, the builder uses
+    # only the stocks that passed the screen on that date.
+    build = pipeline.make_builder(sector_of, params, universe.BENCHMARK,
+                                  screen_history=screen_history)
+    selection_dates = choose_selection_dates(backtest_returns.index)
     windows = backtest.run_walk_forward(
-        returns, selection_dates, HOLDING_PERIOD, build, universe.BENCHMARK,
-        params.risk_free, params.trading_days,
+        backtest_returns, selection_dates, HOLDING_PERIOD, build,
+        universe.BENCHMARK, params.risk_free, params.trading_days,
     )
     backtest_rows = [
         {

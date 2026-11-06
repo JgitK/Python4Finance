@@ -65,3 +65,17 @@ def read_sector_map(con: duckdb.DuckDBPyConnection) -> dict[str, str]:
     """Return the sector of each stock."""
     frame = con.execute("select ticker, sector from main.dim_ticker").fetchdf()
     return dict(zip(frame["ticker"], frame["sector"]))
+
+
+def read_screen_history(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    """Return the screen on each date.
+
+    Each row is one stock that passed the screen on one date. The screen on a
+    date uses only the data up to that date. The backtest uses this frame.
+    """
+    frame = con.execute(
+        "select as_of_date, ticker from main.mart_screen_history "
+        "order by as_of_date, ticker"
+    ).fetchdf()
+    frame["as_of_date"] = pd.to_datetime(frame["as_of_date"])
+    return frame

@@ -35,7 +35,8 @@ The pipeline runs these steps in order:
 8. **Backtest.** Python runs a walk-forward test. At each past date, it
    selects a portfolio from past returns only. It holds the portfolio for
    180 trading days, approximately 8.5 months. Then it compares the result
-   to SPY. Read the note about selection bias before you use this result.
+   to SPY. On each past date, the backtest applies the screen of that date.
+   The screen of a date uses only the data up to that date.
 
 ## Project layout
 
@@ -49,15 +50,16 @@ quant_pipeline/
 │   ├── select_portfolio.py  Low-correlation stock selection.
 │   ├── optimize.py     Markowitz Max Sharpe optimization.
 │   ├── allocate.py     Weights to whole shares.
-│   ├── backtest.py     Walk-forward backtest with no look-ahead.
+│   ├── backtest.py     Walk-forward backtest.
 │   └── pipeline.py     Join the select and optimize steps.
 ├── dbt/                The dbt-duckdb project.
 │   ├── seeds/          The raw price and sector CSV files.
 │   ├── models/
 │   │   ├── staging/        Clean the prices and the sectors.
 │   │   ├── intermediate/   Returns, Bollinger, Ichimoku, risk metrics.
-│   │   └── marts/          Screen candidates, sector leaders, returns.
-│   └── tests/          A singular uniqueness test.
+│   │   └── marts/          Screen candidates, screen history, returns.
+│   ├── macros/         The screen rules. Two marts use the same rules.
+│   └── tests/          Singular tests for uniqueness and consistency.
 ├── tests/              The pytest suite for the Python layer.
 ├── run_pipeline.py     Run the whole pipeline end to end.
 └── verify_indicators.py  Check the numbers against an independent calculation.
@@ -110,7 +112,9 @@ python -m pytest
 cd dbt && dbt build --profiles-dir .
 ```
 
-The dbt layer has 3 unit tests for the return, score, and screen logic.
+The dbt layer has 6 unit tests for the return, score, and screen logic.
+Three of these tests put a large future value in the input. They make sure
+that an earlier row does not change.
 It also has schema tests for not-null, unique, and relationship rules.
 The Python layer has unit tests for every stats function. The backtest
 tests make sure that the build step does not use future returns.
@@ -140,8 +144,12 @@ Run it after a dbt build. It needs the warehouse file.
   risk metrics. The `max_abs_daily_return` variable sets this limit.
 - The Monte Carlo Sharpe ratio is an in-sample fit. Because of this, the value is too
   high. Use the backtest to measure the method, but read the next note first.
-- The backtest has a selection bias. It uses the stocks that pass the screen
-  today. The screen uses the last 252 trading days, and these days overlap
-  the holding periods of the backtest. Because of this, the backtest is not
-  reliable. The backtest also does not apply the dbt screen gates.
+- The backtest has no look-ahead in the screen. On each selection date, it
+  uses `mart_screen_history` for that date. The verify script calculates
+  that screen again from prices that stop on that date. The two must agree.
+- The backtest still has a survivorship bias. The universe is a list of 43
+  stocks that are large today. A stock that failed before today is not in
+  the list. Because of this, the backtest result can be too high.
+- The live run uses the last 252 trading days to select and weight the
+  stocks. The backtest uses all of the history before each selection date.
 - This project is for education. It is not investment advice.

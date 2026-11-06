@@ -41,3 +41,17 @@ def test_latest_prices_are_positive(con):
     prices = warehouse.read_latest_prices(con)
     assert len(prices) > 0
     assert all(price > 0 for price in prices.values())
+
+
+def test_screen_history_on_the_latest_date_equals_the_candidates(con):
+    history = warehouse.read_screen_history(con)
+    latest = history[history["as_of_date"] == history["as_of_date"].max()]
+    candidates = warehouse.read_candidates(con)
+    assert set(latest["ticker"]) == set(candidates["ticker"])
+
+
+def test_screen_history_covers_many_past_dates(con):
+    history = warehouse.read_screen_history(con)
+    # The backtest needs a screen on each past selection date.
+    assert history["as_of_date"].nunique() > 250
+    assert list(history.columns) == ["as_of_date", "ticker"]
