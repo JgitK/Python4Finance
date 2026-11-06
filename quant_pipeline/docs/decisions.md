@@ -57,7 +57,7 @@ Use this template for a new entry:
      That answer is worse than no answer.
 - **Results:** The large move count falls from 608 to 532. The `sp500`
   results do not change, because no excluded ticker is in that universe.
-- **Commits:** See the commit that holds this entry.
+- **Commits:** `81e83c3`
 
 ## D14. Classify a large move with the volume rule
 
@@ -111,7 +111,7 @@ Use this template for a new entry:
     from 598. `verify_indicators.py` passes all of its checks again.
   - The `sp500` results do not change. HON is the only S&P 500 member with
     a corporate action, and its row was already in the seed.
-- **Commits:** See the commit that holds this entry.
+- **Commits:** `81e83c3`
 
 ## D13. Keep the S&P 500 as the default universe
 
@@ -151,6 +151,11 @@ Use this template for a new entry:
      The S&P 500 drops 4 to 20 of 503 members (1% to 4%).
 - **Results:** The default does not change. The `nasdaq` and `both` rows in
   the results log are provisional.
+- **Update, later the same day:** D14 and D15 solved the data quality
+  problem of evidence 3. The `nasdaq` and `both` rows after commit
+  `81e83c3` are not provisional. The numbers did not change, because none
+  of the affected tickers passed the screen. Evidence 1, 2 and 4 stand, so
+  the decision stands.
 - **Commits:** `0e11033`, `329a747`, `23102b3`
 
 ## D12. Record the decisions and the results in `docs/`
