@@ -89,3 +89,8 @@ def read_universe_coverage(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     ).fetchdf()
     frame["as_of_date"] = pd.to_datetime(frame["as_of_date"])
     return frame
+
+
+def read_universe(con: duckdb.DuckDBPyConnection) -> str:
+    """Return the universe of the last dbt build: sp500, nasdaq, or both."""
+    return con.execute("select universe from main.meta_universe").fetchone()[0]

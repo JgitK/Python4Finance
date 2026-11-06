@@ -83,3 +83,13 @@ def test_cached_download_does_not_cache_an_error(tmp_path):
         pass
     # The next run must try AAA again.
     assert not list(tmp_path.iterdir())
+
+
+def test_download_symbols_join_every_membership_seed(tmp_path):
+    sp500 = tmp_path / "sp500_membership.csv"
+    sp500.write_text("ticker,start_date,end_date\nAAPL,1982-11-30,\nKO,1957-03-04,\n")
+    nasdaq = tmp_path / "nasdaq_membership.csv"
+    nasdaq.write_text("ticker,start_date,end_date\nAAPL,2022-11-01,\nZZZ,2023-02-01,\n")
+    symbols = ingest.download_symbols([sp500, nasdaq], "2022-11-01", "2026-11-01")
+    # AAPL is in both seeds. The list has it one time.
+    assert symbols == ["AAPL", "KO", "ZZZ", universe.BENCHMARK]

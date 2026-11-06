@@ -20,15 +20,18 @@ the work that it does best.
 The pipeline runs these steps in order:
 
 1. **Ingest.** Download daily prices from the nasdaq API for the SPY
-   benchmark and for each stock that was in the S&P 500 at some time in
-   the date range.
+   benchmark and for each stock that was in a universe at some time in the
+   date range. There are two universes: the S&P 500, and the Nasdaq
+   universe (operating companies listed on the Nasdaq with a market cap of
+   at least $1B in each monthly snapshot).
 2. **Clean and index.** dbt builds the daily return, the cumulative return,
    the Bollinger Bands, and the five Ichimoku Cloud lines for every stock.
 3. **Measure risk.** dbt measures each stock over the last 252 trading days:
    the Sharpe ratio, the Sortino ratio, the CVaR, and the volatility.
 4. **Screen.** dbt keeps the stocks that pass four gates: enough history,
    enough volume, calm enough daily moves, and a bullish Ichimoku score.
-   On each date, only the stocks in the S&P 500 on that date can pass.
+   On each date, only the stocks in the selected universe on that date
+   can pass.
 5. **Select.** Python picks a diversified set. It avoids stocks that move
    together. It selects a maximum of three stocks from one sector.
 6. **Optimize.** Python runs a Monte Carlo search. It tries 10,000 random
@@ -87,11 +90,12 @@ two source repositories, then build the seeds from them:
 ```bash
 git clone https://github.com/fja05680/sp500.git ../sp500
 git clone https://github.com/datasets/s-and-p-500-companies.git ../spc
-python -m quant.reference --sp500 ../sp500 --companies ../spc
+git clone --filter=blob:none --no-checkout https://github.com/rreichel3/US-Stock-Symbols.git ../uss
+python -m quant.reference --sp500 ../sp500 --companies ../spc --nasdaq ../uss
 ```
 
 Then download the prices. This step needs network access to the nasdaq
-API. It downloads approximately 580 symbols. With the default settings, this
+API. It downloads approximately 2,100 symbols. With the default settings, this
 step takes approximately 30 to 60 minutes. If the download stops, run it again.
 The cache in `data/cache/` keeps the symbols that are complete.
 
@@ -110,9 +114,15 @@ Run the whole pipeline:
 
 ```bash
 cd quant_pipeline
-python run_pipeline.py            # build dbt, then run the stats
-python run_pipeline.py --skip-dbt # reuse the warehouse from the last run
+python run_pipeline.py                    # build dbt, then run the stats
+python run_pipeline.py --universe nasdaq  # use the Nasdaq universe
+python run_pipeline.py --universe both    # use the two universes together
+python run_pipeline.py --skip-dbt         # reuse the warehouse from the last run
 ```
+
+The default universe is `sp500`. With `--skip-dbt`, the pipeline uses the
+universe of the last dbt build. The results log records the universe of
+each run.
 
 The pipeline writes the results to the `output/` folder: the weights, the
 share allocation, the efficient frontier, the backtest results, and the

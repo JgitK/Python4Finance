@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import subprocess
 from pathlib import Path
 
@@ -34,13 +35,16 @@ OUTPUT_DIR = HERE / "output"
 HOLDING_PERIOD = 180
 
 
-def build_dbt() -> None:
+def dbt_command(universe: str) -> list[str]:
+    """Return the dbt command that builds the models for a universe."""
+    return ["dbt", "build", "--profiles-dir", ".",
+            "--vars", json.dumps({"universe": universe})]
+
+
+def build_dbt(universe: str) -> None:
     """Build the dbt models with DuckDB."""
-    print("Step 1: build the dbt models ...")
-    subprocess.run(
-        ["dbt", "build", "--profiles-dir", "."],
-        cwd=DBT_DIR, check=True,
-    )
+    print(f"Step 1: build the dbt models for the {universe} universe ...")
+    subprocess.run(dbt_command(universe), cwd=DBT_DIR, check=True)
 
 
 def choose_selection_dates(index: pd.DatetimeIndex) -> list[pd.Timestamp]:
@@ -94,12 +98,15 @@ def main() -> None:
                         help="The number of random portfolios to try.")
     parser.add_argument("--skip-dbt", action="store_true",
                         help="Do not build dbt. Use the warehouse from the last run.")
+    parser.add_argument("--universe", default="sp500",
+                        choices=["sp500", "nasdaq", "both"],
+                        help="The universe of stocks. The default is sp500.")
     parser.add_argument("--no-log", action="store_true",
                         help="Do not add a row to docs/results_log.md.")
     args = parser.parse_args()
 
     if not args.skip_dbt:
-        build_dbt()
+        build_dbt(args.universe)
 
     OUTPUT_DIR.mkdir(exist_ok=True)
     params = pipeline.PortfolioParams(n_portfolios=args.n_portfolios)
@@ -108,6 +115,7 @@ def main() -> None:
     candidates = warehouse.read_candidates(con)
     sector_of = warehouse.read_sector_map(con)
     prices = warehouse.read_latest_prices(con)
+    universe_name = warehouse.read_universe(con)
     backtest_returns, screen_history = load_backtest_inputs(con)
     print(f"Step 2: read {len(candidates)} candidates and "
           f"{len(backtest_returns)} days of returns.")
@@ -176,14 +184,15 @@ def main() -> None:
     if not args.no_log:
         row = results_log.format_row(
             run_date=dt.date.today().isoformat(),
-            revision=results_log.git_revision(HERE),
+            revision=results_log.git_revision(HERE), universe=universe_name,
             n_candidates=len(candidates), live_sharpe=result["sharpe"],
             backtest=backtest_df)
         added = results_log.append_row(results_log.LOG_FILE, row)
         print("Step 7: " + ("added a row to" if added else
                             "no new results for") + " docs/results_log.md.")
 
-    print("\nS&P 500 members dropped for missing data (survivorship bias):")
+    print(f"\nUniverse members dropped for missing data ({universe_name}, "
+          "survivorship bias):")
     print(coverage[["date", "members", "usable", "dropped",
                     "dropped_tickers"]].to_string(index=False))
 

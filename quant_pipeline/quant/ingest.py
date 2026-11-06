@@ -1,8 +1,9 @@
 """Download the prices of the universe and write them to a Parquet file.
 
-The universe is every stock that was in the S&P 500 at some time in the date
-range, plus the benchmark. The membership seed lists these stocks. Build
-that seed first with quant.reference.
+The download list is every stock that was in a universe (the S&P 500 or
+the Nasdaq universe) at some time in the date range, plus the benchmark.
+The membership seeds list these stocks. Build the seeds first with
+quant.reference.
 
 This script calls the nasdaq API for each stock and cleans the rows. It
 writes one long table of daily prices to data/raw_prices.parquet. The dbt
@@ -34,20 +35,29 @@ DEFAULT_TODATE = "2026-11-01"
 PRICE_COLUMNS = ["ticker", "date", "open", "high", "low", "close", "volume"]
 
 ROOT = Path(__file__).resolve().parents[1]
-MEMBERSHIP_SEED = ROOT / "dbt" / "seeds" / "sp500_membership.csv"
+# The membership seeds. The download list joins all of them, so each
+# universe in the dbt project has its prices.
+MEMBERSHIP_SEEDS = [ROOT / "dbt" / "seeds" / "sp500_membership.csv",
+                    ROOT / "dbt" / "seeds" / "nasdaq_membership.csv"]
 PRICES_FILE = ROOT / "data" / "raw_prices.parquet"
 # One cache file for each symbol. A stopped download continues from here.
 CACHE_DIR = ROOT / "data" / "cache"
 
 
-def download_symbols(membership_seed: Path, fromdate: str,
+def download_symbols(membership_seeds: Path | list[Path], fromdate: str,
                      todate: str) -> list[str]:
     """Return the stocks to download, then the benchmark.
 
-    A stock is in the list when its index membership overlaps the range.
+    A stock is in the list when a membership stint in one of the seeds
+    overlaps the range.
     """
-    with membership_seed.open() as handle:
-        intervals = list(csv.DictReader(handle))
+    if isinstance(membership_seeds, Path):
+        membership_seeds = [membership_seeds]
+    intervals = []
+    for seed in membership_seeds:
+        if seed.exists():
+            with seed.open() as handle:
+                intervals.extend(csv.DictReader(handle))
     stocks = reference.tickers_in_range(intervals, fromdate, todate)
     return [s for s in stocks if s != universe.BENCHMARK] + [universe.BENCHMARK]
 
@@ -112,7 +122,7 @@ def run(fromdate: str, todate: str, pause: float = 1.0,
     load on the API low. A finished symbol goes to the cache, so you can run
     this function again after a stop.
     """
-    symbols = download_symbols(MEMBERSHIP_SEED, fromdate, todate)
+    symbols = download_symbols(MEMBERSHIP_SEEDS, fromdate, todate)
 
     def fetch(symbol: str) -> list[dict[str, Any]]:
         # The benchmark is an ETF. Every other symbol is a stock.

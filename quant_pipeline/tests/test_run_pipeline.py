@@ -64,5 +64,13 @@ def test_coverage_report_has_one_row_for_each_date(con):
     report = run_pipeline.coverage_report(con, dates)
     assert len(report) == len(dates)
     assert (report["members"] >= report["usable"]).all()
-    # The S&P 500 has about 500 members on each date.
-    assert report["members"].between(490, 510).all()
+    if warehouse.read_universe(con) == "sp500":
+        # The S&P 500 has about 500 members on each date.
+        assert report["members"].between(490, 510).all()
+
+
+def test_dbt_command_passes_the_universe():
+    command = run_pipeline.dbt_command("nasdaq")
+    assert command[:2] == ["dbt", "build"]
+    assert "--vars" in command
+    assert command[command.index("--vars") + 1] == '{"universe": "nasdaq"}'

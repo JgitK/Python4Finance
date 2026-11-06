@@ -17,9 +17,9 @@ import pandas as pd
 LOG_FILE = Path(__file__).resolve().parents[1] / "docs" / "results_log.md"
 
 TABLE_HEADER = (
-    "| Run date | Commit | Candidates | Live Sharpe (in-sample) "
+    "| Run date | Commit | Universe | Candidates | Live Sharpe (in-sample) "
     "| Window 1: portfolio vs SPY | Window 2 | Window 3 | Note |\n"
-    "|---|---|---|---|---|---|---|---|"
+    "|---|---|---|---|---|---|---|---|---|"
 )
 
 
@@ -41,8 +41,9 @@ def git_revision(folder: Path) -> str:
     return f"{commit}-dirty" if changes else commit
 
 
-def format_row(run_date: str, revision: str, n_candidates: int,
-               live_sharpe: float, backtest: pd.DataFrame) -> str:
+def format_row(run_date: str, revision: str, universe: str,
+               n_candidates: int, live_sharpe: float,
+               backtest: pd.DataFrame) -> str:
     """Make one Markdown table row from the results of a run."""
     windows = [
         f"{pd.Timestamp(r.selection_date).date()}: "
@@ -51,7 +52,8 @@ def format_row(run_date: str, revision: str, n_candidates: int,
     ]
     # The table has three window columns.
     windows = (windows + ["", "", ""])[:3]
-    cells = [run_date, revision, str(n_candidates), f"{live_sharpe:.2f}",
+    cells = [run_date, revision, universe, str(n_candidates),
+             f"{live_sharpe:.2f}",
              *windows, ""]
     return "| " + " | ".join(cells) + " |"
 

@@ -14,6 +14,8 @@ clean-targets: ["target", "dbt_packages"]
 
 # Variables hold the strategy parameters. Change a value here to tune the pipeline.
 vars:
+  # The universe of stocks: sp500, nasdaq, or both. See docs/decisions.md.
+  universe: sp500
   # The Parquet file of raw prices. The path is relative to the dbt folder.
   prices_file: "../data/raw_prices.parquet"
   # Risk-free rate for the Sharpe and Sortino ratios. 4.5% per year.
@@ -58,6 +60,15 @@ seeds:
         ticker: varchar
         start_date: date
         end_date: date
+    nasdaq_membership:
+      +column_types:
+        ticker: varchar
+        start_date: date
+        end_date: date
+    nasdaq_sectors:
+      +column_types:
+        ticker: varchar
+        sector: varchar
     corporate_actions:
       +column_types:
         ticker: varchar

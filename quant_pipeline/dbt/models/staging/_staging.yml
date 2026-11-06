@@ -118,3 +118,86 @@ unit_tests:
         - {ticker: SPIN, price_date: "2024-01-04", open: 50.0, high: 51.0, low: 47.0, close: 48.0, volume: 100}
         - {ticker: REAL, price_date: "2024-01-03", open: 10.0, high: 10.0, low: 10.0, close: 10.0, volume: 100}
         - {ticker: REAL, price_date: "2024-01-04", open: 5.0, high: 5.0, low: 4.0, close: 4.0, volume: 100}
+
+  - name: test_membership_uses_the_sp500_by_default
+    description: The default universe is the S&P 500. The Nasdaq stints are not used.
+    model: stg_membership
+    given:
+      - input: ref('sp500_membership')
+        rows:
+          - {ticker: AAPL, start_date: "1982-11-30", end_date: null}
+      - input: ref('nasdaq_membership')
+        rows:
+          - {ticker: ZZZ, start_date: "2023-02-01", end_date: null}
+    expect:
+      rows:
+        - {ticker: AAPL, start_date: "1982-11-30", end_date: null}
+
+  - name: test_membership_uses_only_the_nasdaq_universe
+    model: stg_membership
+    overrides:
+      vars:
+        universe: nasdaq
+    given:
+      - input: ref('sp500_membership')
+        rows:
+          - {ticker: AAPL, start_date: "1982-11-30", end_date: null}
+      - input: ref('nasdaq_membership')
+        rows:
+          - {ticker: ZZZ, start_date: "2023-02-01", end_date: null}
+    expect:
+      rows:
+        - {ticker: ZZZ, start_date: "2023-02-01", end_date: null}
+
+  - name: test_membership_both_merges_overlapping_stints
+    description: >
+      With both universes, a stock can have stints in the two lists that
+      overlap or touch. The model merges them into one stint, so that a
+      screen does not count the stock two times. Separate stints stay
+      separate.
+    model: stg_membership
+    overrides:
+      vars:
+        universe: both
+    given:
+      - input: ref('sp500_membership')
+        rows:
+          # AAPL is in both lists. The S&P stint covers the Nasdaq stint.
+          - {ticker: AAPL, start_date: "1982-11-30", end_date: null}
+          # EDGE: the S&P stint starts inside the Nasdaq stint.
+          - {ticker: EDGE, start_date: "2023-01-01", end_date: "2023-03-01"}
+          # TOUCH: the S&P stint starts on the day that the Nasdaq stint ends.
+          - {ticker: TOUCH, start_date: "2023-05-01", end_date: "2023-06-01"}
+      - input: ref('nasdaq_membership')
+        rows:
+          - {ticker: AAPL, start_date: "2022-11-01", end_date: null}
+          - {ticker: EDGE, start_date: "2022-12-01", end_date: "2023-01-03"}
+          - {ticker: TOUCH, start_date: "2023-04-03", end_date: "2023-05-01"}
+          # GAP: two Nasdaq stints with a gap between them stay separate.
+          - {ticker: GAP, start_date: "2022-12-01", end_date: "2023-01-03"}
+          - {ticker: GAP, start_date: "2023-02-01", end_date: null}
+    expect:
+      rows:
+        - {ticker: AAPL, start_date: "1982-11-30", end_date: null}
+        - {ticker: EDGE, start_date: "2022-12-01", end_date: "2023-03-01"}
+        - {ticker: TOUCH, start_date: "2023-04-03", end_date: "2023-06-01"}
+        - {ticker: GAP, start_date: "2022-12-01", end_date: "2023-01-03"}
+        - {ticker: GAP, start_date: "2023-02-01", end_date: null}
+
+  - name: test_sectors_prefer_gics_over_nasdaq
+    description: >
+      A stock with a GICS sector keeps it. A stock with only a Nasdaq sector
+      gets the Nasdaq sector, which the reference step maps to a GICS name.
+    model: stg_sectors
+    given:
+      - input: ref('stock_sectors')
+        rows:
+          - {ticker: AAPL, sector: Information Technology}
+      - input: ref('nasdaq_sectors')
+        rows:
+          - {ticker: AAPL, sector: Consumer Discretionary}
+          - {ticker: ZZZ, sector: Health Care}
+    expect:
+      rows:
+        - {ticker: AAPL, sector: Information Technology}
+        - {ticker: ZZZ, sector: Health Care}

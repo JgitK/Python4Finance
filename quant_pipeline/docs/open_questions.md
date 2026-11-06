@@ -17,11 +17,11 @@ one, move it to the "Solved" section with the commit hash.
 
 ### Universe and data
 
-- **The Nasdaq universe.** You wanted Nasdaq stocks in the universe. No
-  free point-in-time Nasdaq membership was found. One option: a switch
-  between the S&P 500 and the 2021 Nasdaq list (`Nasdaq.csv`), so that you
-  can compare the two results. A better backtest result with the Nasdaq list
-  can come partly from survivorship bias.
+- **The Nasdaq universe (in progress).** The code is complete:
+  `run_pipeline.py --universe nasdaq` or `--universe both`. The Nasdaq
+  prices are downloading. The results and decision D13 come next.
+  `Nasdaq.csv` in the repository root is from early 2015, not 2021 (it has
+  YHOO but not PYPL), so the pipeline does not use it.
 - **The survivorship bias that remains.** The pipeline drops 10 to 20 index
   members on each selection date because the nasdaq API has no prices for
   them. See `output/universe_coverage.csv`.
@@ -32,7 +32,6 @@ one, move it to the "Solved" section with the commit hash.
 - **The sectors are not point-in-time.** Each stock has its newest GICS
   sector on all dates. For example, GICS moved Visa and Mastercard to
   Financials in 2023.
-- **SOLS has no sector.** A dbt test gives a warning for its 260 rows.
 - **Small corporate actions.** The `corporate_actions` seed has only the
   moves larger than 50%. If the source does not adjust a smaller one, its
   gap stays in the returns.

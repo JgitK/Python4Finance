@@ -87,3 +87,7 @@ def test_a_corporate_action_does_not_drop_the_stock_from_the_window(con):
     window = pipeline.lookback_window(warehouse.read_returns_matrix(con),
                                       pipeline.PortfolioParams())
     assert "HON" in window.columns
+
+
+def test_the_warehouse_reports_its_universe(con):
+    assert warehouse.read_universe(con) in {"sp500", "nasdaq", "both"}

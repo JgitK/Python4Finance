@@ -19,15 +19,15 @@ def _backtest() -> pd.DataFrame:
     })
 
 
-def _row(revision: str = "abc1234") -> str:
+def _row(revision: str = "abc1234", universe: str = "sp500") -> str:
     return results_log.format_row(
-        run_date="2026-11-06", revision=revision, n_candidates=110,
-        live_sharpe=4.6573, backtest=_backtest())
+        run_date="2026-11-06", revision=revision, universe=universe,
+        n_candidates=110, live_sharpe=4.6573, backtest=_backtest())
 
 
 def test_format_row_shows_each_window_against_the_benchmark():
     row = _row()
-    assert row.startswith("| 2026-11-06 | abc1234 | 110 | 4.66 |")
+    assert row.startswith("| 2026-11-06 | abc1234 | sp500 | 110 | 4.66 |")
     assert "2026-02-11: +12.7% vs +11.2%" in row
     assert "2025-08-12: -2.1% vs +13.6%" in row
     assert row.endswith("|  |")  # The note cell is empty. You fill it in.
@@ -93,3 +93,10 @@ def test_git_revision_ignores_a_change_to_the_log_itself(tmp_path):
     # A code change makes the run dirty.
     (tmp_path / "code.py").write_text("x = 2\n")
     assert results_log.git_revision(tmp_path).endswith("-dirty")
+
+
+def test_append_row_keeps_runs_of_two_universes_on_one_commit(tmp_path):
+    path = tmp_path / "results_log.md"
+    results_log.append_row(path, _row(universe="sp500"))
+    # The same commit with another universe is a different run.
+    assert results_log.append_row(path, _row(universe="nasdaq")) is True
