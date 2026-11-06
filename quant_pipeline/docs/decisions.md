@@ -68,7 +68,7 @@ Use this template for a new entry:
   which is lower than the cash of the $10,000 plan. A low cash figure is
   therefore not proof of a good plan. The $2,500 plan spends almost every
   dollar, and it still holds the wrong portfolio.
-- **Commits:** See the commit that holds this entry.
+- **Commits:** `d90c665`
 
 ## D17. Spend the cash that the share rounding leaves
 
