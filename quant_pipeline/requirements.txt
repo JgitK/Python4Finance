@@ -1,0 +1,14 @@
+# Data plane.
+dbt-duckdb==1.11.1
+duckdb==2.0.0
+
+# Stats layer.
+pandas==3.1.1
+numpy==2.4.6
+scipy==1.16.3
+
+# Ingestion.
+requests==2.32.5
+
+# Tests.
+pytest==9.2.0

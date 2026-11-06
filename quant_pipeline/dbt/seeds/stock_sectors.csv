@@ -1,0 +1,44 @@
+ticker,sector
+AAPL,Information Technology
+ABBV,Health Care
+ADBE,Information Technology
+AMT,Real Estate
+AMZN,Consumer Discretionary
+AVGO,Information Technology
+BA,Industrials
+BAC,Financials
+CAT,Industrials
+COP,Energy
+COST,Consumer Staples
+CRM,Information Technology
+CVX,Energy
+DIS,Communication Services
+DUK,Utilities
+GOOGL,Communication Services
+GS,Financials
+HD,Consumer Discretionary
+HON,Industrials
+JNJ,Health Care
+JPM,Financials
+KO,Consumer Staples
+LIN,Materials
+LLY,Health Care
+MA,Financials
+MCD,Consumer Discretionary
+META,Communication Services
+MSFT,Information Technology
+NEE,Utilities
+NFLX,Communication Services
+NKE,Consumer Discretionary
+NVDA,Information Technology
+PEP,Consumer Staples
+PFE,Health Care
+PG,Consumer Staples
+PLD,Real Estate
+SHW,Materials
+TSLA,Consumer Discretionary
+UNH,Health Care
+UPS,Industrials
+V,Financials
+WMT,Consumer Staples
+XOM,Energy
