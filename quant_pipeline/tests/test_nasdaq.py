@@ -102,3 +102,67 @@ def test_build_historical_url_supports_etf_asset_class():
     url = nasdaq.build_historical_url("SPY", "2023-01-01", "2025-12-31",
                                       assetclass="etf")
     assert "assetclass=etf" in url
+
+
+# --- rows_from_payload -----------------------------------------------------
+#
+# The API answers with HTTP 200 and an error inside the body. For a symbol
+# that it does not have, the body holds rCode 400 and the message
+# "Symbol not exists.". The old code read the rows of such a body as an
+# empty list, so an error looked the same as a symbol with no trades. The
+# download then cached the empty list, and nobody saw the gap. See D19.
+
+OK_PAYLOAD = {
+    "data": {"tradesTable": {"rows": SAMPLE_ROWS}},
+    "status": {"rCode": 200, "bCodeMessage": None},
+}
+NOT_EXISTS_PAYLOAD = {
+    "data": None,
+    "status": {"rCode": 400,
+               "bCodeMessage": [{"code": 1001,
+                                 "errorMessage": "Symbol not exists."}]},
+}
+EMPTY_PAYLOAD = {
+    "data": {"tradesTable": {"rows": []}},
+    "status": {"rCode": 200, "bCodeMessage": None},
+}
+SERVER_ERROR_PAYLOAD = {
+    "data": None,
+    "status": {"rCode": 500,
+               "bCodeMessage": [{"code": 9999,
+                                 "errorMessage": "Service unavailable."}]},
+}
+
+
+def test_rows_from_payload_returns_the_rows():
+    assert nasdaq.rows_from_payload("AAPL", OK_PAYLOAD) == SAMPLE_ROWS
+
+
+def test_rows_from_payload_raises_for_a_symbol_that_the_source_lacks():
+    with pytest.raises(nasdaq.SymbolNotFound) as error:
+        nasdaq.rows_from_payload("EA", NOT_EXISTS_PAYLOAD)
+    # The message must name the symbol and repeat the words of the API.
+    assert "EA" in str(error.value)
+    assert "Symbol not exists." in str(error.value)
+
+
+def test_rows_from_payload_returns_empty_for_a_symbol_with_no_trades():
+    # The symbol exists, and it has no trade in the date range. That is not
+    # an error, and the download can cache it.
+    assert nasdaq.rows_from_payload("AAA", EMPTY_PAYLOAD) == []
+
+
+def test_rows_from_payload_raises_another_error_for_another_code():
+    with pytest.raises(nasdaq.NasdaqApiError) as error:
+        nasdaq.rows_from_payload("AAA", SERVER_ERROR_PAYLOAD)
+    assert not isinstance(error.value, nasdaq.SymbolNotFound)
+    assert "Service unavailable." in str(error.value)
+
+
+def test_a_missing_symbol_is_not_a_general_failure():
+    # The two errors need different answers. A symbol that the source does
+    # not have is a known gap, and it must not stop the download of the
+    # other symbols. Both come from one base class.
+    assert issubclass(nasdaq.SymbolNotFound, nasdaq.NasdaqError)
+    assert issubclass(nasdaq.NasdaqApiError, nasdaq.NasdaqError)
+    assert not issubclass(nasdaq.SymbolNotFound, nasdaq.NasdaqApiError)

@@ -22,6 +22,78 @@ Use this template for a new entry:
 
 ---
 
+## D19. Make the survivorship gap visible at the download
+
+- **Date:** 2026-11-06
+- **Role:** Protective measure, outside the core loop. It changes no
+  number of a run. It measures a hole in the data that the numbers hide.
+- **Question:** The price source has no prices for 345 of the 1,418
+  members of the `both` universe. The share of the members with no prices
+  rises as a date goes back: 0.8% on the last day, 4.2% in February 2026,
+  6.5% in August 2025, and 8.8% in February 2025. That pattern is
+  survivorship bias: the source serves the symbols that trade now, so a
+  company that another company bought, or a company that a new ticker
+  replaced, has no history at all. 333 of the 345 are not members of the
+  universe on the last day, for example ATVI (Microsoft bought
+  Activision), ABMD (Johnson & Johnson bought Abiomed) and ANSS (Synopsys
+  bought Ansys).
+
+  The pipeline hid this. `fetch_historical` read the body of an answer and
+  returned the rows. For a symbol that the API does not have, the answer
+  is HTTP 200 with `rCode 400` and `"Symbol not exists."` in the body, and
+  no rows. The function returned an empty list, so an error looked the
+  same as a quiet symbol. `cached_download` then wrote the empty list to
+  the cache, and no later run asked again. The log of the download said
+  "No prices for 333 symbols", as if that were normal.
+- **Options:**
+  1. Fill the gap from a second price source that serves a delisted
+     company. The nasdaq API cannot do it at any price.
+  2. Make the gap visible: separate an error of the API from a quiet
+     symbol, record each symbol that the source does not have, and report
+     the share on each run.
+  3. Keep the three selection dates near the last day, where the coverage
+     is good, and say nothing about the earlier dates.
+- **Decision:** Option 2. The user selected it. Option 1 is the only real
+  repair, and it needs a new data source, so it stays open. Option 3 hides
+  the problem instead of measuring it.
+- **The change:**
+  * `nasdaq.rows_from_payload` reads the status of the body. It raises
+    `SymbolNotFound` for code 1001, and `NasdaqApiError` for another
+    error. It returns an empty list only for a symbol that exists and has
+    no trade in the date range.
+  * `ingest.download_all` sorts the problems into two groups. A missing
+    symbol is a known gap: the download records it and continues, and it
+    does **not** go in the cache, so each run asks again and the gap stays
+    visible. Another error is a failure: the download still writes no
+    price file, because a later run can repair it.
+  * `ingest.write_missing_report` writes `data/missing_symbols.csv` with
+    the ticker, the date of the check, and the message of the API.
+  * The end of a download reports the share of the symbols that the source
+    does not have, and it says that the backtest therefore holds a
+    survivor of the period only.
+  * A new warning test, `assert_current_members_have_prices`, lists a
+    member of the universe on the last day with no prices. Such a row is
+    repairable, and the 333 companies that left the market are not.
+- **Evidence:** I deleted the 333 cached empty answers and asked the API
+  again for each symbol, on 2026-11-06:
+
+  | Answer | Symbols |
+  |---|---|
+  | The API has prices after all | **0** |
+  | The symbol exists, and it has no trade | 1 |
+  | "Symbol not exists." | **332** |
+  | Another error | 0 |
+
+  No symbol came back with data, so the cache was not the cause. The
+  source does not have 332 of the 2,123 symbols of the download list,
+  which is 15.6%. `assert_current_members_have_prices` gives 4 rows for
+  `sp500` (BF.B, KVUE, PSKY, WBD) and 12 for `both`.
+- **What this does not repair:** The backtest still holds a survivor of
+  the period only. The result of a past window is therefore the result of
+  a portfolio of the companies that are still here. This decision makes
+  the size of that hole a number in the output. It does not fill it.
+- **Commits:** See the commit that holds this entry.
+
 ## D18. Say when the money cannot hold the weights
 
 - **Date:** 2026-11-06

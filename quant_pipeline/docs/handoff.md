@@ -122,6 +122,10 @@ The `price_data_exclusions` seed grew from 1 ticker to 11. The close of
 each new ticker spans a factor of 1000 or more over four years, so its
 price history is not one security. See D15.
 
+`data/missing_symbols.csv` holds the 332 symbols that the price source
+does not have. The download writes the file again on each run, and it does
+not cache a refusal, so the list stays current. See D19.
+
 `allocate.py` runs a second pass that spends the cash of the share
 rounding. For $10,000 the cash is $63.06, and it was $1,680.44. See D17.
 Step 4 of a run also prints a warning for each target weight that whole

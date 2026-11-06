@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import duckdb
 
-from quant import ingest, universe
+from quant import ingest, nasdaq, universe
 
 
 def test_download_symbols_come_from_the_membership_seed(tmp_path):
@@ -93,3 +93,111 @@ def test_download_symbols_join_every_membership_seed(tmp_path):
     symbols = ingest.download_symbols([sp500, nasdaq], "2022-11-01", "2026-11-01")
     # AAPL is in both seeds. The list has it one time.
     assert symbols == ["AAPL", "KO", "ZZZ", universe.BENCHMARK]
+
+
+# ---------------------------------------------------------------------------
+# The two kinds of problem.
+#
+# The API does not have a symbol of a company that left the market. That is
+# a known gap, and the download must record it and continue. Another error,
+# for example a busy service, is a failure, and the download must stop
+# before it writes a price file with a hole in it. See D19.
+
+
+def _rows(symbol: str) -> list[dict]:
+    return [{"ticker": symbol, "date": "2023-01-03", "open": 1.0, "high": 1.0,
+             "low": 1.0, "close": 1.0, "volume": 100}]
+
+
+def test_download_all_separates_a_missing_symbol_from_a_failure(tmp_path):
+    def fake_fetch(symbol):
+        if symbol == "GONE":
+            raise nasdaq.SymbolNotFound("GONE: the nasdaq API answered "
+                                       "rCode 400. Symbol not exists.")
+        if symbol == "BROKEN":
+            raise RuntimeError("the network is down")
+        if symbol == "QUIET":
+            return []
+        return _rows(symbol)
+
+    report = ingest.download_all(["AAA", "GONE", "BROKEN", "QUIET"],
+                                 fake_fetch, tmp_path, workers=1)
+    assert [r["ticker"] for r in report["records"]] == ["AAA"]
+    assert list(report["missing"]) == ["GONE"]
+    assert report["failed"] == ["BROKEN"]
+    assert report["no_rows"] == ["QUIET"]
+    # The message of the API goes into the report, as the evidence.
+    assert "Symbol not exists." in report["missing"]["GONE"]
+
+
+def test_download_all_does_not_cache_a_missing_symbol(tmp_path):
+    # The old code cached the empty answer of an error, so the gap stayed
+    # out of sight for every later run. The next run must ask again.
+    calls = []
+
+    def fake_fetch(symbol):
+        calls.append(symbol)
+        raise nasdaq.SymbolNotFound("GONE: Symbol not exists.")
+
+    ingest.download_all(["GONE"], fake_fetch, tmp_path, workers=1)
+    ingest.download_all(["GONE"], fake_fetch, tmp_path, workers=1)
+    assert calls == ["GONE", "GONE"]
+    assert not (tmp_path / "GONE.json").exists()
+
+
+def test_download_all_caches_a_symbol_with_no_trades(tmp_path):
+    # A symbol that exists and has no trade is not an error. One call only.
+    calls = []
+
+    def fake_fetch(symbol):
+        calls.append(symbol)
+        return []
+
+    ingest.download_all(["QUIET"], fake_fetch, tmp_path, workers=1)
+    ingest.download_all(["QUIET"], fake_fetch, tmp_path, workers=1)
+    assert calls == ["QUIET"]
+
+
+def test_write_missing_report_holds_each_symbol_and_the_date(tmp_path):
+    path = tmp_path / "missing_symbols.csv"
+    ingest.write_missing_report(path, {"GONE": "Symbol not exists.",
+                                       "ALSO": "Symbol not exists."},
+                                checked_on="2026-11-06")
+    lines = path.read_text().splitlines()
+    assert lines[0] == "ticker,checked_on,message"
+    # The order is alphabetic, so the file does not change between runs.
+    assert lines[1].startswith("ALSO,2026-11-06,")
+    assert lines[2].startswith("GONE,2026-11-06,")
+
+
+def test_run_writes_the_prices_when_only_a_symbol_is_missing(tmp_path):
+    def fake_fetch(symbol):
+        if symbol == "GONE":
+            raise nasdaq.SymbolNotFound("GONE: Symbol not exists.")
+        return _rows(symbol)
+
+    prices = tmp_path / "raw_prices.parquet"
+    missing = tmp_path / "missing_symbols.csv"
+    rows = ingest.run("2023-01-01", "2023-01-31", pause=0.0, workers=1,
+                      fetch=fake_fetch, symbols=["AAA", "GONE"],
+                      cache_dir=tmp_path / "cache", prices_file=prices,
+                      missing_file=missing)
+    # The file holds the one symbol that the source has.
+    assert rows == 1
+    assert prices.exists()
+    assert "GONE" in missing.read_text()
+
+
+def test_run_does_not_write_the_prices_after_a_failure(tmp_path):
+    def fake_fetch(symbol):
+        if symbol == "BROKEN":
+            raise RuntimeError("the network is down")
+        return _rows(symbol)
+
+    prices = tmp_path / "raw_prices.parquet"
+    rows = ingest.run("2023-01-01", "2023-01-31", pause=0.0, workers=1,
+                      fetch=fake_fetch, symbols=["AAA", "BROKEN"],
+                      cache_dir=tmp_path / "cache", prices_file=prices,
+                      missing_file=tmp_path / "missing_symbols.csv")
+    assert rows == 0
+    assert not prices.exists()

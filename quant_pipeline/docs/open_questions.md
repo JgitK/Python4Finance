@@ -30,9 +30,22 @@ one, move it to the "Solved" section with the commit hash.
   BAND, IBRX, NUTX, RADX, RGTI, SBET and SHAZ in the seed carry the note
   "Hand review (D14)". A later change to the limits of the rule does not
   change these rows. Read them again if you move a limit.
-- **The survivorship bias that remains.** The pipeline drops 10 to 20 index
-  members on each selection date because the nasdaq API has no prices for
-  them. See `output/universe_coverage.csv`.
+- **The survivorship bias that remains.** The price source serves the
+  symbols that trade now, so a company that left the market has no history
+  at all. D19 measures the hole and does not fill it: the source does not
+  have 332 of the 2,123 symbols of the download list, and the share of the
+  members with no prices rises from 0.8% on the last day to 8.8% in
+  February 2025 for the `both` universe. A repair needs a second price
+  source that serves a delisted company. Until then, every backtest window
+  holds the companies that survived to today, and the further back the
+  window, the larger the hole. See `data/missing_symbols.csv` and
+  `output/universe_coverage.csv`.
+- **12 current members have no prices.** `assert_current_members_have_prices`
+  lists them. These are repairable, and the 333 companies that left the
+  market are not. BF.B needs another spelling of the ticker, because the
+  API does not use a full stop. KVUE, PSKY and WBD are in the middle of an
+  acquisition, so the index seed still holds them and the quote API does
+  not.
 - **Renamed tickers count as dropped.** The membership data records a rename
   as a removal and an addition (for example FI to FISV). On the dates before
   the rename, the old ticker has no prices.

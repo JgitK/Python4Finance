@@ -45,6 +45,7 @@ proof that the results are correct.
 | D12 | `docs/` holds the reasons and the results. `run_pipeline.py` adds one row to the results log with the commit hash, so each result points to the code that made it. |
 | D10, D11 | Two warning tests watch the price data: `assert_members_have_plausible_volume` finds a ticker that names a different security, and `assert_large_moves_are_reviewed` finds a large one-day move that no person reviewed. A warning does not stop a build. |
 | D15 | A third warning test, `assert_a_price_history_is_one_security`, finds a ticker whose close spans a factor of 1000. Such a file mixes the prices before and after a split. |
+| D19 | The download separates an error of the price source from a quiet symbol. `data/missing_symbols.csv` holds each symbol that the source does not have, and the run reports the share. `assert_current_members_have_prices` finds a current member with no prices, which is the repairable case. |
 | D18 | The pipeline prints a warning for each target weight that whole shares cannot hold, and it gives the smallest investment amount that has no such problem. |
 | D1 | The 48 data tests and the 15 unit tests in the dbt project check each model on every build. |
 

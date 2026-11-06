@@ -28,6 +28,30 @@ _HEADERS = {
 
 _BASE_URL = "https://api.nasdaq.com/api/quote/{symbol}/historical"
 
+# The API answers with HTTP 200 and an error inside the body. This code in
+# the body says that the API does not have the symbol.
+SYMBOL_NOT_FOUND_CODE = 1001
+
+
+class NasdaqError(Exception):
+    """The base class of the errors of the nasdaq API."""
+
+
+class SymbolNotFound(NasdaqError):
+    """The API does not have the symbol.
+
+    The API answers in this way for a company that left the market: a
+    company that another company bought, or a company that a new name or a
+    new ticker replaced. The API serves the symbols that trade now.
+
+    This error is a known gap, not a failure of the download. The caller
+    must record the symbol and continue. See decision D19.
+    """
+
+
+class NasdaqApiError(NasdaqError):
+    """The API answered with an error that is not a missing symbol."""
+
 
 def parse_price(text: str | None) -> float | None:
     """Change a price string to a float.
@@ -102,18 +126,56 @@ def build_historical_url(symbol: str, fromdate: str, todate: str,
     )
 
 
+def api_error_message(payload: dict[str, Any]) -> tuple[int | None, str]:
+    """Read the error code and the message of an answer of the API."""
+    status = payload.get("status") or {}
+    messages = status.get("bCodeMessage") or []
+    first = messages[0] if messages else {}
+    return first.get("code"), str(first.get("errorMessage") or "")
+
+
+def rows_from_payload(symbol: str, payload: dict[str, Any]
+                      ) -> list[dict[str, Any]]:
+    """Return the price rows of an answer of the API.
+
+    The API uses HTTP 200 for an error, and it puts the error in the body.
+    This function reads the body and answers in three ways:
+
+      * The rows, when the answer holds a table.
+      * An empty list, when the symbol exists and has no trade in the date
+        range. The caller can cache that answer.
+      * An error, when the body holds an error. `SymbolNotFound` says that
+        the API does not have the symbol. `NasdaqApiError` says that
+        something else is wrong, for example a busy service.
+
+    The old code read every answer as rows, and an error gave an empty
+    list. A gap in the data then looked the same as a quiet symbol.
+    """
+    status = payload.get("status") or {}
+    code = status.get("rCode")
+    if code is not None and int(code) >= 400:
+        error_code, message = api_error_message(payload)
+        text = f"{symbol}: the nasdaq API answered rCode {code}. {message}"
+        if error_code == SYMBOL_NOT_FOUND_CODE:
+            raise SymbolNotFound(text)
+        raise NasdaqApiError(text)
+    table = (payload.get("data") or {}).get("tradesTable") or {}
+    return table.get("rows") or []
+
+
 def fetch_historical(symbol: str, fromdate: str, todate: str,
                      session: requests.Session | None = None,
                      timeout: int = 30,
                      assetclass: str = "stocks") -> list[dict[str, Any]]:
     """Download raw historical rows for one symbol.
 
-    This function uses the network. Return an empty list when no rows exist.
+    This function uses the network. Return an empty list when the symbol
+    exists and has no trade in the date range. Raise `SymbolNotFound` when
+    the API does not have the symbol, and `NasdaqApiError` for another
+    error of the API.
     """
     url = build_historical_url(symbol, fromdate, todate, assetclass=assetclass)
     client = session or requests.Session()
     response = client.get(url, headers=_HEADERS, timeout=timeout)
     response.raise_for_status()
-    payload = response.json()
-    table = (payload.get("data") or {}).get("tradesTable") or {}
-    return table.get("rows") or []
+    return rows_from_payload(symbol, response.json())
