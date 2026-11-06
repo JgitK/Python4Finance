@@ -10,6 +10,8 @@ Use this template for a new entry:
 ## D<number>. <Short title>
 
 - **Date:** YYYY-MM-DD
+- **Role:** A protective measure outside the core loop, or a
+  correctness fix in the core loop. See [README.md](README.md).
 - **Question:** What did you have to decide?
 - **Options:** The options that you examined.
 - **Decision:** The option that you selected.
@@ -23,6 +25,8 @@ Use this template for a new entry:
 ## D12. Record the decisions and the results in `docs/`
 
 - **Date:** 2026-11-06
+- **Role:** Protective measure, outside the core loop. It does not
+  change the numbers. It measures how much you can trust them.
 - **Question:** Git records what changed. Where do the reasons and the
   results go?
 - **Decision:** A `docs/` folder with three files: `decisions.md`,
@@ -35,6 +39,8 @@ Use this template for a new entry:
 ## D11. Keep real large moves. Back-adjust a corporate action only.
 
 - **Date:** 2026-11-06
+- **Role:** Correctness fix, in the core loop. It changed the
+  reported numbers.
 - **Question:** What must the data layer do with a one-day move larger
   than 50%?
 - **Options:**
@@ -58,6 +64,8 @@ Use this template for a new entry:
 ## D10. Exclude a ticker whose price history is a different security
 
 - **Date:** 2026-11-06
+- **Role:** Correctness fix, in the core loop. It changed the
+  reported numbers.
 - **Question:** What must the pipeline do with PARA? Its prices go up to
   1,139,000 and its median volume is 87 shares.
 - **Options:** Delete the rows by hand; add a rule for high prices; list
@@ -87,6 +95,8 @@ Use this template for a new entry:
 ## D8. Report the survivorship bias that remains. Do not buy data.
 
 - **Date:** 2026-11-06
+- **Role:** Protective measure, outside the core loop. It does not
+  change the numbers. It measures how much you can trust them.
 - **Question:** The nasdaq API has no prices for a stock that does not
   trade now. What must the pipeline do with these index members?
 - **Options:** Buy one month of data from a vendor; model each exit by
@@ -103,6 +113,8 @@ Use this template for a new entry:
 ## D7. Use the S&P 500 on each date as the universe
 
 - **Date:** 2026-11-06
+- **Role:** Correctness fix, in the core loop. It changed the
+  reported numbers.
 - **Question:** The universe was a list of 43 stocks that are large today.
   This list has a survivorship bias. Which universe must replace it?
 - **Options:** All Nasdaq-listed stocks; the Nasdaq-100; the S&P 500.
@@ -121,6 +133,8 @@ Use this template for a new entry:
 ## D6. Use the same lookback window in the live run and the backtest
 
 - **Date:** 2026-11-06
+- **Role:** Correctness fix, in the core loop. It changed the
+  reported numbers.
 - **Question:** The live run selected the stocks from the last 252 days.
   The backtest used all of the history. Which window is correct?
 - **Decision:** The last 252 trading days in both. The function
@@ -134,6 +148,8 @@ Use this template for a new entry:
 ## D5. Remove the look-ahead bias with a point-in-time screen
 
 - **Date:** 2026-11-06
+- **Role:** Correctness fix, in the core loop. It changed the
+  reported numbers.
 - **Question:** The backtest started from the stocks that pass the screen
   today. Today's screen uses data from the holding periods. How can the
   backtest use only past data?
@@ -171,6 +187,8 @@ Use this template for a new entry:
 ## D2. Verify the numbers a second way
 
 - **Date:** 2026-11-06
+- **Role:** Protective measure, outside the core loop. It does not
+  change the numbers. It measures how much you can trust them.
 - **Decision:** `verify_indicators.py` calculates the indicators, the risk
   metrics, the screen history, and the price adjustment again with pandas,
   and compares the results to dbt.

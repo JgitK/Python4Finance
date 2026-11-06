@@ -24,6 +24,43 @@ This folder records why it changed and what the results showed.
    section with the commit hash.
 6. **Commit the documents** with the code, or in the next commit.
 
+## Safeguards and correctness fixes
+
+The core loop is the chain that makes a portfolio: screen, select,
+optimize, allocate, and backtest. Each decision in
+[decisions.md](decisions.md) carries a `Role` line. The role puts the
+decision in one of two groups.
+
+### Protective measures, outside the core loop
+
+These parts do not change the numbers. They measure how much you can trust
+the numbers. Remove one, and the results stay the same. You then have less
+proof that the results are correct.
+
+| Decision | The safeguard |
+|---|---|
+| D2 | `verify_indicators.py` calculates the indicators, the risk metrics, the screen history, and the price adjustment again with pandas. It compares each result to dbt. One check proves that future data does not change a past selection. |
+| D8 | `mart_universe_coverage` counts the index members that have no prices or no sector. Each run reports the count, so the survivorship bias that remains stays visible. |
+| D12 | `docs/` holds the reasons and the results. `run_pipeline.py` adds one row to the results log with the commit hash, so each result points to the code that made it. |
+| D10, D11 | Two warning tests watch the price data: `assert_members_have_plausible_volume` finds a ticker that names a different security, and `assert_large_moves_are_reviewed` finds a large one-day move that no person reviewed. A warning does not stop a build. |
+| D1 | The 48 data tests and the 15 unit tests in the dbt project check each model on every build. |
+
+### Correctness fixes, in the core loop
+
+These decisions changed the method. The numbers moved. The results before
+each fix are not valid.
+
+| Decision | The fix | The effect |
+|---|---|---|
+| D5 | The backtest applies the screen of each past date, not the screen of today. | The newest window fell from +13.9% to +5.8%. |
+| D6 | The live run and the backtest use the same 252-day lookback window. | The windows changed to +6.3%, +8.2%, and +9.8%. |
+| D7 | The universe is the S&P 500 on each date, not a list of 43 stocks that are large today. | The candidate count went from 32 to 110. |
+| D10 | `stg_prices` drops PARA, because its price history is a different security. | The screens changed. |
+| D11 | A real large move stays in the returns. Only a confirmed corporate action gets a back-adjustment. | The screens changed. MRNA now fails the volatility gate. |
+
+D9 supports both groups. It moved the prices to a Parquet file, so the
+repository can hold the full S&P 500 history that D7 needs.
+
 ## The commit column in the results log
 
 The commit column shows the code that made the row.
