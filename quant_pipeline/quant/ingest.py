@@ -175,7 +175,8 @@ def write_missing_report(path: Path, missing: dict[str, str],
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as handle:
-        writer = csv.writer(handle)
+        # One line ending, so git does not change the file.
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(["ticker", "checked_on", "message"])
         for symbol in sorted(missing):
             writer.writerow([symbol, checked_on, missing[symbol]])

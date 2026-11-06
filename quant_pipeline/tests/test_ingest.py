@@ -163,6 +163,8 @@ def test_write_missing_report_holds_each_symbol_and_the_date(tmp_path):
     ingest.write_missing_report(path, {"GONE": "Symbol not exists.",
                                        "ALSO": "Symbol not exists."},
                                 checked_on="2026-11-06")
+    # The file must use one line ending, so git does not change it.
+    assert b"\r" not in path.read_bytes()
     lines = path.read_text().splitlines()
     assert lines[0] == "ticker,checked_on,message"
     # The order is alphabetic, so the file does not change between runs.
