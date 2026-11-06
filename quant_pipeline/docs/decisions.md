@@ -22,6 +22,46 @@ Use this template for a new entry:
 
 ---
 
+## D13. Keep the S&P 500 as the default universe
+
+- **Date:** 2026-11-06
+- **Role:** Method choice, in the core loop. It keeps the current default,
+  so the reported numbers do not change.
+- **Question:** The pipeline can use the S&P 500 (`sp500`), the Nasdaq
+  universe (`nasdaq`), or the two together (`both`). Which one must be the
+  default?
+- **Options:** The three universes.
+- **Decision:** Keep `sp500`. Mark the `nasdaq` and `both` results as
+  provisional until a person reviews the large moves in the Nasdaq prices.
+- **Evidence:**
+  1. The live, in-sample Sharpe ratio goes up with the size of the
+     universe: 4.66 (sp500), 5.72 (nasdaq), 6.01 (both). The out-of-sample
+     Sharpe ratio goes down: 0.58, 0.56, 0.51. A bigger search finds a
+     better fit, not a better method.
+  2. A walk-forward run with 84 windows, each one a 180-day hold:
+
+     | Universe | Beat SPY on return | Beat SPY on Sharpe | Mean excess | Median excess |
+     |---|---|---|---|---|
+     | sp500 | 53.6% | 45.2% | +0.22% | +0.19% |
+     | nasdaq | 48.8% | 44.0% | +4.00% | -0.53% |
+     | both | 45.2% | 38.1% | +3.00% | -2.45% |
+
+     The two Nasdaq universes have a positive mean and a negative median.
+     A few large wins make the mean. The best window is +60.5%. The
+     windows overlap, and the valid dates cover about two independent
+     180-day periods, so this table cannot show a real difference.
+  3. The data quality of the Nasdaq prices is not good enough. The price
+     data holds 601 one-day moves larger than 50% that no person reviewed.
+     104 of them are inside the `both` universe, and 34 of the affected
+     tickers pass the screen. D11 requires a review of each large move.
+     `verify_indicators.py` fails this check.
+  4. The survivorship bias is larger. The Nasdaq universe drops 55 to 105
+     of approximately 1,000 members on each selection date (5% to 11%).
+     The S&P 500 drops 4 to 20 of 503 members (1% to 4%).
+- **Results:** The default does not change. The `nasdaq` and `both` rows in
+  the results log are provisional.
+- **Commits:** `0e11033`, `329a747`, `23102b3`
+
 ## D12. Record the decisions and the results in `docs/`
 
 - **Date:** 2026-11-06

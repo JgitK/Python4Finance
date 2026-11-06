@@ -29,7 +29,8 @@ This folder records why it changed and what the results showed.
 The core loop is the chain that makes a portfolio: screen, select,
 optimize, allocate, and backtest. Each decision in
 [decisions.md](decisions.md) carries a `Role` line. The role puts the
-decision in one of two groups.
+decision in one of two groups. A decision that only selects a default,
+and changes no number, says so in its Role line.
 
 ### Protective measures, outside the core loop
 

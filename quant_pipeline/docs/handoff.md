@@ -3,7 +3,7 @@
 Give this file to a new chat. It holds the state of the project and the
 rules of work. Update it at the end of each session.
 
-Last update: 2026-11-06.
+Last update: 2026-11-06 (second session of that day).
 
 ## Paste this into the new chat
 
@@ -89,13 +89,41 @@ The user set these rules. Keep them.
 
 - **Done:** look-ahead fix (D5), same lookback (D6), S&P 500 universe (D7),
   survivorship report (D8), Parquet prices (D9), PARA exclusion (D10),
-  real large moves (D11), docs system (D12), and the code of the universe
-  switch (commit `6219072`).
-- **In progress:** the Nasdaq prices download, then a comparison of the
-  three universes.
+  real large moves (D11), docs system (D12), and the universe comparison
+  (D13, `23102b3`).
+- The Nasdaq prices are complete: 1,671,625 rows for 2,123 symbols, in
+  `data/raw_prices.parquet` (25 MB, in git).
+- Two bugs are fixed. A unit test made every non-default universe build
+  stop with an error (`0e11033`). The backtest selected dates that have no
+  screen and counted them as 0% losses (`23102b3`).
+- The docs separate a protective measure outside the core loop from a
+  correctness fix in the core loop. See the Safeguards section of
+  `docs/README.md`.
+
+## Read this before you run the checks
+
+`python verify_indicators.py` now **fails one check**:
+`each large move is in the corporate_actions seed`. This failure is known
+and expected. The Nasdaq prices hold 601 one-day moves larger than 50%
+that no person classified, and D11 requires a review of each one. Every
+other check passes. `dbt build` gives 2 warnings for `sp500` and 3 for the
+other universes, for the same reason and for the tickers with no sector.
+
+Because of this, the `nasdaq` and `both` rows in the results log are
+provisional. The `sp500` path is clean: 110 candidates, live Sharpe 4.6573,
+and no unreviewed large move inside the universe.
 
 ## Next steps
 
-1. Finish the universe comparison: run `sp500`, `nasdaq`, and `both`.
-   Write decision D13 and the notes in the results log.
-2. Then select the next item from `docs/open_questions.md`.
+1. Select a rule for the 601 unreviewed large moves. See the first item in
+   `docs/open_questions.md`, which lists three options. This unblocks the
+   `nasdaq` and `both` results.
+2. Add an option to `run_pipeline.py` for a walk-forward run with many
+   windows. An experiment ran 84 windows in approximately 10 seconds and
+   gave a much better measure than 3 windows.
+3. The user asked for an interactive web app of this pipeline. Three plans
+   are open, and the user has not selected one: a read-only batch site, a
+   live parameter workbench, and a browser-only teaching tool with toggles
+   that turn each removed bias back on. Note that `webapp/` in this
+   repository is an early FastAPI scaffold that reads CSV exports from the
+   R modules, not from `quant_pipeline`.
