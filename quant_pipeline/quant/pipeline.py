@@ -76,7 +76,8 @@ def make_builder(sector_of: dict[str, str], params: PortfolioParams,
                  benchmark: str) -> Callable[[pd.DataFrame], dict[str, float]]:
     """Make a build_portfolio function for the backtest.
 
-    The function that this returns uses a train frame as input. It returns weights by ticker.
+    The function that this returns uses a train frame as input.
+    It returns weights by ticker.
     It drops the benchmark first, so the benchmark never enters the portfolio.
     """
     def build(train: pd.DataFrame) -> dict[str, float]:
