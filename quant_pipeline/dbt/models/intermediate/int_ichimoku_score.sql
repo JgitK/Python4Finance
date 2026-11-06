@@ -25,11 +25,5 @@ select
     base_line,
     span_a,
     span_b,
-    (
-        case when close > span_a then 1 else 0 end
-        + case when close > span_b then 1 else 0 end
-        + case when conversion_line > base_line then 1 else 0 end
-        + case when span_a > span_b then 1 else 0 end
-        + case when close > base_line then 1 else 0 end
-    ) as ichimoku_score
+    {{ ichimoku_score() }} as ichimoku_score
 from latest

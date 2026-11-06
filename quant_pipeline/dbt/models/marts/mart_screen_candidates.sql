@@ -7,10 +7,6 @@
 -- The model then ranks the stocks inside each sector by Sharpe ratio
 -- and keeps the top names. These are the candidates for the portfolio.
 
-{% set min_days = var('min_trading_days') %}
-{% set min_volume = var('min_avg_volume') %}
-{% set max_vol = var('max_daily_volatility') %}
-{% set min_score = var('min_ichimoku_score') %}
 {% set top_n = var('top_n_per_sector') %}
 
 with metrics as (
@@ -55,10 +51,7 @@ joined as (
 screened as (
     select *
     from joined
-    where total_trading_days >= {{ min_days }}
-        and avg_volume >= {{ min_volume }}
-        and daily_volatility <= {{ max_vol }}
-        and ichimoku_score >= {{ min_score }}
+    where {{ passes_screen() }}
 )
 
 select

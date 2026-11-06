@@ -49,6 +49,23 @@ models:
       - name: ticker
         data_tests: [not_null]
 
+  - name: mart_screen_history
+    description: >
+      The screen on each date. Each row is one stock that passed the screen on
+      that date, with only the data up to that date. The backtest reads this mart.
+    columns:
+      - name: as_of_date
+        data_tests: [not_null]
+      - name: ticker
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_ticker')
+                field: ticker
+      - name: sector_rank
+        data_tests: [not_null]
+
 unit_tests:
   - name: test_screen_applies_all_gates
     description: >
@@ -98,3 +115,49 @@ unit_tests:
            daily_volatility: 0.02, annual_return: 0.30, annual_volatility: 0.25,
            sharpe_ratio: 1.0, sortino_ratio: 1.6, cvar_5: -0.04, cum_return_window: 0.28,
            ichimoku_score: 5, current_price: 120, sector_rank: 1}
+
+  - name: test_screen_history_applies_the_gates_on_each_date
+    description: >
+      The screen history applies every gate on each date. It ranks the stocks
+      in each sector on each date. A stock that passes later does not pass
+      earlier. The top_n limit is 1 for this test.
+    model: mart_screen_history
+    overrides:
+      vars:
+        top_n_per_sector: 1
+    given:
+      - input: ref('int_risk_metrics_daily')
+        rows:
+          # D1: AAA is too new. BBB passes. CCC passes with a lower Sharpe.
+          - {ticker: AAA, as_of_date: "2024-01-02", total_trading_days: 100,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 3.0}
+          - {ticker: BBB, as_of_date: "2024-01-02", total_trading_days: 500,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0}
+          - {ticker: CCC, as_of_date: "2024-01-02", total_trading_days: 500,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 0.5}
+          # D2: AAA has enough history and the best Sharpe.
+          - {ticker: AAA, as_of_date: "2025-01-02", total_trading_days: 450,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 3.0}
+          - {ticker: BBB, as_of_date: "2025-01-02", total_trading_days: 750,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0}
+          - {ticker: CCC, as_of_date: "2025-01-02", total_trading_days: 750,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 0.5}
+      - input: ref('int_ichimoku_score_daily')
+        rows:
+          - {ticker: AAA, as_of_date: "2024-01-02", ichimoku_score: 5}
+          - {ticker: BBB, as_of_date: "2024-01-02", ichimoku_score: 5}
+          - {ticker: CCC, as_of_date: "2024-01-02", ichimoku_score: 5}
+          - {ticker: AAA, as_of_date: "2025-01-02", ichimoku_score: 5}
+          - {ticker: BBB, as_of_date: "2025-01-02", ichimoku_score: 5}
+          # On D2, CCC is not bullish.
+          - {ticker: CCC, as_of_date: "2025-01-02", ichimoku_score: 1}
+      - input: ref('dim_ticker')
+        rows:
+          - {ticker: AAA, sector: Tech}
+          - {ticker: BBB, sector: Tech}
+          - {ticker: CCC, sector: Energy}
+    expect:
+      rows:
+        - {as_of_date: "2024-01-02", ticker: BBB, sector_rank: 1}
+        - {as_of_date: "2024-01-02", ticker: CCC, sector_rank: 1}
+        - {as_of_date: "2025-01-02", ticker: AAA, sector_rank: 1}

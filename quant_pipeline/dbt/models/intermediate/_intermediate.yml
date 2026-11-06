@@ -42,6 +42,28 @@ models:
       - name: total_trading_days
         data_tests: [not_null]
 
+  - name: int_ichimoku_score_daily
+    description: The bullish Ichimoku score of each stock on each day, from 0 to 5.
+    columns:
+      - name: ichimoku_score
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1, 2, 3, 4, 5]
+
+  - name: int_risk_metrics_daily
+    description: >
+      The risk and return metrics of each stock on each day. Each row uses
+      only the returns up to its own date.
+    columns:
+      - name: ticker
+        data_tests: [not_null]
+      - name: as_of_date
+        data_tests: [not_null]
+      - name: total_trading_days
+        data_tests: [not_null]
+
 unit_tests:
   - name: test_daily_return_is_pct_change
     description: The daily return is the percent change of the close.
@@ -77,3 +99,55 @@ unit_tests:
            conversion_line: 95, base_line: 85, span_a: 90, span_b: 80, ichimoku_score: 5}
         - {ticker: BEAR, as_of_date: "2023-01-10", close: 50,
            conversion_line: 55, base_line: 60, span_a: 65, span_b: 70, ichimoku_score: 0}
+
+  - name: test_risk_metrics_daily_uses_only_past_rows
+    description: >
+      Each row uses the last N returns up to its own date. A large future
+      return must not change an earlier row. The window is 3 for this test.
+    model: int_risk_metrics_daily
+    overrides:
+      vars:
+        analysis_window: 3
+        trading_days_per_year: 1
+        risk_free_rate: 0
+    given:
+      - input: ref('int_daily_returns')
+        rows:
+          # The first day has no return. The model ignores a null return.
+          - {ticker: TST, price_date: "2024-01-01", daily_return: null}
+          - {ticker: TST, price_date: "2024-01-02", daily_return: -0.5}
+          - {ticker: TST, price_date: "2024-01-03", daily_return: 0}
+          - {ticker: TST, price_date: "2024-01-04", daily_return: 0.5}
+          - {ticker: TST, price_date: "2024-01-05", daily_return: 0.25}
+          # This future return is very large.
+          - {ticker: TST, price_date: "2024-01-08", daily_return: 2.25}
+      - input: ref('stg_prices')
+        rows:
+          - {ticker: TST, price_date: "2024-01-01", volume: 100}
+          - {ticker: TST, price_date: "2024-01-02", volume: 200}
+          - {ticker: TST, price_date: "2024-01-03", volume: 300}
+          - {ticker: TST, price_date: "2024-01-04", volume: 400}
+          - {ticker: TST, price_date: "2024-01-05", volume: 500}
+          - {ticker: TST, price_date: "2024-01-08", volume: 600}
+    expect:
+      rows:
+        - {ticker: TST, as_of_date: "2024-01-02", total_trading_days: 2, avg_volume: 200, annual_return: -0.5}
+        - {ticker: TST, as_of_date: "2024-01-03", total_trading_days: 3, avg_volume: 250, annual_return: -0.25}
+        - {ticker: TST, as_of_date: "2024-01-04", total_trading_days: 4, avg_volume: 300, annual_return: 0}
+        - {ticker: TST, as_of_date: "2024-01-05", total_trading_days: 5, avg_volume: 400, annual_return: 0.25}
+        - {ticker: TST, as_of_date: "2024-01-08", total_trading_days: 6, avg_volume: 500, annual_return: 1.0}
+
+  - name: test_ichimoku_score_daily_scores_every_day
+    description: The daily model gives a score on each day, not only the last day.
+    model: int_ichimoku_score_daily
+    given:
+      - input: ref('int_ichimoku')
+        rows:
+          - {ticker: TST, price_date: "2023-01-09", close: 100,
+             conversion_line: 95, base_line: 85, span_a: 90, span_b: 80}
+          - {ticker: TST, price_date: "2023-01-10", close: 50,
+             conversion_line: 55, base_line: 60, span_a: 65, span_b: 70}
+    expect:
+      rows:
+        - {ticker: TST, as_of_date: "2023-01-09", ichimoku_score: 5}
+        - {ticker: TST, as_of_date: "2023-01-10", ichimoku_score: 0}
