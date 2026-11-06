@@ -29,6 +29,19 @@ class PortfolioParams:
     trading_days: int = 252
     n_portfolios: int = 10000
     seed: int = 42
+    # The build step uses this many recent rows. The dbt analysis_window
+    # has the same value, so the screen and the build use the same year.
+    lookback_days: int = 252
+
+
+def lookback_window(returns: pd.DataFrame,
+                    params: PortfolioParams) -> pd.DataFrame:
+    """Keep the last lookback_days rows. Drop a stock with a gap in them.
+
+    The live run and the backtest both use this function. Because of this,
+    both select and weight the stocks from the same window.
+    """
+    return returns.tail(params.lookback_days).dropna(axis=1)
 
 
 def rank_by_sharpe(returns: pd.DataFrame, risk_free: float = 0.045,
@@ -105,7 +118,7 @@ def make_builder(sector_of: dict[str, str], params: PortfolioParams,
         if screen_history is not None:
             passed = candidates_as_of(screen_history, train.index.max())
             tradeable = tradeable[[t for t in passed if t in tradeable.columns]]
-        tradeable = tradeable.dropna(axis=1)
+        tradeable = lookback_window(tradeable, params)
         if tradeable.shape[1] == 0:
             return {}
         result = build_max_sharpe_portfolio(tradeable, sector_of, params)

@@ -61,6 +61,16 @@ def load_backtest_inputs(con) -> tuple[pd.DataFrame, pd.DataFrame]:
     return returns, history
 
 
+def build_live_portfolio(con, params: pipeline.PortfolioParams
+                         ) -> dict:
+    """Build the portfolio for today from the stocks that pass the screen."""
+    candidates = warehouse.read_candidates(con)
+    returns = warehouse.read_returns_matrix(con, candidates["ticker"].tolist())
+    window = pipeline.lookback_window(returns, params)
+    return pipeline.build_max_sharpe_portfolio(
+        window, warehouse.read_sector_map(con), params)
+
+
 def main() -> None:
     """Run the pipeline and write the results."""
     parser = argparse.ArgumentParser(description="Run the quant pipeline.")
@@ -82,20 +92,13 @@ def main() -> None:
     candidates = warehouse.read_candidates(con)
     sector_of = warehouse.read_sector_map(con)
     prices = warehouse.read_latest_prices(con)
-    candidate_tickers = candidates["ticker"].tolist()
-    returns = warehouse.read_returns_matrix(
-        con, candidate_tickers + [universe.BENCHMARK]
-    )
     backtest_returns, screen_history = load_backtest_inputs(con)
-    con.close()
-
-    print(f"Step 2: read {len(candidate_tickers)} candidates and "
-          f"{len(returns)} days of returns.")
+    print(f"Step 2: read {len(candidates)} candidates and "
+          f"{len(backtest_returns)} days of returns.")
 
     # Step 3: build the portfolio from the most recent year.
-    tradeable = returns.drop(columns=[universe.BENCHMARK])
-    recent = tradeable.tail(params.trading_days).dropna(axis=1)
-    result = pipeline.build_max_sharpe_portfolio(recent, sector_of, params)
+    result = build_live_portfolio(con, params)
+    con.close()
     weights = result["weights"]
     selected = result["selected"]
     print(f"Step 3: selected {len(selected)} stocks. "

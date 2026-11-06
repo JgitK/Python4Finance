@@ -290,15 +290,13 @@ def verify_screen_history(con, tables: dict[str, pd.DataFrame]) -> None:
 
 def verify_portfolio_stats(con) -> None:
     """Rebuild the optimizer's own numbers a second way."""
-    sector_of = warehouse.read_sector_map(con)
     candidates = warehouse.read_candidates(con)
-    returns = warehouse.read_returns_matrix(
-        con, candidates["ticker"].tolist() + [universe.BENCHMARK]
-    )
-    recent = returns.drop(columns=[universe.BENCHMARK]).tail(252).dropna(axis=1)
+    returns = warehouse.read_returns_matrix(con, candidates["ticker"].tolist())
+    # Take the last 252 rows here without the pipeline helper.
+    recent = returns.tail(252).dropna(axis=1)
 
     params = pipeline.PortfolioParams(n_portfolios=3000, seed=42)
-    result = pipeline.build_max_sharpe_portfolio(recent, sector_of, params)
+    result = run_pipeline.build_live_portfolio(con, params)
     weights = result["weights"]
     selected = result["selected"]
 

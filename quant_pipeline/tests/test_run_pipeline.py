@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 import run_pipeline
-from quant import universe, warehouse
+from quant import pipeline, universe, warehouse
 
 pytestmark = pytest.mark.skipif(
     not warehouse.DEFAULT_WAREHOUSE.exists(),
@@ -42,3 +42,16 @@ def test_backtest_inputs_include_stocks_that_fail_the_screen_today(con):
 def test_backtest_inputs_include_the_screen_history(con):
     _, history = run_pipeline.load_backtest_inputs(con)
     assert len(history) > 0
+
+
+def test_backtest_builder_on_the_last_date_equals_the_live_portfolio(con):
+    # On the last date, the backtest and the live run have the same data.
+    # Because of this, they must give the same weights. A different lookback
+    # window or a different stock list makes the weights different.
+    params = pipeline.PortfolioParams(n_portfolios=300, seed=7)
+    live = run_pipeline.build_live_portfolio(con, params)
+
+    returns, history = run_pipeline.load_backtest_inputs(con)
+    build = pipeline.make_builder(warehouse.read_sector_map(con), params,
+                                  universe.BENCHMARK, screen_history=history)
+    assert build(returns) == pytest.approx(live["weights"])

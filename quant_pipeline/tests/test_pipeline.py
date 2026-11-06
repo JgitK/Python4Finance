@@ -116,3 +116,60 @@ def test_make_builder_returns_no_weights_when_no_stock_passed():
         benchmark="SPY", screen_history=_screen_history(),
     )
     assert build(train) == {}
+
+
+# --- lookback window --------------------------------------------------------
+# The live run and the backtest must select and weight the stocks from the
+# same window: the last lookback_days rows up to the selection date.
+
+def test_lookback_window_keeps_only_the_last_rows():
+    returns = _three_stocks()
+    params = pipeline.PortfolioParams(lookback_days=252)
+    window = pipeline.lookback_window(returns, params)
+    assert len(window) == 252
+    assert window.index[-1] == returns.index[-1]
+
+
+def test_lookback_window_drops_a_stock_with_a_gap_inside_the_window():
+    returns = _three_stocks()
+    returns.iloc[-10, returns.columns.get_loc("BBB")] = np.nan
+    window = pipeline.lookback_window(returns, pipeline.PortfolioParams())
+    assert "BBB" not in window.columns
+
+
+def test_lookback_window_keeps_a_stock_with_a_gap_before_the_window():
+    returns = _three_stocks()
+    # A gap long before the window does not affect the window.
+    returns.iloc[5, returns.columns.get_loc("BBB")] = np.nan
+    window = pipeline.lookback_window(returns, pipeline.PortfolioParams())
+    assert "BBB" in window.columns
+
+
+def test_make_builder_uses_only_the_lookback_window(monkeypatch):
+    returns = _three_stocks()
+    seen = {}
+    real_build = pipeline.build_max_sharpe_portfolio
+
+    def spy(frame, sector_of, params):
+        # Record the rows that the build step gets.
+        seen["rows"], seen["last"] = len(frame), frame.index[-1]
+        return real_build(frame, sector_of, params)
+
+    monkeypatch.setattr(pipeline, "build_max_sharpe_portfolio", spy)
+    params = pipeline.PortfolioParams(n_portfolios=200, seed=1, lookback_days=100)
+    build = pipeline.make_builder(
+        {"AAA": "Tech", "BBB": "Health", "CCC": "Energy"}, params, "SPY")
+    build(returns)
+    assert seen["rows"] == 100
+    assert seen["last"] == returns.index[-1]
+
+
+def test_lookback_equals_the_dbt_analysis_window():
+    # The screen in dbt and the build step in Python must use the same year.
+    import pathlib
+
+    import yaml
+
+    project = pathlib.Path(__file__).resolve().parents[1] / "dbt" / "dbt_project.yml"
+    dbt_vars = yaml.safe_load(project.read_text())["vars"]
+    assert pipeline.PortfolioParams().lookback_days == dbt_vars["analysis_window"]

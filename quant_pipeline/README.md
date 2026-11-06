@@ -150,6 +150,8 @@ Run it after a dbt build. It needs the warehouse file.
 - The backtest still has a survivorship bias. The universe is a list of 43
   stocks that are large today. A stock that failed before today is not in
   the list. Because of this, the backtest result can be too high.
-- The live run uses the last 252 trading days to select and weight the
-  stocks. The backtest uses all of the history before each selection date.
+- The live run and the backtest use the same build step and the same
+  window: the last 252 trading days up to the selection date. A test makes
+  sure that, on the last date, the backtest gives the same weights as the
+  live run.
 - This project is for education. It is not investment advice.
