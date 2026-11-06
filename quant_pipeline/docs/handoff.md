@@ -122,15 +122,15 @@ The `price_data_exclusions` seed grew from 1 ticker to 11. The close of
 each new ticker spans a factor of 1000 or more over four years, so its
 price history is not one security. See D15.
 
+`run_pipeline.py --many-windows` runs the walk-forward test on every valid
+date, not only three. The row of the results log then holds the share of
+the windows that beat SPY. Use it for each new result. See D16.
+
 ## Next steps
 
-1. Add an option to `run_pipeline.py` for a walk-forward run with many
-   windows. An experiment ran 84 windows in approximately 10 seconds and
-   gave a much better measure than 3 windows. This is the largest open
-   item on the results side.
-2. Measure a liquidity floor for the Nasdaq universe. D14 left this option
+1. Measure a liquidity floor for the Nasdaq universe. D14 left this option
    open. See `docs/open_questions.md`.
-3. The user asked for an interactive web app of this pipeline. Three plans
+2. The user asked for an interactive web app of this pipeline. Three plans
    are open, and the user has not selected one: a read-only batch site, a
    live parameter workbench, and a browser-only teaching tool with toggles
    that turn each removed bias back on. Note that `webapp/` in this

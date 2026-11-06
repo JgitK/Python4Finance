@@ -6,7 +6,8 @@ The steps are:
   3. Select a diversified set of stocks and find the Max Sharpe weights.
   4. Change the weights to whole shares for a fixed budget.
   5. Backtest the method with a walk-forward test against SPY. On each
-     past date, the backtest uses only the screen of that date.
+     past date, the backtest uses only the screen of that date. Use
+     --many-windows for a test on every valid date, not only three.
   6. Write the results to the output folder.
   7. Add one row to docs/results_log.md. Use --no-log to skip this step.
 
@@ -33,6 +34,11 @@ OUTPUT_DIR = HERE / "output"
 
 # The backtest holds each portfolio for 180 trading days, approximately 8.5 months.
 HOLDING_PERIOD = 180
+# The warm-up of the risk metrics and the Ichimoku lines, in trading days.
+# No stock passes the screen before this day.
+WARM_UP = 261
+# The step between the selection dates of a many-window run, in trading days.
+DEFAULT_WINDOW_STEP = 5
 
 
 def dbt_command(universe: str) -> list[str]:
@@ -60,9 +66,37 @@ def choose_selection_dates(index: pd.DatetimeIndex,
     last = len(index) - 1
     offsets = [HOLDING_PERIOD + 1, HOLDING_PERIOD + 127, HOLDING_PERIOD + 253]
     positions = [last - offset for offset in offsets]
-    dates = [index[pos] for pos in positions if pos > 260]
+    dates = [index[pos] for pos in positions if pos >= WARM_UP]
     if first_screen_date is not None:
         dates = [d for d in dates if d >= first_screen_date]
+    return dates
+
+
+def choose_many_selection_dates(index: pd.DatetimeIndex,
+                                step: int = DEFAULT_WINDOW_STEP,
+                                first_screen_date: pd.Timestamp | None = None
+                                ) -> list[pd.Timestamp]:
+    """Select every past date that has a full holding window after it.
+
+    Three overlapping windows cannot show that a result is not luck. A run
+    with many windows gives a much better measure. The step between the
+    dates controls the count of the windows.
+
+    The dates start after the warm-up of the risk metrics and the Ichimoku
+    lines, and they stop one holding period before the end of the data. A
+    date must also have a screen, for the reason in
+    `choose_selection_dates`.
+
+    The windows overlap, so they are not independent. The valid dates of
+    the current data cover approximately two independent holding periods.
+    Read the share of the windows that beat the benchmark as a measure of
+    the method, not as proof.
+    """
+    last_usable = len(index) - 1 - HOLDING_PERIOD
+    dates = [index[position]
+             for position in range(WARM_UP, last_usable + 1, step)]
+    if first_screen_date is not None:
+        dates = [date for date in dates if date >= first_screen_date]
     return dates
 
 
@@ -114,6 +148,13 @@ def main() -> None:
                         help="The universe of stocks. The default is sp500.")
     parser.add_argument("--no-log", action="store_true",
                         help="Do not add a row to docs/results_log.md.")
+    parser.add_argument("--many-windows", action="store_true",
+                        help="Also run the backtest on every valid date. "
+                             "The row then holds the share of the windows "
+                             "that beat the benchmark.")
+    parser.add_argument("--window-step", type=int, default=DEFAULT_WINDOW_STEP,
+                        help="The step between the dates of a many-window "
+                             "run, in trading days. The default is 5.")
     args = parser.parse_args()
 
     if not args.skip_dbt:
@@ -173,6 +214,27 @@ def main() -> None:
     print(f"Step 5: ran {len(backtest_df)} walk-forward windows against "
           f"{universe.BENCHMARK}.")
 
+    # Step 5b: the same test on every valid date. Three windows overlap,
+    # so they cannot show that a result is not luck.
+    summary = None
+    if args.many_windows:
+        many_dates = choose_many_selection_dates(
+            backtest_returns.index, args.window_step,
+            first_screen_date=pd.Timestamp(screen_history["as_of_date"].min()))
+        summary = backtest.summarize_windows(backtest.run_walk_forward(
+            backtest_returns, many_dates, HOLDING_PERIOD, build,
+            universe.BENCHMARK, params.risk_free, params.trading_days))
+        print(f"Step 5b: ran {summary['n_windows']} windows with a step of "
+              f"{args.window_step} days. "
+              f"{summary['n_scored']} hold a result.")
+        print(f"         beat {universe.BENCHMARK} on the return in "
+              f"{summary['win_return']:.1%} of them, and on the Sharpe "
+              f"ratio in {summary['win_sharpe']:.1%}.")
+        print(f"         mean excess return {summary['mean_excess']:+.2%}, "
+              f"median {summary['median_excess']:+.2%}. "
+              f"Mean Sharpe {summary['mean_sharpe']:.2f} against "
+              f"{summary['mean_benchmark_sharpe']:.2f}.")
+
     # Step 6: write the results.
     weights_df = pd.DataFrame(
         {"ticker": list(weights), "weight": list(weights.values())}
@@ -199,7 +261,7 @@ def main() -> None:
             run_date=dt.date.today().isoformat(),
             revision=results_log.git_revision(HERE), universe=universe_name,
             n_candidates=len(candidates), live_sharpe=result["sharpe"],
-            backtest=backtest_df)
+            backtest=backtest_df, summary=summary)
         added = results_log.append_row(results_log.LOG_FILE, row)
         print("Step 7: " + ("added a row to" if added else
                             "no new results for") + " docs/results_log.md.")

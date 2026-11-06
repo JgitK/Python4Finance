@@ -10,16 +10,6 @@ one, move it to the "Solved" section with the commit hash.
 - **The method does not beat SPY.** The backtest beats SPY in 1 of 3
   windows, and its Sharpe ratio is lower than the Sharpe ratio of SPY in
   all 3 windows. See `results_log.md`.
-- **The backtest logs only 3 windows, and they overlap.** The windows start
-  126 days apart but each one lasts 180 days. Three windows cannot show
-  that a result is not luck. An experiment on 2026-11-06 ran 84 windows
-  with a 5-day step (approximately 10 seconds), and gave a much better
-  measure: sp500 beats SPY on the return in 53.6% of the windows and on the
-  Sharpe ratio in 45.2%. `run_pipeline.py` must get an option for this, so
-  each row of the results log holds the measure. Note that the valid dates
-  cover only about two independent 180-day periods, so even 84 windows
-  cannot prove a small difference.
-
 ### Universe and data
 
 - **A liquidity floor for the Nasdaq universe.** D14 selected the volume
@@ -69,6 +59,11 @@ one, move it to the "Solved" section with the commit hash.
 - **Merge to `main`?** Not decided. See decision D3.
 
 ## Solved
+
+- **The backtest logs only 3 windows, and they overlap.** Solved by D16.
+  `run_pipeline.py --many-windows` runs the test on every valid date with
+  a step of 5 trading days, and the results log holds the measure. The
+  windows still overlap, so read the share as a measure, not as proof.
 
 - **The Nasdaq large moves are not reviewed.** Solved by D14 and D15. The
   volume rule names 515 of the 532 large moves, a person read 7, and D15

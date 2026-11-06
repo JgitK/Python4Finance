@@ -100,3 +100,55 @@ def test_append_row_keeps_runs_of_two_universes_on_one_commit(tmp_path):
     results_log.append_row(path, _row(universe="sp500"))
     # The same commit with another universe is a different run.
     assert results_log.append_row(path, _row(universe="nasdaq")) is True
+
+
+# ---------------------------------------------------------------------------
+# The many-window column.
+
+
+def _summary() -> dict:
+    return {"n_windows": 84, "n_scored": 84, "n_sharpe": 84,
+            "win_return": 0.5357, "win_sharpe": 0.4524,
+            "mean_excess": 0.0022, "median_excess": 0.0019,
+            "mean_sharpe": 0.58, "mean_benchmark_sharpe": 0.79}
+
+
+def test_the_table_has_a_column_for_the_many_window_measure():
+    assert "Walk-forward" in results_log.TABLE_HEADER
+    # The header row and the separator row must have the same cell count.
+    header, separator = results_log.TABLE_HEADER.splitlines()
+    assert header.count("|") == separator.count("|")
+
+
+def test_format_row_holds_the_many_window_measure():
+    row = results_log.format_row(
+        run_date="2026-11-06", revision="abc1234", universe="sp500",
+        n_candidates=110, live_sharpe=4.6573, backtest=_backtest(),
+        summary=_summary())
+    assert "84 windows" in row
+    assert "53.6% on return" in row
+    assert "45.2% on Sharpe" in row
+    assert "+0.2%" in row
+    # The note cell stays last and stays empty.
+    assert row.endswith("|  |")
+    # The row must have the same cell count as the header.
+    header = results_log.TABLE_HEADER.splitlines()[0]
+    assert row.count("|") == header.count("|")
+
+
+def test_format_row_without_a_measure_leaves_the_cell_empty():
+    row = _row()
+    header = results_log.TABLE_HEADER.splitlines()[0]
+    assert row.count("|") == header.count("|")
+    assert row.endswith("|  |  |")
+
+
+def test_the_measure_says_when_a_window_has_no_result():
+    # A window that the summary cannot score must stay visible. A silent
+    # drop of such a window gave a wrong result in an earlier experiment.
+    summary = _summary() | {"n_windows": 114, "n_scored": 84}
+    row = results_log.format_row(
+        run_date="2026-11-06", revision="abc1234", universe="sp500",
+        n_candidates=110, live_sharpe=4.6573, backtest=_backtest(),
+        summary=summary)
+    assert "84 of 114 windows" in row

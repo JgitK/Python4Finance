@@ -18,8 +18,9 @@ LOG_FILE = Path(__file__).resolve().parents[1] / "docs" / "results_log.md"
 
 TABLE_HEADER = (
     "| Run date | Commit | Universe | Candidates | Live Sharpe (in-sample) "
-    "| Window 1: portfolio vs SPY | Window 2 | Window 3 | Note |\n"
-    "|---|---|---|---|---|---|---|---|---|"
+    "| Window 1: portfolio vs SPY | Window 2 | Window 3 "
+    "| Walk-forward, many windows | Note |\n"
+    "|---|---|---|---|---|---|---|---|---|---|"
 )
 
 
@@ -41,10 +42,34 @@ def git_revision(folder: Path) -> str:
     return f"{commit}-dirty" if changes else commit
 
 
+def format_summary(summary: dict | None) -> str:
+    """Write the measure of a many-window run in one cell.
+
+    The cell gives the count of the windows, the share that beats the
+    benchmark on the return and on the Sharpe ratio, and the excess
+    return. When the summary cannot score every window, the cell gives
+    both counts. A reader must see that a window has no result.
+    """
+    if not summary or not summary.get("n_scored"):
+        return ""
+    count = (f"{summary['n_scored']} of {summary['n_windows']} windows"
+             if summary["n_scored"] != summary["n_windows"]
+             else f"{summary['n_windows']} windows")
+    return (f"{count}: {summary['win_return']:.1%} on return, "
+            f"{summary['win_sharpe']:.1%} on Sharpe, "
+            f"mean excess {summary['mean_excess']:+.1%}, "
+            f"median {summary['median_excess']:+.1%}")
+
+
 def format_row(run_date: str, revision: str, universe: str,
                n_candidates: int, live_sharpe: float,
-               backtest: pd.DataFrame) -> str:
-    """Make one Markdown table row from the results of a run."""
+               backtest: pd.DataFrame, summary: dict | None = None) -> str:
+    """Make one Markdown table row from the results of a run.
+
+    `summary` holds the measure of a many-window run. See
+    `quant.backtest.summarize_windows`. A run without that measure leaves
+    the cell empty.
+    """
     windows = [
         f"{pd.Timestamp(r.selection_date).date()}: "
         f"{r.portfolio_return:+.1%} vs {r.benchmark_return:+.1%}"
@@ -54,7 +79,7 @@ def format_row(run_date: str, revision: str, universe: str,
     windows = (windows + ["", "", ""])[:3]
     cells = [run_date, revision, universe, str(n_candidates),
              f"{live_sharpe:.2f}",
-             *windows, ""]
+             *windows, format_summary(summary), ""]
     return "| " + " | ".join(cells) + " |"
 
 

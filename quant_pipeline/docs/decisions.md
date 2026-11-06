@@ -22,6 +22,47 @@ Use this template for a new entry:
 
 ---
 
+## D16. Measure the method on many windows, not three
+
+- **Date:** 2026-11-06
+- **Role:** Protective measure, outside the core loop. It does not change
+  the portfolio or the numbers of a run. It measures how much you can
+  trust them.
+- **Question:** Each results row held three windows. The windows start 126
+  trading days apart, and each one lasts 180 trading days, so they overlap
+  and they share most of their days. Three overlapping windows cannot show
+  that a result is not luck. How does a row report the method?
+- **Options:**
+  1. Keep the three windows.
+  2. Use only windows that do not overlap. The data holds approximately
+     two such windows after the warm-up, so this gives two results.
+  3. Run the test on every valid date with a small step, and report the
+     share of the windows that beats the benchmark.
+- **Decision:** Option 3, with option 1 beside it. `run_pipeline.py` gets
+  `--many-windows` and `--window-step` (the default step is 5 trading
+  days). The three windows stay in their columns, so a new row stays
+  comparable with every old row. A new column holds the measure of the
+  many windows.
+- **Evidence:**
+  1. A run with 85 windows takes approximately 10 seconds. The cost is not
+     a reason to use three windows.
+  2. `backtest.summarize_windows` reports `n_windows` and `n_scored`. A
+     window that holds no result stays in the count. This matters: an
+     earlier experiment counted 30 windows that held no stock as 0%
+     losses, and reported a mean excess return of -4.49%. A second
+     attempt dropped those windows in silence and reported +0.22%. Both
+     numbers were wrong for the same reason, in two directions.
+     `window_is_scored` and its test hold the correct behaviour now.
+  3. `choose_many_selection_dates` drops a date before the start of the
+     screen history, for the reason in the backtest date guard. The run
+     reports 85 windows and 85 results, so no window is empty.
+- **Limit of the measure:** The windows overlap. The valid dates cover
+  approximately two independent 180-day periods, so a share of 54% against
+  46% is not proof of a difference. The measure is better than three
+  windows. It is not a test of significance.
+- **Results:** No number of a run changes. Each new row holds the measure.
+- **Commits:** See the commit that holds this entry.
+
 ## D15. Drop a ticker whose price history is not one security
 
 - **Date:** 2026-11-06

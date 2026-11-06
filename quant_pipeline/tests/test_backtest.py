@@ -103,3 +103,80 @@ def test_backtest_window_holds_for_the_requested_period():
     assert result["portfolio"]["n_days"] == 3
     assert result["benchmark"]["n_days"] == 3
     assert "sharpe_diff" in result
+
+
+# ---------------------------------------------------------------------------
+# The summary of many windows.
+
+
+def _window(date: str, portfolio_return: float, portfolio_sharpe: float,
+            benchmark_return: float, benchmark_sharpe: float,
+            n_stocks: int = 12) -> dict:
+    """Make one window result, in the shape that backtest_window returns."""
+    weights = {f"S{i}": 1.0 / n_stocks for i in range(n_stocks)}
+    return {
+        "selection_date": pd.Timestamp(date),
+        "weights": weights,
+        "portfolio": {"total_return": portfolio_return,
+                      "sharpe": portfolio_sharpe},
+        "benchmark": {"total_return": benchmark_return,
+                      "sharpe": benchmark_sharpe},
+        "sharpe_diff": portfolio_sharpe - benchmark_sharpe,
+    }
+
+
+def test_summarize_windows_counts_the_wins_and_the_excess_return():
+    windows = [
+        _window("2025-01-02", 0.20, 1.50, 0.10, 1.00),   # win, win
+        _window("2025-01-09", 0.05, 0.40, 0.10, 1.00),   # loss, loss
+        _window("2025-01-16", 0.15, 0.80, 0.10, 1.00),   # win, loss
+        _window("2025-01-23", -0.10, -0.50, 0.10, 1.00),  # loss, loss
+    ]
+    summary = backtest.summarize_windows(windows)
+    assert summary["n_windows"] == 4
+    assert summary["n_scored"] == 4
+    assert summary["win_return"] == pytest.approx(0.5)
+    assert summary["win_sharpe"] == pytest.approx(0.25)
+    # The excess returns are +10%, -5%, +5% and -20%.
+    assert summary["mean_excess"] == pytest.approx(-0.025)
+    assert summary["median_excess"] == pytest.approx(0.0)
+    assert summary["mean_sharpe"] == pytest.approx(0.55)
+    assert summary["mean_benchmark_sharpe"] == pytest.approx(1.0)
+
+
+def test_summarize_windows_does_not_score_a_window_with_no_stocks():
+    # A selection date before the start of the screen history selects no
+    # stock. The portfolio then holds nothing and reports a return of 0%.
+    # A count of that window as a loss gives a wrong win rate. This is a
+    # real bug of an earlier experiment, so the test holds the behaviour.
+    empty = _window("2024-01-02", 0.0, float("nan"), 0.10, 1.00, n_stocks=0)
+    windows = [empty, _window("2025-01-02", 0.20, 1.50, 0.10, 1.00)]
+    summary = backtest.summarize_windows(windows)
+    assert summary["n_windows"] == 2
+    assert summary["n_scored"] == 1
+    # The one scored window is a win on both measures.
+    assert summary["win_return"] == pytest.approx(1.0)
+    assert summary["win_sharpe"] == pytest.approx(1.0)
+    assert summary["mean_excess"] == pytest.approx(0.10)
+
+
+def test_summarize_windows_counts_a_window_with_no_sharpe_ratio():
+    # A window can have a return but no Sharpe ratio, because one day is
+    # not enough for a volatility. Such a window counts for the return,
+    # and it does not count for the Sharpe ratio.
+    windows = [
+        _window("2025-01-02", 0.20, float("nan"), 0.10, 1.00),
+        _window("2025-01-09", 0.20, 2.00, 0.10, 1.00),
+    ]
+    summary = backtest.summarize_windows(windows)
+    assert summary["n_scored"] == 2
+    assert summary["win_return"] == pytest.approx(1.0)
+    assert summary["n_sharpe"] == 1
+    assert summary["win_sharpe"] == pytest.approx(1.0)
+
+
+def test_summarize_windows_with_no_windows_is_empty():
+    summary = backtest.summarize_windows([])
+    assert summary["n_windows"] == 0
+    assert summary["n_scored"] == 0
+    assert math.isnan(summary["win_return"])

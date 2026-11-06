@@ -8,6 +8,7 @@ these tests. The tests skip when the warehouse file is not there.
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 import run_pipeline
@@ -100,3 +101,60 @@ def test_choose_selection_dates_skips_dates_before_the_screen_history(con):
                                                first_screen_date=first)
     assert len(real) == 3
     assert min(real) >= first
+
+
+# ---------------------------------------------------------------------------
+# Many selection dates.
+
+
+def test_choose_many_selection_dates_steps_through_every_valid_date():
+    # Three overlapping windows cannot show that a result is not luck.
+    # This function gives every date that has a full holding window after
+    # it, with a step between the dates.
+    import pandas as pd
+
+    index = pd.DatetimeIndex(pd.bdate_range("2022-11-01", periods=1002))
+    dates = run_pipeline.choose_many_selection_dates(index, step=5)
+    # The first date needs 261 days of warm-up. The last date needs 180
+    # days of holding period after it.
+    assert dates[0] == index[261]
+    assert dates[-1] <= index[1001 - run_pipeline.HOLDING_PERIOD]
+    assert len(dates) == 113
+    # The step must hold between each pair of dates.
+    positions = [index.get_loc(d) for d in dates]
+    assert set(np.diff(positions)) == {5}
+
+
+def test_choose_many_selection_dates_obeys_the_step():
+    import pandas as pd
+
+    index = pd.DatetimeIndex(pd.bdate_range("2022-11-01", periods=1002))
+    assert len(run_pipeline.choose_many_selection_dates(index, step=1)) == 561
+    assert len(run_pipeline.choose_many_selection_dates(index, step=20)) == 29
+
+
+def test_choose_many_selection_dates_skips_dates_before_the_screen_history():
+    # A date before the start of the screen history selects no stock. The
+    # backtest then holds nothing and reports a 0% return. Such a window
+    # is not a result, so this function must not return such a date.
+    import pandas as pd
+
+    index = pd.DatetimeIndex(pd.bdate_range("2022-11-01", periods=1002))
+    every_date = run_pipeline.choose_many_selection_dates(index, step=5)
+    cut = every_date[len(every_date) // 2]
+    kept = run_pipeline.choose_many_selection_dates(
+        index, step=5, first_screen_date=cut)
+    assert kept[0] == cut
+    assert len(kept) == len(every_date) - len(every_date) // 2
+
+
+def test_choose_many_selection_dates_on_the_real_warehouse(con):
+    import pandas as pd
+
+    returns, history = run_pipeline.load_backtest_inputs(con)
+    first = pd.Timestamp(history["as_of_date"].min())
+    dates = run_pipeline.choose_many_selection_dates(
+        returns.index, step=5, first_screen_date=first)
+    # The experiment of 2026-11-06 found 84 valid windows with this step.
+    assert len(dates) >= 80
+    assert min(dates) >= first

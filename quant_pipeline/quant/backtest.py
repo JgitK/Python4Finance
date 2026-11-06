@@ -113,3 +113,64 @@ def run_walk_forward(returns: pd.DataFrame, selection_dates: list[Any],
                         benchmark, risk_free, trading_days)
         for date in selection_dates
     ]
+
+
+def window_is_scored(window: dict[str, Any]) -> bool:
+    """Say if one window holds a result.
+
+    A window with no stock is not a result. The portfolio then holds
+    nothing, and it reports a return of 0%. A count of that window as a
+    loss gives a wrong win rate. A window also needs a total return for
+    the portfolio and for the benchmark.
+    """
+    if not window["weights"]:
+        return False
+    return bool(np.isfinite(window["portfolio"]["total_return"])
+                and np.isfinite(window["benchmark"]["total_return"]))
+
+
+def summarize_windows(windows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize many walk-forward windows against the benchmark.
+
+    Three overlapping windows cannot show that a result is not luck. This
+    function reads many windows and gives the share that beats the
+    benchmark, and the excess return.
+
+    The summary reports `n_windows` and `n_scored`. A window that this
+    function cannot score stays in `n_windows`, so a reader sees that it
+    is there. See `window_is_scored`.
+
+    The Sharpe ratio needs more than one day, so a window can have a
+    return and no Sharpe ratio. `n_sharpe` gives the count of windows with
+    a Sharpe ratio for the portfolio and for the benchmark.
+    """
+    nothing = float("nan")
+    summary: dict[str, Any] = {
+        "n_windows": len(windows), "n_scored": 0, "n_sharpe": 0,
+        "win_return": nothing, "win_sharpe": nothing,
+        "mean_excess": nothing, "median_excess": nothing,
+        "mean_sharpe": nothing, "mean_benchmark_sharpe": nothing,
+    }
+    scored = [w for w in windows if window_is_scored(w)]
+    summary["n_scored"] = len(scored)
+    if not scored:
+        return summary
+
+    excess = np.array([w["portfolio"]["total_return"]
+                       - w["benchmark"]["total_return"] for w in scored])
+    summary["win_return"] = float((excess > 0).mean())
+    summary["mean_excess"] = float(excess.mean())
+    summary["median_excess"] = float(np.median(excess))
+
+    sharpe = np.array([w["portfolio"]["sharpe"] for w in scored])
+    benchmark = np.array([w["benchmark"]["sharpe"] for w in scored])
+    both = np.isfinite(sharpe) & np.isfinite(benchmark)
+    summary["n_sharpe"] = int(both.sum())
+    if both.any():
+        summary["win_sharpe"] = float(
+            (sharpe[both] > benchmark[both]).mean())
+    if np.isfinite(sharpe).any():
+        summary["mean_sharpe"] = float(np.nanmean(sharpe))
+    if np.isfinite(benchmark).any():
+        summary["mean_benchmark_sharpe"] = float(np.nanmean(benchmark))
+    return summary
