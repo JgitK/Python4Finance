@@ -56,12 +56,28 @@ Use this template for a new entry:
   3. `choose_many_selection_dates` drops a date before the start of the
      screen history, for the reason in the backtest date guard. The run
      reports 85 windows and 85 results, so no window is empty.
+- **How stable is the measure?** Not very. The same data with a different
+  step gives a different share. On `sp500`:
+
+  | Step | Windows | Beat SPY on return | On Sharpe | Mean excess | Median excess |
+  |---|---|---|---|---|---|
+  | 3 | 141 | 46.1% | 44.0% | +0.33% | -0.53% |
+  | 5 | 85 | 48.2% | 45.9% | +1.09% | -0.27% |
+  | 10 | 43 | 46.5% | 48.8% | +1.99% | -0.66% |
+  | 21 | 20 | 45.0% | 40.0% | -1.37% | -0.34% |
+
+  The mean excess return changes its sign. The median stays negative on
+  every step. Read the median, not the mean: a few large wins make the
+  mean. The earlier experiment of this day used a different grid of 84
+  dates and gave 53.6% on return for `sp500`, against 48.2% here. The
+  grid moves the share by approximately 5 points, so a difference of 5
+  points between two universes is not a difference.
 - **Limit of the measure:** The windows overlap. The valid dates cover
   approximately two independent 180-day periods, so a share of 54% against
   46% is not proof of a difference. The measure is better than three
   windows. It is not a test of significance.
 - **Results:** No number of a run changes. Each new row holds the measure.
-- **Commits:** See the commit that holds this entry.
+- **Commits:** `06862e6`
 
 ## D15. Drop a ticker whose price history is not one security
 
@@ -182,6 +198,12 @@ Use this template for a new entry:
      A few large wins make the mean. The best window is +60.5%. The
      windows overlap, and the valid dates cover about two independent
      180-day periods, so this table cannot show a real difference.
+     **Update (D16):** the table above comes from one grid of 84 dates. A
+     grid of 85 dates gives 48.2% on return for `sp500` and 56.5% for
+     `nasdaq`, which reverses the order of the first two columns. The
+     grid moves the share by approximately 5 points. This evidence is
+     therefore weaker than it looks, and it cannot separate the
+     universes. Evidence 1, 3 and 4 carry the decision.
   3. The data quality of the Nasdaq prices is not good enough. The price
      data holds 598 one-day moves larger than 50% that no person reviewed.
      102 of them are inside the Nasdaq universe, and 31 to 34 of the
