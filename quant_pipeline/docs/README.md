@@ -44,6 +44,7 @@ proof that the results are correct.
 | D8 | `mart_universe_coverage` counts the index members that have no prices or no sector. Each run reports the count, so the survivorship bias that remains stays visible. |
 | D12 | `docs/` holds the reasons and the results. `run_pipeline.py` adds one row to the results log with the commit hash, so each result points to the code that made it. |
 | D10, D11 | Two warning tests watch the price data: `assert_members_have_plausible_volume` finds a ticker that names a different security, and `assert_large_moves_are_reviewed` finds a large one-day move that no person reviewed. A warning does not stop a build. |
+| D15 | A third warning test, `assert_a_price_history_is_one_security`, finds a ticker whose close spans a factor of 1000. Such a file mixes the prices before and after a split. |
 | D1 | The 48 data tests and the 15 unit tests in the dbt project check each model on every build. |
 
 ### Correctness fixes, in the core loop
@@ -58,6 +59,8 @@ each fix are not valid.
 | D7 | The universe is the S&P 500 on each date, not a list of 43 stocks that are large today. | The candidate count went from 32 to 110. |
 | D10 | `stg_prices` drops PARA, because its price history is a different security. | The screens changed. |
 | D11 | A real large move stays in the returns. Only a confirmed corporate action gets a back-adjustment. | The screens changed. MRNA now fails the volatility gate. |
+| D14 | The volume rule classifies each large one-day move. The seed grew from 10 rows to 532 rows, and 24 of them get a back-adjustment. | The `nasdaq` prices changed. The `sp500` prices did not: HON is the only S&P 500 member with a corporate action. |
+| D15 | `stg_prices` drops 10 more tickers. The close of each one spans a factor of 1000 or more, so the file mixes two price regimes. | The Nasdaq universe lost 10 of approximately 1,000 members. None of them passed the screen. |
 
 D9 supports both groups. It moved the prices to a Parquet file, so the
 repository can hold the full S&P 500 history that D7 needs.

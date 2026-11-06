@@ -1,2 +1,12 @@
 ticker,reason
+AIXI,"D15: the close spans a factor of 10,412 (lowest 1.215, highest 12,650). The file mixes the prices before and after a split, with no adjustment."
+BDRX,"D15: the close spans a factor of 2,170,188 (lowest 2.8016, highest 6,080,000). The file mixes the prices before and after a split, with no adjustment."
+GDHG,"D15: the close spans a factor of 434,085 (lowest 1.05, highest 455,790). The file mixes the prices before and after a split, with no adjustment."
+JDZG,"D15: the close spans a factor of 27,708 (lowest 0.9362, highest 25,940). The file mixes the prices before and after a split, with no adjustment."
+KALA,"D15: the close spans a factor of 12,716 (lowest 0.1655, highest 2,104). The file mixes the prices before and after a split, with no adjustment."
+NAAS,"D15: the close spans a factor of 2,008 (lowest 1.97, highest 3,955). The file mixes the prices before and after a split, with no adjustment."
+NCT,"D15: the close spans a factor of 3,973 (lowest 1.26, highest 5,006). The file mixes the prices before and after a split, with no adjustment."
+NXTT,"D15: the close spans a factor of 1,130,249 (lowest 4.71, highest 5,323,475). The file mixes the prices before and after a split, with no adjustment."
 PARA,The nasdaq API returns a different security for PARA: close up to 1139000 and median volume 87. Paramount left the index on 2025-08-08 and trades as PSKY.
+RDHL,"D15: the close spans a factor of 1,751 (lowest 0.3878, highest 679). The file mixes the prices before and after a split, with no adjustment."
+SEZL,"D15: the close spans a factor of 11,091 (lowest 0.017, highest 189). The file mixes the prices before and after a split, with no adjustment."

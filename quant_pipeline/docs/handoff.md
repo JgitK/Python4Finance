@@ -105,25 +105,31 @@ The user set these rules. Keep them.
 
 ## Read this before you run the checks
 
-`python verify_indicators.py` now **fails one check**:
-`each large move is in the corporate_actions seed`. This failure is known
-and expected. The Nasdaq prices hold 598 one-day moves larger than 50%
-that no person classified, and D11 requires a review of each one. Every
-other check passes. `dbt build` gives 2 warnings for `sp500` and 3 for the
-other universes, for the same reason and for the tickers with no sector.
+`python verify_indicators.py` passes every check again. The script takes
+several minutes, so give it time. `dbt build` gives 1 warning for `sp500`
+and 2 for the other universes. The warnings are
+`relationships_stg_prices_ticker__ticker__ref_stg_sectors_` (a ticker in
+the prices with no sector) and, for the Nasdaq universes, the sector
+coverage. No warning is a data quality failure now.
 
-Because of this, the `nasdaq` and `both` rows in the results log are
-provisional. The `sp500` path is clean: 110 candidates, live Sharpe 4.6573,
-and no unreviewed large move inside the universe.
+The `corporate_actions` seed grew from 10 rows to 532 rows. 508 rows are
+real moves, which keep their return, and 24 rows are corporate actions,
+which get a back-adjustment. `quant/large_moves.py` holds the rule that
+classified 515 of them, and `classify_large_moves.py` runs it. 7 rows carry
+the note "Hand review (D14)": the rule could not name those moves. See D14.
+
+The `price_data_exclusions` seed grew from 1 ticker to 11. The close of
+each new ticker spans a factor of 1000 or more over four years, so its
+price history is not one security. See D15.
 
 ## Next steps
 
-1. Select a rule for the 601 unreviewed large moves. See the first item in
-   `docs/open_questions.md`, which lists three options. This unblocks the
-   `nasdaq` and `both` results.
-2. Add an option to `run_pipeline.py` for a walk-forward run with many
+1. Add an option to `run_pipeline.py` for a walk-forward run with many
    windows. An experiment ran 84 windows in approximately 10 seconds and
-   gave a much better measure than 3 windows.
+   gave a much better measure than 3 windows. This is the largest open
+   item on the results side.
+2. Measure a liquidity floor for the Nasdaq universe. D14 left this option
+   open. See `docs/open_questions.md`.
 3. The user asked for an interactive web app of this pipeline. Three plans
    are open, and the user has not selected one: a read-only batch site, a
    live parameter workbench, and a browser-only teaching tool with toggles

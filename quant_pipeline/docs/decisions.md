@@ -22,6 +22,97 @@ Use this template for a new entry:
 
 ---
 
+## D15. Drop a ticker whose price history is not one security
+
+- **Date:** 2026-11-06
+- **Role:** Correctness fix, in the core loop. It removes 10 tickers from
+  the Nasdaq universe and changes the reported numbers of that universe.
+- **Question:** The price file holds tickers whose close goes from 4.71 to
+  5,323,475 (NXTT) or from 2.80 to 6,080,000 (BDRX). Such a file mixes the
+  prices before a reverse split and the prices after it, with no
+  adjustment. The daily returns of such a history are not returns. How
+  does the pipeline find these tickers?
+- **Options:**
+  1. Review each large move of each such ticker by hand. NXTT alone has 16
+     large moves, and SEZL has 15.
+  2. Drop a ticker when the highest close divided by the lowest close
+     reaches a limit over the history.
+  3. Do nothing. The volume rule (D14) reads each move.
+- **Decision:** Option 2, with a limit of 1000. A new test,
+  `assert_a_price_history_is_one_security`, lists each ticker above the
+  limit. The 10 tickers above the limit go in the `price_data_exclusions`
+  seed, with the span in the reason.
+- **Evidence:**
+  1. No listed share rises or falls by a factor of 1000 in four years.
+  2. PARA is already in the seed for the same reason (D10). Its span is
+     359,306. The new rule finds PARA too, so it agrees with the one
+     exclusion that a person made by hand.
+  3. The 11 tickers at or above the limit are BDRX, NXTT, GDHG, PARA,
+     JDZG, KALA, SEZL, AIXI, NCT, NAAS and RDHL. **None of them passes the
+     screen on any date, and none of them is in the S&P 500 seed.** The
+     limit of 1000 is therefore safe: a lower limit of 100 catches 43
+     tickers, and one of those does pass the screen.
+  4. Option 3 is not safe. Without this decision the volume rule calls
+     these moves "real", because a 1000x gap comes with a high volume.
+     That answer is worse than no answer.
+- **Results:** The large move count falls from 608 to 532. The `sp500`
+  results do not change, because no excluded ticker is in that universe.
+- **Commits:** See the commit that holds this entry.
+
+## D14. Classify a large move with the volume rule
+
+- **Date:** 2026-11-06
+- **Role:** Correctness fix, in the core loop. It back-adjusts the prices
+  of 24 corporate actions, so it changes the returns of those days.
+- **Question:** D11 requires a review of each one-day move larger than
+  50%. 598 moves had no review, so `verify_indicators.py` failed that
+  check, and the `nasdaq` and `both` results stayed provisional. A review
+  of 598 moves by hand is not practical. What rule replaces it?
+- **Options:**
+  1. Classify each move with the volume of the day. A real move brings a
+     volume spike. A split brings a gap and no trading.
+  2. Add a liquidity floor to the universe, so the micro-caps that hold
+     most of these moves never enter it.
+  3. Accept the warning and mark every result that uses the Nasdaq
+     universe.
+- **Decision:** Option 1. The user selected it. Option 2 changes the
+  definition of the universe, so it needs its own decision. It stays open.
+- **The rule:** `quant/large_moves.py` reads three signals of each move:
+  the volume of the day divided by the median volume of the 60 days on
+  each side; the move from the open to the close; and the gap, which is
+  the open divided by the close of the day before. The tests run in this
+  order:
+  1. A gap by a factor of 5 or more, with no volume spike, is a corporate
+     action. A share does not change its price by a factor of 5 in one day.
+  2. A volume below 2x with a day that moves no more than 5% after the
+     open is a corporate action. The price gapped, and then nobody traded.
+  3. A volume at or above 6x is a real move. Many people traded.
+  4. A move larger than 20% from the open to the close is a real move. A
+     corporate action gaps at the open. It does not trade.
+  5. Every other move is "unclear". A person reads it.
+- **Evidence:**
+  1. The rule never contradicts the 10 moves that a person classified by
+     hand (D11). A test holds this property:
+     `test_the_rule_never_contradicts_a_hand_review`. The rule names 8 of
+     the 10 and leaves 2 to the person.
+  2. The two that the rule leaves are HON and STRL. HON is the one
+     corporate action that a person found: a spin-off with 3.1x volume and
+     a day that moved only -5% after the open. No volume limit separates it
+     from a real move, so the rule must not try. This is the reason for
+     the "unclear" answer, and a test holds it.
+  3. On the 532 large moves of the clean price file, the rule names 515:
+     493 real moves and 22 corporate actions. 7 moves stay unclear, one
+     for each of 7 tickers. A person read those 7 and wrote the rows with
+     the evidence: 6 real moves and 1 corporate action.
+  4. 16 tests cover the rule. Each test fails when a small bug goes into
+     the code, and passes again when the bug comes out.
+- **Results:**
+  - `assert_large_moves_are_reviewed` passes. 0 moves have no review, down
+    from 598. `verify_indicators.py` passes all of its checks again.
+  - The `sp500` results do not change. HON is the only S&P 500 member with
+    a corporate action, and its row was already in the seed.
+- **Commits:** See the commit that holds this entry.
+
 ## D13. Keep the S&P 500 as the default universe
 
 - **Date:** 2026-11-06

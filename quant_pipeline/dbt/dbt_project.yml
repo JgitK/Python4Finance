@@ -35,6 +35,9 @@ vars:
   # A one-day move larger than this limit needs a review. A test lists each
   # such move that is not in the corporate_actions seed.
   large_move_review_limit: 0.5
+  # The close of a ticker must not span this factor over the history. Such a
+  # span means that the file mixes the prices before and after a split.
+  price_span_limit: 1000
   # Screen gates.
   min_trading_days: 400
   min_avg_volume: 100000

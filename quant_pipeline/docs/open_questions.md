@@ -22,22 +22,24 @@ one, move it to the "Solved" section with the commit hash.
 
 ### Universe and data
 
-- **The Nasdaq large moves are not reviewed.** The price data holds 598
-  one-day moves larger than 50% that no person classified. 102 of them are
-  inside the Nasdaq universe, and 31 to 34 of the affected tickers pass the
-  screen. D11 requires a review of each large move, so
-  `verify_indicators.py` fails its data quality check and the `nasdaq` and
-  `both` rows in the results log are provisional. A hand review of 598
-  moves is not practical. The next decision must select a rule. Three
-  options: classify each move by its volume (a real move has a volume
-  spike, a split does not); add a liquidity floor to the universe so the
-  long tail never enters; or accept the warning and mark the results.
-- **The Nasdaq universe admits a stock that pumps for one month.** The rule
-  keeps a stock with a market cap of at least $1B in a monthly snapshot.
-  A micro-cap that pumps above $1B for one month gets a one-month stint,
-  for example SHAZ, NXTT, JDZG, and BDRX. These stocks hold most of the
-  unreviewed large moves. A persistence rule, for example four snapshots
-  in a row, would remove them.
+- **A liquidity floor for the Nasdaq universe.** D14 selected the volume
+  rule and left this option open. The rule keeps a stock with a market cap
+  of at least $1B in a monthly snapshot, so a micro-cap that pumps above
+  $1B for one month gets a one-month stint. A floor on the dollar volume,
+  or a persistence rule of four snapshots in a row, would remove such a
+  stock before the screen sees it. The screen already has a volume gate of
+  100,000 shares, so the effect on the results may be small. Measure it
+  before you decide.
+- **The volume rule cannot see a spin-off.** D14 leaves such a move to a
+  person, because a spin-off gaps at the open with a normal volume, like a
+  split, and holds its price, like real news. HON is the one example in the
+  data. A new spin-off in a future download will raise a warning, and a
+  person must read it. A source of the corporate actions, for example a
+  split and dividend feed, would remove the need for the rule.
+- **7 of the 532 large moves hold a hand review, not a rule.** The rows of
+  BAND, IBRX, NUTX, RADX, RGTI, SBET and SHAZ in the seed carry the note
+  "Hand review (D14)". A later change to the limits of the rule does not
+  change these rows. Read them again if you move a limit.
 - **The survivorship bias that remains.** The pipeline drops 10 to 20 index
   members on each selection date because the nasdaq API has no prices for
   them. See `output/universe_coverage.csv`.
@@ -67,6 +69,11 @@ one, move it to the "Solved" section with the commit hash.
 - **Merge to `main`?** Not decided. See decision D3.
 
 ## Solved
+
+- **The Nasdaq large moves are not reviewed.** Solved by D14 and D15. The
+  volume rule names 515 of the 532 large moves, a person read 7, and D15
+  dropped 10 tickers whose price history is not one security.
+  `assert_large_moves_are_reviewed` passes with 0 rows.
 
 - **A non-default universe build stopped with an error.** The unit test
   `test_membership_uses_the_sp500_by_default` read the universe from the
