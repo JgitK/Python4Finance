@@ -1,4 +1,4 @@
-"""Turn portfolio weights into whole shares.
+"""Change portfolio weights to whole shares.
 
 The optimizer gives a weight for each stock. The weight is a fraction of
 the money. This module buys whole shares with that money. A person cannot
@@ -49,7 +49,7 @@ def allocation_summary(weights: dict[str, float], prices: dict[str, float],
     summary = pd.DataFrame(rows)
 
     total_cost = summary["cost"].sum()
-    # Guard against a divide by zero when nothing is bought.
+    # Prevent a division by zero when the plan buys no shares.
     summary["actual_weight"] = (
         summary["cost"] / total_cost if total_cost > 0 else 0.0
     )

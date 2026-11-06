@@ -22,7 +22,7 @@ def test_average_correlation_is_zero_for_empty_selection():
 
 
 def test_selector_skips_a_highly_correlated_stock():
-    # A and B move together. The selector should keep A and skip B.
+    # A and B move together. The selector must keep A and skip B.
     candidates = [
         {"ticker": "A", "sector": "Tech"},
         {"ticker": "B", "sector": "Health"},
@@ -41,7 +41,7 @@ def test_selector_skips_a_highly_correlated_stock():
 
 
 def test_selector_limits_stocks_per_sector():
-    # Three Tech stocks, all uncorrelated, but only two may come from Tech.
+    # Three Tech stocks, all uncorrelated, but only two can come from Tech.
     candidates = [
         {"ticker": "T1", "sector": "Tech"},
         {"ticker": "T2", "sector": "Tech"},
@@ -55,7 +55,7 @@ def test_selector_limits_stocks_per_sector():
         candidates, corr, target_size=12, max_per_sector=2,
         max_avg_correlation=0.6,
     )
-    # T3 is dropped because Tech already has two names.
+    # The selector drops T3 because Tech already has two names.
     assert selected == ["T1", "T2", "E1"]
 
 

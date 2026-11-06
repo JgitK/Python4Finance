@@ -1,7 +1,7 @@
-"""Tests for the nasdaq parsing layer.
+"""Tests for the nasdaq parser.
 
 These tests use fixed sample rows. They do not use the network.
-They lock the rules that clean the raw nasdaq fields.
+They make sure that the rules that clean the raw nasdaq fields do not change.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ def test_parse_price_strips_thousands_comma():
 
 
 def test_parse_price_returns_none_for_missing():
-    # Nasdaq uses "N/A" or an empty value when a price is missing.
+    # Nasdaq uses "N/A" or an empty value when there is no price.
     assert nasdaq.parse_price("N/A") is None
     assert nasdaq.parse_price("") is None
     assert nasdaq.parse_price(None) is None

@@ -1,6 +1,6 @@
 """Tests for the Markowitz optimizer.
 
-These tests use small inputs with answers that are known by hand.
+These tests use small inputs with answers that you can calculate by hand.
 They check the portfolio math and the Max Sharpe search.
 """
 

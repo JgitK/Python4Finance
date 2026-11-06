@@ -4,7 +4,7 @@ The steps are:
   1. Build the dbt models. This cleans the data and makes the marts.
   2. Read the screened candidates and the returns from the warehouse.
   3. Select a diversified set of stocks and find the Max Sharpe weights.
-  4. Turn the weights into whole shares for a fixed budget.
+  4. Change the weights to whole shares for a fixed budget.
   5. Backtest the method with a walk-forward test against SPY.
   6. Write the results to the output folder.
 
@@ -26,7 +26,7 @@ HERE = Path(__file__).resolve().parent
 DBT_DIR = HERE / "dbt"
 OUTPUT_DIR = HERE / "output"
 
-# The backtest holds each portfolio for six months.
+# The backtest holds each portfolio for 180 trading days, approximately 8.5 months.
 HOLDING_PERIOD = 180
 
 
@@ -40,7 +40,7 @@ def build_dbt() -> None:
 
 
 def choose_selection_dates(index: pd.DatetimeIndex) -> list[pd.Timestamp]:
-    """Pick three past dates that each leave room for a holding window."""
+    """Select three past dates. Each date must have a full holding window after it."""
     last = len(index) - 1
     offsets = [HOLDING_PERIOD + 1, HOLDING_PERIOD + 127, HOLDING_PERIOD + 253]
     positions = [last - offset for offset in offsets]
@@ -55,7 +55,7 @@ def main() -> None:
     parser.add_argument("--n-portfolios", type=int, default=10000,
                         help="The number of random portfolios to try.")
     parser.add_argument("--skip-dbt", action="store_true",
-                        help="Reuse the existing warehouse.")
+                        help="Do not build dbt. Use the warehouse from the last run.")
     args = parser.parse_args()
 
     if not args.skip_dbt:
@@ -88,11 +88,12 @@ def main() -> None:
           f"return {result['annual_return']:.1%}, "
           f"volatility {result['annual_volatility']:.1%}.")
 
-    # Step 4: turn the weights into whole shares.
+    # Step 4: change the weights to whole shares.
     selected_prices = {ticker: prices[ticker] for ticker in selected}
     plan = allocate.allocation_summary(weights, selected_prices, args.investment)
 
-    # Step 5: backtest the method with no look-ahead.
+    # Step 5: backtest the method. The candidates come from today's screen, so
+    # this step has a selection bias. See the README notes.
     build = pipeline.make_builder(sector_of, params, universe.BENCHMARK)
     selection_dates = choose_selection_dates(returns.index)
     windows = backtest.run_walk_forward(

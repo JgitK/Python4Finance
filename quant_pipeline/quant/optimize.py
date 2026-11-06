@@ -1,10 +1,10 @@
 """Markowitz portfolio optimization.
 
-Modern Portfolio Theory looks for the best mix of stocks.
-The best mix gives the most return for the risk it takes.
+Modern Portfolio Theory finds the best mix of stocks.
+The best mix gives the most return for each unit of risk.
 This module searches for the mix with the highest Sharpe ratio.
 It uses a Monte Carlo search. It tries many random weightings and keeps
-the best one. Every function takes plain data, so the tests can check them.
+the best one. Every function uses plain data as input, so the tests can check them.
 """
 
 from __future__ import annotations

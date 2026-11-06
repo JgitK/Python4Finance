@@ -1,7 +1,9 @@
-"""Walk-forward backtest with no look-ahead.
+"""Walk-forward backtest.
 
-A fair backtest picks a portfolio with past data only. It then holds that
-portfolio forward and measures the result on data the model never saw.
+Each step selects a portfolio from past returns only. Then it holds that
+portfolio and measures the result on returns that the build step did not use.
+This module does not select the list of stocks. The caller must supply a
+list that does not use future data.
 This module splits the data at a date, builds the portfolio from the past,
 and scores it on the future window. It also scores the benchmark.
 """
@@ -14,7 +16,8 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
-# A build_portfolio function takes a train frame and returns weights by ticker.
+# A build_portfolio function uses a train frame as input.
+# It returns weights by ticker.
 BuildPortfolio = Callable[[pd.DataFrame], dict[str, float]]
 
 
@@ -22,7 +25,7 @@ def split_by_date(returns: pd.DataFrame,
                   date: Any) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Split the returns at a date.
 
-    The train set holds every day up to and including the date.
+    The train set holds every day before the date, and the date too.
     The test set holds every day after the date.
     """
     cut = pd.Timestamp(date)

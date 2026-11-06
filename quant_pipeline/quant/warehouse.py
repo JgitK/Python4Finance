@@ -32,8 +32,8 @@ def read_returns_matrix(con: duckdb.DuckDBPyConnection,
                         tickers: list[str] | None = None) -> pd.DataFrame:
     """Return the daily returns as a wide matrix.
 
-    The rows are dates. The columns are tickers. Keep only the given tickers
-    when a list is passed.
+    The rows are dates. The columns are tickers. When you supply a list,
+    keep only those tickers.
     """
     frame = con.execute(
         "select ticker, price_date, daily_return from main.mart_daily_returns"

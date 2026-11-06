@@ -1,6 +1,6 @@
 -- The ticker dimension. One row per stock in the universe.
 -- It holds the sector and the span of available history.
--- The benchmark SPY has no sector, so the inner join leaves it out.
+-- The benchmark SPY has no sector, so the inner join removes it.
 
 with history as (
     select

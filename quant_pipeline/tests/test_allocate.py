@@ -1,6 +1,6 @@
 """Tests for the share allocation.
 
-The allocator turns portfolio weights into whole shares. It uses the latest
+The allocator changes portfolio weights to whole shares. It uses the latest
 price of each stock and a fixed amount of money.
 """
 

@@ -2,7 +2,7 @@
 
 This script does not trust the dbt models or the Python stats. It rebuilds
 the numbers a second way with pandas, then compares the two. It also scans
-for split artifacts and checks the no-look-ahead rule of the backtest.
+for split artifacts and makes sure that the build step does not use future data.
 
 Run it after a dbt build:
 
@@ -45,8 +45,8 @@ def check(name: str, passed: bool, detail: str = "") -> None:
 def max_abs_diff(mine: pd.Series, theirs: pd.Series) -> float:
     """Compare two series where my value is not null.
 
-    My pandas value is null until the window fills. The dbt value on those
-    same days uses a full window, so the overlap is a fair comparison.
+    My pandas value is null until the window is full. On the other days, both
+    values use a full window, so the two values must agree.
     """
     mask = mine.notna()
     aligned = theirs.reindex(mine.index)
@@ -192,8 +192,8 @@ def verify_risk_metrics(tables: dict[str, pd.DataFrame]) -> None:
 def verify_corporate_actions_neutralized(tables: dict[str, pd.DataFrame]) -> None:
     """Confirm the data layer handles every corporate action.
 
-    Find the extreme one-day moves in the raw prices. Each one should be a
-    corporate action. The dbt model must null that day in int_daily_returns.
+    Find the extreme one-day moves in the raw prices. Each one can be
+    a corporate action. The dbt model must null that day in int_daily_returns.
     """
     prices = tables["prices"].sort_values(["ticker", "price_date"])
     prices = prices.assign(
@@ -213,7 +213,7 @@ def verify_corporate_actions_neutralized(tables: dict[str, pd.DataFrame]) -> Non
               f"raw {row['raw_return']:+.1%} -> "
               f"{'nulled' if is_null else 'KEPT'}")
 
-    check("corporate actions are neutralized in int_daily_returns", neutralized)
+    check("int_daily_returns sets corporate actions to null", neutralized)
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +254,7 @@ def verify_portfolio_stats(con) -> None:
 # ---------------------------------------------------------------------------
 
 def verify_no_look_ahead(con) -> None:
-    """Prove that future data cannot change a past portfolio choice."""
+    """Prove that future returns cannot change the weights of a past build."""
     sector_of = warehouse.read_sector_map(con)
     candidates = warehouse.read_candidates(con)
     returns = warehouse.read_returns_matrix(
@@ -279,7 +279,7 @@ def verify_no_look_ahead(con) -> None:
 
 
 def backtest_holding() -> int:
-    """The holding period used by the backtest."""
+    """Return the holding period of the backtest."""
     return 180
 
 

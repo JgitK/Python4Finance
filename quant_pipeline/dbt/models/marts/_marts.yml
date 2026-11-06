@@ -53,7 +53,7 @@ unit_tests:
   - name: test_screen_applies_all_gates
     description: >
       A candidate must pass every gate. This test sends four stocks through
-      the screen. Only the stock that passes all gates should survive.
+      the screen. Only the stock that passes all gates stays.
     model: mart_screen_candidates
     given:
       - input: ref('int_risk_metrics')

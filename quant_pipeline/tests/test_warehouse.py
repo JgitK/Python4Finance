@@ -1,7 +1,7 @@
 """Integration tests for the warehouse reader.
 
-These tests read the real DuckDB warehouse. They need the dbt build to have
-run first. They skip themselves when the warehouse file is missing.
+These tests read the real DuckDB warehouse. Run the dbt build before
+these tests. The tests skip when the warehouse file is not there.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ def test_candidates_have_rows_and_pass_the_min_score(con):
 def test_returns_matrix_includes_the_benchmark(con):
     matrix = warehouse.read_returns_matrix(con)
     assert universe.BENCHMARK in matrix.columns
-    # The matrix should hold a few years of trading days.
+    # The matrix must hold a few years of trading days.
     assert len(matrix) > 500
 
 

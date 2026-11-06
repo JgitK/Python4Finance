@@ -10,7 +10,7 @@ models:
         description: The stock symbol.
         data_tests:
           - not_null
-          # The benchmark SPY has no sector, so leave it out of this check.
+          # The benchmark SPY has no sector, so this check does not include it.
           - relationships:
               arguments:
                 to: ref('stg_sectors')
@@ -22,7 +22,7 @@ models:
         data_tests:
           - not_null
       - name: close
-        description: The closing price. Always positive.
+        description: The close price. It is always more than zero.
         data_tests:
           - not_null
     # The singular test assert_unique_ticker_date.sql checks that a ticker

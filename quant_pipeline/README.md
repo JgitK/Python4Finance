@@ -11,9 +11,9 @@ The project has two layers:
 - **The stats layer** uses **Python**. It does the math that SQL does not fit:
   the Markowitz optimization and the walk-forward backtest.
 
-This split is on purpose. SQL is strong for set-based work on many rows.
-Python is strong for linear algebra and simulation. Each layer does the job
-it is best at.
+The project uses this split for a reason. SQL is good at set-based work on
+many rows. Python is good at linear algebra and simulation. Each layer does
+the work that it does best.
 
 ## What the pipeline decides
 
@@ -28,13 +28,14 @@ The pipeline runs these steps in order:
 4. **Screen.** dbt keeps the stocks that pass four gates: enough history,
    enough volume, calm enough daily moves, and a bullish Ichimoku score.
 5. **Select.** Python picks a diversified set. It avoids stocks that move
-   together. It takes at most three stocks from one sector.
+   together. It selects a maximum of three stocks from one sector.
 6. **Optimize.** Python runs a Monte Carlo search. It tries 10,000 random
    weightings and keeps the one with the highest Sharpe ratio.
-7. **Allocate.** Python turns the weights into whole shares for a fixed budget.
-8. **Backtest.** Python runs a walk-forward test. It picks a portfolio with
-   past data only. It then holds the portfolio for six months and compares
-   the result to SPY. This test has no look-ahead, so it is fair.
+7. **Allocate.** Python changes the weights to whole shares for a fixed budget.
+8. **Backtest.** Python runs a walk-forward test. At each past date, it
+   selects a portfolio from past returns only. It holds the portfolio for
+   180 trading days, approximately 8.5 months. Then it compares the result
+   to SPY. Read the note about selection bias before you use this result.
 
 ## Project layout
 
@@ -112,15 +113,15 @@ cd dbt && dbt build --profiles-dir .
 The dbt layer has 3 unit tests for the return, score, and screen logic.
 It also has schema tests for not-null, unique, and relationship rules.
 The Python layer has unit tests for every stats function. The backtest
-tests check that the method never uses future data.
+tests make sure that the build step does not use future returns.
 
 ### Independent verification
 
 The tests check each part against a fixed expected value. The verify script
 checks the whole warehouse a second way. It rebuilds the indicators and the
-risk metrics with pandas, then compares them to dbt. It also rebuilds the
-optimizer's Sharpe ratio, and it proves that future data cannot change a
-past portfolio choice.
+risk metrics with pandas, then compares them to dbt. It also calculates the
+Sharpe ratio of the optimizer again. Then it makes sure that future returns
+cannot change the weights of a past portfolio.
 
 ```bash
 cd quant_pipeline
@@ -133,10 +134,14 @@ Run it after a dbt build. It needs the warehouse file.
 ## Notes
 
 - The data runs from late 2022 to late 2026. The nasdaq API serves this range.
-- The nasdaq close is split-adjusted but not spinoff-adjusted. A spinoff makes
-  a large one-day drop that is not a real loss. The data layer nulls any
+- The nasdaq close is split-adjusted but not spinoff-adjusted. A spinoff causes
+  a large one-day decrease that is not a real loss. The data layer nulls any
   one-day move beyond 50 percent, so a corporate action does not distort the
   risk metrics. The `max_abs_daily_return` variable sets this limit.
-- The Monte Carlo Sharpe ratio is an in-sample fit, so it looks high. The
-  walk-forward backtest is the honest measure of the method.
-- This project is for learning. It is not investment advice.
+- The Monte Carlo Sharpe ratio is an in-sample fit. Because of this, the value is too
+  high. Use the backtest to measure the method, but read the next note first.
+- The backtest has a selection bias. It uses the stocks that pass the screen
+  today. The screen uses the last 252 trading days, and these days overlap
+  the holding periods of the backtest. Because of this, the backtest is not
+  reliable. The backtest also does not apply the dbt screen gates.
+- This project is for education. It is not investment advice.

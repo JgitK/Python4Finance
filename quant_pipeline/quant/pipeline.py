@@ -2,8 +2,9 @@
 
 This module joins the small parts into one step. It ranks the stocks by
 Sharpe ratio, picks a diversified set, and finds the Max Sharpe weights.
-Both the live run and the backtest use the same build step. This keeps the
-backtest honest, because it builds the portfolio the same way every time.
+Both the live run and the backtest use the same build step. But the live
+run starts from the dbt screen candidates, and the backtest does not apply
+the screen gates.
 """
 
 from __future__ import annotations
@@ -75,7 +76,7 @@ def make_builder(sector_of: dict[str, str], params: PortfolioParams,
                  benchmark: str) -> Callable[[pd.DataFrame], dict[str, float]]:
     """Make a build_portfolio function for the backtest.
 
-    The returned function takes a train frame and returns weights by ticker.
+    The function that this returns uses a train frame as input. It returns weights by ticker.
     It drops the benchmark first, so the benchmark never enters the portfolio.
     """
     def build(train: pd.DataFrame) -> dict[str, float]:

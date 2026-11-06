@@ -69,7 +69,7 @@ metrics as (
         sqrt(avg(
             case when daily_return < 0 then daily_return * daily_return else 0 end
         )) * sqrt({{ tdays }}) as downside_deviation,
-        -- Compound the window returns to get the one-year return.
+        -- Compound the window returns to calculate the one-year return.
         exp(sum(ln(1 + daily_return))) - 1 as cum_return_window
     from recent
     group by ticker

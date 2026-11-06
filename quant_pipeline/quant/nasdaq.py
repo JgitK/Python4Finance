@@ -2,7 +2,7 @@
 
 The nasdaq API sends prices as text. For example "$1,234.56".
 It sends the newest day first. It uses month/day/year dates.
-This module turns that raw text into clean, sorted records.
+This module changes that raw text to clean, sorted records.
 The pure functions have no network calls, so the tests can check them.
 """
 
@@ -13,8 +13,8 @@ from typing import Any
 
 import requests
 
-# The nasdaq API checks the request headers. A plain client gets a 403 error.
-# These headers make the request look like a normal browser.
+# The nasdaq API checks the request headers. It sends a 403 error to a plain
+# client. With these headers, the API accepts the request as a browser request.
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -30,10 +30,10 @@ _BASE_URL = "https://api.nasdaq.com/api/quote/{symbol}/historical"
 
 
 def parse_price(text: str | None) -> float | None:
-    """Turn a price string into a float.
+    """Change a price string to a float.
 
     Remove the dollar sign and the thousands commas.
-    Return None when the value is missing.
+    Return None when there is no value.
     """
     if text is None:
         return None
@@ -44,9 +44,9 @@ def parse_price(text: str | None) -> float | None:
 
 
 def parse_volume(text: str | None) -> int | None:
-    """Turn a volume string into an integer.
+    """Change a volume string to an integer.
 
-    Remove the thousands commas. Return None when the value is missing.
+    Remove the thousands commas. Return None when there is no value.
     """
     if text is None:
         return None
@@ -57,13 +57,13 @@ def parse_volume(text: str | None) -> int | None:
 
 
 def parse_us_date(text: str) -> str:
-    """Turn a month/day/year date into a year-month-day string."""
+    """Change a month/day/year date to a year-month-day string."""
     parsed = dt.datetime.strptime(text.strip(), "%m/%d/%Y").date()
     return parsed.isoformat()
 
 
 def normalize_rows(ticker: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Turn raw nasdaq rows into clean records.
+    """Change raw nasdaq rows to clean records.
 
     Add the ticker to each record. Cast the price and volume fields.
     Drop any row that has no close price. Sort the records oldest first.

@@ -79,7 +79,7 @@ def test_backtest_window_shows_the_selector_only_past_data():
     seen = {}
 
     def build_portfolio(train: pd.DataFrame) -> dict[str, float]:
-        # Record the newest day the selector was allowed to see.
+        # Record the newest day that the selector can see.
         seen["max_train_date"] = train.index.max()
         return {"AAA": 1.0}
 

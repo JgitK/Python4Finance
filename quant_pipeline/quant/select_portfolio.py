@@ -2,8 +2,8 @@
 
 A good portfolio holds stocks that do not move together. When one stock
 falls, another may hold or rise. This smooths the return.
-This module picks stocks with a greedy rule. It walks the candidates from
-best to worst. It adds a stock only when the stock is different enough from
+This module picks stocks with a greedy rule. It examines the candidates in
+sequence, from best to worst. It adds a stock only when the stock is different enough from
 the stocks it already holds. It also caps how many stocks come from one sector.
 """
 

@@ -1,4 +1,4 @@
--- Screen the universe down to the strong, liquid, bullish stocks.
+-- Screen the universe. Keep the stocks that are liquid, calm, and bullish.
 -- A stock must pass four gates:
 --   1. It has enough history.
 --   2. It trades enough volume.

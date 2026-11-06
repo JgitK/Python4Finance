@@ -63,7 +63,7 @@ def run(fromdate: str, todate: str, pause: float = 1.0) -> int:
     """Download every symbol and write the seed files.
 
     Return the count of price rows written.
-    Wait a short time between calls. This is polite to the API.
+    Wait a short time between calls. This decreases the load on the API.
     """
     session = requests.Session()
     all_records: list[dict[str, Any]] = []

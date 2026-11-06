@@ -14,7 +14,7 @@ deduped as (
         low,
         close,
         volume,
-        -- A ticker and date should be unique. This guards against a stray duplicate.
+        -- A ticker and a date must be unique. This step removes a duplicate row.
         row_number() over (
             partition by ticker, date
             order by volume desc

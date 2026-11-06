@@ -1,7 +1,7 @@
 """Tests for the pipeline composition.
 
 The pipeline ranks stocks, selects a diversified set, and optimizes the
-weights. These tests use small synthetic returns, so no warehouse is needed.
+weights. These tests use small synthetic returns, so they do not need a warehouse.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def test_build_portfolio_weights_sum_to_one():
 
 def test_build_portfolio_respects_the_sector_cap():
     returns = _three_stocks()
-    # All three stocks sit in one sector, but only one may be chosen.
+    # All three stocks sit in one sector, but the selector can choose only one.
     sector_of = {"AAA": "Tech", "BBB": "Tech", "CCC": "Tech"}
     params = pipeline.PortfolioParams(max_per_sector=1, n_portfolios=500, seed=1)
     result = pipeline.build_max_sharpe_portfolio(returns, sector_of, params)
