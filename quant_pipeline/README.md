@@ -58,7 +58,8 @@ quant_pipeline/
 │   │   └── marts/          Screen candidates, sector leaders, returns.
 │   └── tests/          A singular uniqueness test.
 ├── tests/              The pytest suite for the Python layer.
-└── run_pipeline.py     Run the whole pipeline end to end.
+├── run_pipeline.py     Run the whole pipeline end to end.
+└── verify_indicators.py  Check the numbers against an independent calculation.
 ```
 
 ## How to run
@@ -113,9 +114,29 @@ It also has schema tests for not-null, unique, and relationship rules.
 The Python layer has unit tests for every stats function. The backtest
 tests check that the method never uses future data.
 
+### Independent verification
+
+The tests check each part against a fixed expected value. The verify script
+checks the whole warehouse a second way. It rebuilds the indicators and the
+risk metrics with pandas, then compares them to dbt. It also rebuilds the
+optimizer's Sharpe ratio, and it proves that future data cannot change a
+past portfolio choice.
+
+```bash
+cd quant_pipeline
+. .venv/bin/activate
+python verify_indicators.py      # exits 0 when every check passes
+```
+
+Run it after a dbt build. It needs the warehouse file.
+
 ## Notes
 
 - The data runs from late 2022 to late 2026. The nasdaq API serves this range.
+- The nasdaq close is split-adjusted but not spinoff-adjusted. A spinoff makes
+  a large one-day drop that is not a real loss. The data layer nulls any
+  one-day move beyond 50 percent, so a corporate action does not distort the
+  risk metrics. The `max_abs_daily_return` variable sets this limit.
 - The Monte Carlo Sharpe ratio is an in-sample fit, so it looks high. The
   walk-forward backtest is the honest measure of the method.
 - This project is for learning. It is not investment advice.

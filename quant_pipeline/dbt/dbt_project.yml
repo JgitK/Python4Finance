@@ -27,6 +27,9 @@ vars:
   ichimoku_base: 26
   ichimoku_span_b: 52
   ichimoku_displacement: 26
+  # A one-day move beyond this size is treated as a corporate action, such as
+  # a spinoff, and not as a real return. The data layer nulls such a day.
+  max_abs_daily_return: 0.5
   # Screening gates.
   min_trading_days: 400
   min_avg_volume: 100000
