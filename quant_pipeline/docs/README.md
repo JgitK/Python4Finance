@@ -60,6 +60,7 @@ each fix are not valid.
 | D10 | `stg_prices` drops PARA, because its price history is a different security. | The screens changed. |
 | D11 | A real large move stays in the returns. Only a confirmed corporate action gets a back-adjustment. | The screens changed. MRNA now fails the volatility gate. |
 | D14 | The volume rule classifies each large one-day move. The seed grew from 10 rows to 532 rows, and 24 of them get a back-adjustment. | The `nasdaq` prices changed. The `sp500` prices did not: HON is the only S&P 500 member with a corporate action. |
+| D17 | The allocator spends the cash that the share rounding leaves. It buys the shares that move the weights back to the target. | For $10,000 the cash fell from $1,680.44 to $63.06, and the largest weight difference fell from 3.65 points to 1.70. |
 | D15 | `stg_prices` drops 10 more tickers. The close of each one spans a factor of 1000 or more, so the file mixes two price regimes. | The Nasdaq universe lost 10 of approximately 1,000 members. None of them passed the screen. |
 
 D9 supports both groups. It moved the prices to a Parquet file, so the

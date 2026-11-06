@@ -187,9 +187,17 @@ def main() -> None:
           f"return {result['annual_return']:.1%}, "
           f"volatility {result['annual_volatility']:.1%}.")
 
-    # Step 4: change the weights to whole shares.
+    # Step 4: change the weights to whole shares. The top-up pass spends
+    # the cash that the rounding leaves.
     selected_prices = {ticker: prices[ticker] for ticker in selected}
-    plan = allocate.allocation_summary(weights, selected_prices, args.investment)
+    plan = allocate.allocation_summary(weights, selected_prices,
+                                       args.investment)
+    spent = float(plan["cost"].sum())
+    drift = float((plan["cost"] / args.investment
+                   - plan["target_weight"]).abs().max())
+    print(f"Step 4: spent {spent:,.2f} of {args.investment:,.2f}, "
+          f"so the cash is {args.investment - spent:,.2f}. "
+          f"The largest weight difference is {drift:.2%}.")
 
     # Step 5: backtest the method. On each selection date, the builder uses
     # only the stocks that passed the screen on that date.

@@ -122,6 +122,9 @@ The `price_data_exclusions` seed grew from 1 ticker to 11. The close of
 each new ticker spans a factor of 1000 or more over four years, so its
 price history is not one security. See D15.
 
+`allocate.py` runs a second pass that spends the cash of the share
+rounding. For $10,000 the cash is $63.06, and it was $1,680.44. See D17.
+
 `run_pipeline.py --many-windows` runs the walk-forward test on every valid
 date, not only three. The row of the results log then holds the share of
 the windows that beat SPY. Use it for each new result. See D16.

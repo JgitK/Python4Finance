@@ -22,6 +22,54 @@ Use this template for a new entry:
 
 ---
 
+## D17. Spend the cash that the share rounding leaves
+
+- **Date:** 2026-11-06
+- **Role:** Correctness fix, in the core loop. It changes the share counts
+  of a plan. It does not change the weights, the screen, or the backtest,
+  so no row of the results log changes.
+- **Question:** `allocate.py` gave each stock its share of the money,
+  divided by the price, and rounded down. For an investment of $10,000 in
+  12 stocks, that plan spent $8,319.56 and left $1,680.44, which is 16.8%
+  of the money, in cash. The rounding also moved the portfolio away from
+  the weights of the optimizer, and not by the same amount for each stock:
+  an expensive share loses more of its weight than a cheap one, because
+  the money that it cannot use is larger. ADI at $417.11 held 8.3% of the
+  money against a target of 12.0%. VTRS at $19.04 held 10.1% against
+  10.3%. What does the plan do with the cash?
+- **Options:**
+  1. Keep the cash. The plan is simple, and it never holds more of a stock
+     than the target.
+  2. Buy one more share at a time. Each step takes the share that moves
+     the actual weights nearest to the target weights. Stop when no share
+     is affordable, and stop when no share makes the plan better.
+  3. Allow a part of a share. Some brokers sell them.
+- **Decision:** Option 2. The pass runs on each plan.
+  `allocation_summary(..., top_up=False)` gives the first pass alone.
+  Option 3 is not a code question: it depends on the broker of the user,
+  and the data does not say which broker that is.
+- **Evidence:** The live plan of commit `31d2a09`, for $10,000 in the same
+  12 stocks:
+
+  | | First pass | With the top-up |
+  |---|---|---|
+  | Money spent | $8,319.56 | $9,936.94 |
+  | Cash | $1,680.44 (16.8%) | $63.06 (0.6%) |
+  | Largest weight difference | 3.65 points (TRV) | 1.70 points (MPC) |
+  | Sum of the squared differences | 0.004721 | 0.000706 |
+
+  The cash falls to less than the price of one share of the cheapest stock
+  that the plan could still use. The weight error falls by a factor of 6.7.
+- **The measure:** `weight_error` divides the cost of a stock by the
+  investment amount, not by the money spent. The cash is therefore an
+  error. Without that rule, a plan that buys nothing has no error, and the
+  pass has no reason to buy a share. A test holds this property.
+- **A note on the direction:** The top-up can hold more of a stock than
+  the target. MPC ends 1.70 points above its target, because the third
+  share at $444.73 moves MPC from 2.75 points below to 1.70 points above.
+  That plan is nearer to the target than the cash is.
+- **Commits:** See the commit that holds this entry.
+
 ## D16. Measure the method on many windows, not three
 
 - **Date:** 2026-11-06

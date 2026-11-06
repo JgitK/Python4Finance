@@ -2,7 +2,13 @@
 
 The optimizer gives a weight for each stock. The weight is a fraction of
 the money. This module buys whole shares with that money. A person cannot
-buy part of a share, so the plan always rounds the share count down.
+buy part of a share, so the first pass rounds each share count down.
+
+The first pass alone leaves cash, and it moves the portfolio away from the
+weights of the optimizer. An expensive share loses more of its weight than
+a cheap one, because the money that it cannot use is larger. A second pass
+spends that cash: it buys one more share at a time, and each step takes
+the share that moves the weights nearest to the target. See decision D17.
 """
 
 from __future__ import annotations
@@ -28,14 +34,76 @@ def allocate_shares(weights: dict[str, float], prices: dict[str, float],
     return plan
 
 
+def weight_error(plan: dict[str, dict[str, float]],
+                 weights: dict[str, float],
+                 investment_amount: float) -> float:
+    """Measure the distance between the plan and the target weights.
+
+    The actual weight of a stock is its cost over the investment amount,
+    not over the money spent. The cash that the plan does not spend is
+    therefore an error. Without that rule, a plan that buys nothing has no
+    error, and the top-up pass has no reason to buy a share.
+
+    The measure is the sum of the squared differences.
+    """
+    return float(sum(
+        (plan[ticker]["cost"] / investment_amount - weight) ** 2
+        for ticker, weight in weights.items()))
+
+
+def top_up_shares(plan: dict[str, dict[str, float]],
+                  weights: dict[str, float], prices: dict[str, float],
+                  investment_amount: float
+                  ) -> dict[str, dict[str, float]]:
+    """Spend the cash that the first pass leaves.
+
+    Buy one more share at a time. Each step takes the share that lowers
+    the weight error by the largest amount. Stop when no share is
+    affordable, and stop when no share lowers the error. A share that
+    takes a stock further from its target than the cash does is not a
+    better plan, so the pass does not buy it.
+
+    The ticker order is alphabetic, so a tie gives the same plan on every
+    run.
+    """
+    plan = {ticker: dict(position) for ticker, position in plan.items()}
+    while True:
+        spent = sum(position["cost"] for position in plan.values())
+        cash = investment_amount - spent
+        best_ticker = None
+        best_error = weight_error(plan, weights, investment_amount)
+        for ticker in sorted(weights):
+            if prices[ticker] > cash:
+                continue
+            shares = plan[ticker]["shares"] + 1
+            trial = dict(plan)
+            trial[ticker] = {"shares": shares,
+                             "cost": shares * prices[ticker]}
+            error = weight_error(trial, weights, investment_amount)
+            # The margin keeps a rounding difference from a purchase.
+            if error < best_error - 1e-15:
+                best_ticker, best_error = ticker, error
+        if best_ticker is None:
+            return plan
+        plan[best_ticker]["shares"] += 1
+        plan[best_ticker]["cost"] = (plan[best_ticker]["shares"]
+                                     * prices[best_ticker])
+
+
 def allocation_summary(weights: dict[str, float], prices: dict[str, float],
-                       investment_amount: float) -> pd.DataFrame:
+                       investment_amount: float,
+                       top_up: bool = True) -> pd.DataFrame:
     """Build a table of the final plan.
 
     The table has the weight, the price, the shares, the cost, and the
     actual weight. The actual weight is the real share of the money spent.
+
+    The plan runs the top-up pass. Use `top_up=False` for the first pass
+    alone.
     """
     plan = allocate_shares(weights, prices, investment_amount)
+    if top_up:
+        plan = top_up_shares(plan, weights, prices, investment_amount)
     rows = [
         {
             "ticker": ticker,
