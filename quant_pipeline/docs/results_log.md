@@ -19,3 +19,4 @@ pipeline did not add them.
 | 2026-11-06 | 9bc2d8c | 32 | 2.90 | 2026-02-11: +6.3% vs +11.2% | 2025-08-12: +8.2% vs +11.8% | 2025-02-10: +9.8% vs +13.6% | D6: same 252-day window in the live run and the backtest. |
 | 2026-11-06 | 9c2addd | 110 | 4.66 | 2026-02-11: +12.7% vs +11.2% | 2025-08-12: +5.3% vs +11.8% | 2025-02-10: -2.1% vs +13.6% | D7: S&P 500 on each date. |
 | 2026-11-06 | 4cfa116 | 110 | 4.66 | 2026-02-11: +12.7% vs +11.2% | 2025-08-12: +5.3% vs +11.8% | 2025-02-10: -2.1% vs +13.6% | D11: real large moves stay. No change to the backtest. |
+| 2026-11-06 | f0509e1 | 110 | 4.66 | 2026-02-11: +12.7% vs +11.2% | 2025-08-12: +5.3% vs +11.8% | 2025-02-10: -2.1% vs +13.6% | D12: first row from the pipeline. Same results as 4cfa116. |

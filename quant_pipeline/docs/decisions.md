@@ -30,7 +30,7 @@ Use this template for a new entry:
   to the results log after each run, with the commit hash.
 - **Evidence:** Before this decision, the reasons and the results of each
   change were only in the work notes, not in the repository.
-- **Commits:** COMMIT_D12
+- **Commits:** `f0509e1`
 
 ## D11. Keep real large moves. Back-adjust a corporate action only.
 
