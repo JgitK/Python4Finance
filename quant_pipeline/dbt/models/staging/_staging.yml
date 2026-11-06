@@ -119,12 +119,11 @@ unit_tests:
         - {ticker: REAL, price_date: "2024-01-03", open: 10.0, high: 10.0, low: 10.0, close: 10.0, volume: 100}
         - {ticker: REAL, price_date: "2024-01-04", open: 5.0, high: 5.0, low: 4.0, close: 4.0, volume: 100}
 
-  - name: test_membership_uses_only_the_sp500_universe
+  - name: test_membership_uses_only_the_sp500
     description: >
-      The sp500 universe uses the S&P 500 stints. It does not use the Nasdaq
-      stints. This test pins the var, because a --vars flag on the command
-      line replaces the project value. A Python test checks that the project
-      value is sp500.
+      With the sp500 universe, the model uses only the S&P 500 stints. The
+      test sets the var, so a build with another universe does not change
+      the test. A pytest test checks that sp500 is the default.
     model: stg_membership
     overrides:
       vars:

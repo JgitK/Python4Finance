@@ -206,3 +206,12 @@ def test_coverage_summary_uses_the_latest_date_on_or_before_each_date():
     summary = pipeline.coverage_summary(_coverage(), ["2025-03-03"])
     assert summary.iloc[0]["coverage_date"] == pd.Timestamp("2025-01-02")
     assert summary.iloc[0]["dropped"] == 2
+
+
+def test_the_default_universe_is_the_sp500():
+    import pathlib
+
+    import yaml
+
+    project = pathlib.Path(__file__).resolve().parents[1] / "dbt" / "dbt_project.yml"
+    assert yaml.safe_load(project.read_text())["vars"]["universe"] == "sp500"
