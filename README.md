@@ -4,6 +4,14 @@
 
 This repository contains complete implementations of a portfolio optimization framework in both **R** (primary) and **Python** (alternative).
 
+## dbt and DuckDB pipeline
+
+The `quant_pipeline/` folder contains a separate project. This project uses dbt and DuckDB for the data work. It uses Python for the statistics.
+
+This project does not use the other files in this repository.
+
+To start, read [`quant_pipeline/README.md`](quant_pipeline/README.md).
+
 ---
 
 ## 📁 Repository Structure
