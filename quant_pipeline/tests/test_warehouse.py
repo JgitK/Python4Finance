@@ -55,3 +55,35 @@ def test_screen_history_covers_many_past_dates(con):
     # The backtest needs a screen on each past selection date.
     assert history["as_of_date"].nunique() > 250
     assert list(history.columns) == ["as_of_date", "ticker"]
+
+
+# --- large moves -------------------------------------------------------------
+# A real large move stays in the data. A corporate action is back-adjusted,
+# so it does not drop the stock out of the lookback window.
+
+def _return_on(con, ticker: str, date: str):
+    row = con.execute(
+        "select daily_return from main.int_daily_returns "
+        "where ticker = ? and price_date = ?", [ticker, date]).fetchone()
+    return None if row is None else row[0]
+
+
+def test_a_real_crash_stays_in_the_returns(con):
+    # GL fell 53% on 2024-04-11 on heavy volume. That loss is real.
+    assert _return_on(con, "GL", "2024-04-11") == pytest.approx(-0.531, abs=1e-3)
+
+
+def test_a_corporate_action_day_has_its_real_return(con):
+    # HON gapped down 48% at the open on 2026-06-29 because of a separation.
+    # After the back-adjustment, the day shows only the move during the day.
+    value = _return_on(con, "HON", "2026-06-29")
+    assert value is not None
+    assert -0.10 < value < 0.0
+
+
+def test_a_corporate_action_does_not_drop_the_stock_from_the_window(con):
+    from quant import pipeline
+
+    window = pipeline.lookback_window(warehouse.read_returns_matrix(con),
+                                      pipeline.PortfolioParams())
+    assert "HON" in window.columns

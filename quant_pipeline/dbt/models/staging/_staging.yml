@@ -73,6 +73,48 @@ unit_tests:
       - input: ref('price_data_exclusions')
         rows:
           - {ticker: REUSED, reason: "The ticker now names a different security."}
+      - input: ref('corporate_actions')
+        format: sql
+        rows: |
+          select null::varchar as ticker, null::date as date,
+                 null::varchar as kind, null::varchar as note
+          where false
     expect:
       rows:
         - {ticker: GOOD, price_date: "2024-01-02", close: 10}
+
+  - name: test_stg_prices_back_adjusts_a_corporate_action
+    description: >
+      A corporate action, for example a spinoff, makes a gap that is not a
+      real return. The model multiplies each earlier price by the gap factor
+      (the open on the event day divided by the close before it). The prices
+      on and after the event day do not change. A real move does not change
+      any price.
+    model: stg_prices
+    given:
+      - input: source('raw', 'prices')
+        format: sql
+        rows: |
+          select * from (values
+            ('SPIN', date '2024-01-02', 98.0, 100.0, 96.0, 98.0, 100::bigint),
+            ('SPIN', date '2024-01-03', 99.0, 102.0, 98.0, 100.0, 100::bigint),
+            ('SPIN', date '2024-01-04', 50.0, 51.0, 47.0, 48.0, 100::bigint),
+            ('REAL', date '2024-01-03', 10.0, 10.0, 10.0, 10.0, 100::bigint),
+            ('REAL', date '2024-01-04', 5.0, 5.0, 4.0, 4.0, 100::bigint)
+          ) as t(ticker, date, open, high, low, close, volume)
+      - input: ref('price_data_exclusions')
+        format: sql
+        rows: |
+          select null::varchar as ticker, null::varchar as reason where false
+      - input: ref('corporate_actions')
+        rows:
+          - {ticker: SPIN, date: "2024-01-04", kind: corporate_action, note: "test"}
+          - {ticker: REAL, date: "2024-01-04", kind: real_move, note: "test"}
+    expect:
+      rows:
+        # The factor is 50 / 100 = 0.5.
+        - {ticker: SPIN, price_date: "2024-01-02", open: 49.0, high: 50.0, low: 48.0, close: 49.0, volume: 100}
+        - {ticker: SPIN, price_date: "2024-01-03", open: 49.5, high: 51.0, low: 49.0, close: 50.0, volume: 100}
+        - {ticker: SPIN, price_date: "2024-01-04", open: 50.0, high: 51.0, low: 47.0, close: 48.0, volume: 100}
+        - {ticker: REAL, price_date: "2024-01-03", open: 10.0, high: 10.0, low: 10.0, close: 10.0, volume: 100}
+        - {ticker: REAL, price_date: "2024-01-04", open: 5.0, high: 5.0, low: 4.0, close: 4.0, volume: 100}

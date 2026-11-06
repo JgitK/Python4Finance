@@ -1,0 +1,8 @@
+ticker,date,kind,note
+HON,2026-06-29,corporate_action,Gap of -48% at the open on normal volume (1.6x). HONA joined the S&P 500 on this day. The source did not adjust this separation.
+MRNA,2026-08-19,real_move,Close +177% on 46x volume. Real trading.
+LUMN,2024-08-06,real_move,Close +93% on 6.9x volume. Real trading.
+ECHO,2025-08-26,real_move,Close +70% on 18.7x volume. Real trading.
+AAP,2025-05-22,real_move,Close +57% on 5.8x volume. Real trading.
+CVNA,2023-06-08,real_move,Close +56% on 7.9x volume. Real trading.
+GL,2024-04-11,real_move,Close -53% on 20.5x volume. Most of the fall was during the day (-50%). Real trading.

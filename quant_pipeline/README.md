@@ -129,8 +129,8 @@ python -m pytest
 cd dbt && dbt build --profiles-dir .
 ```
 
-The dbt layer has 9 unit tests for the return, score, screen, membership,
-coverage, and exclusion logic.
+The dbt layer has 11 unit tests for the return, score, screen, membership,
+coverage, exclusion, and corporate-action logic.
 Three of these tests put a large future value in the input. They make sure
 that an earlier row does not change.
 It also has schema tests for not-null, unique, and relationship rules.
@@ -156,10 +156,18 @@ Run it after a dbt build. It needs the warehouse file.
 ## Notes
 
 - The data runs from late 2022 to late 2026. The nasdaq API serves this range.
-- The nasdaq close is split-adjusted but not spinoff-adjusted. A spinoff causes
-  a large one-day decrease that is not a real loss. The data layer nulls any
-  one-day move beyond 50 percent, so a corporate action does not distort the
-  risk metrics. The `max_abs_daily_return` variable sets this limit.
+- The nasdaq prices are adjusted for splits and for most spinoffs. The data
+  shows no gap for the GE, 3M, and Danaher spinoffs. The source did not
+  adjust the Honeywell separation on 2026-06-29. The `corporate_actions` seed
+  lists such an event. `stg_prices` multiplies each earlier price by the gap
+  factor: the open on the event day divided by the close of the day before.
+- A large move can be real. The data keeps it. For example, GL fell 53% on
+  2024-04-11 on 20 times its usual volume. A warning test lists each move
+  larger than `large_move_review_limit` (50%) that is not in the seed.
+  Review the move, then add it to the seed as a `corporate_action` or as a
+  `real_move`, with the evidence in the note.
+- The seed does not include corporate actions smaller than the limit. If
+  the source does not adjust one of them, its gap stays in the returns.
 - The Monte Carlo Sharpe ratio is an in-sample fit. Because of this, the value is too
   high. Use the backtest to measure the method, but read the next note first.
 - The backtest has no look-ahead in the screen. On each selection date, it

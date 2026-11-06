@@ -32,9 +32,18 @@ with open(warehouse.DEFAULT_WAREHOUSE.parent / "dbt_project.yml") as _handle:
 
 # How close two numbers must be to count as equal.
 ATOL = 1e-6
-# A one-day move larger than this is a corporate action, not a real return.
-# This is the same limit the dbt model uses.
-CORP_ACTION_LIMIT = 0.5
+# A one-day move larger than this limit must be in the corporate_actions seed.
+LARGE_MOVE_LIMIT = DBT_VARS["large_move_review_limit"]
+
+# The raw price file and the seed folder of the dbt project.
+PRICES_FILE = warehouse.DEFAULT_WAREHOUSE.parents[1] / "data" / "raw_prices.parquet"
+SEEDS_DIR = warehouse.DEFAULT_WAREHOUSE.parent / "seeds"
+
+
+def read_seed(name: str) -> pd.DataFrame:
+    """Read a dbt seed file directly, not through dbt."""
+    return pd.read_csv(SEEDS_DIR / f"{name}.csv")
+
 
 # Collect the names of the checks that fail.
 FAILURES: list[str] = []
@@ -106,9 +115,8 @@ def pandas_indicators(prices: pd.DataFrame) -> pd.DataFrame:
     p = prices.sort_values("price_date").set_index("price_date").copy()
     close, high, low = p["close"], p["high"], p["low"]
 
-    # Use the same corporate-action rule as the dbt model.
-    raw_return = close.pct_change()
-    p["ret"] = raw_return.where(raw_return.abs() <= CORP_ACTION_LIMIT)
+    # A large move stays. The prices are already back-adjusted.
+    p["ret"] = close.pct_change()
 
     # Bollinger Bands need a full 20-day window. Calculate each window
     # directly. The pandas rolling std uses a running sum, and a very large
@@ -184,7 +192,7 @@ def verify_risk_metrics(tables: dict[str, pd.DataFrame]) -> None:
     for tk in risk.index:
         p = tables["prices"][tables["prices"]["ticker"] == tk].sort_values("price_date")
         raw_return = p["close"].pct_change()
-        p = p.assign(ret=raw_return.where(raw_return.abs() <= CORP_ACTION_LIMIT))
+        p = p.assign(ret=raw_return)
         recent = p.dropna(subset=["ret"]).tail(252)
         r = recent["ret"]
 
@@ -209,34 +217,58 @@ def verify_risk_metrics(tables: dict[str, pd.DataFrame]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Split artifact scan.
+# Corporate actions and large moves.
 # ---------------------------------------------------------------------------
 
-def verify_corporate_actions_neutralized(tables: dict[str, pd.DataFrame]) -> None:
-    """Confirm the data layer handles every corporate action.
+def verify_price_adjustment(con, tables: dict[str, pd.DataFrame]) -> None:
+    """Back-adjust the raw prices with pandas and compare to stg_prices.
 
-    Find the extreme one-day moves in the raw prices. Each one can be
-    a corporate action. The dbt model must null that day in int_daily_returns.
+    Read the raw Parquet file, not a dbt model. Drop the excluded tickers.
+    For each corporate action in the seed, multiply each earlier price by
+    the open on the event day divided by the close of the day before.
     """
+    raw = con.execute(
+        f"select ticker, date as price_date, open, high, low, close "
+        f"from read_parquet('{PRICES_FILE}') where close > 0"
+    ).fetchdf()
+    excluded = set(read_seed("price_data_exclusions")["ticker"])
+    raw = raw[~raw["ticker"].isin(excluded)]
+    raw["price_date"] = pd.to_datetime(raw["price_date"])
+    raw = raw.sort_values(["ticker", "price_date"]).reset_index(drop=True)
+
+    actions = read_seed("corporate_actions")
+    actions = actions[actions["kind"] == "corporate_action"]
+    factor = pd.Series(1.0, index=raw.index)
+    for _, event in actions.iterrows():
+        rows = raw[raw["ticker"] == event["ticker"]]
+        day = pd.Timestamp(event["date"])
+        position = rows.index[rows["price_date"] == day][0]
+        gap = raw.loc[position, "open"] / raw.loc[position - 1, "close"]
+        factor[rows.index[rows["price_date"] < day]] *= gap
+    for column in ("open", "high", "low", "close"):
+        raw[column] = raw[column] * factor
+
+    dbt = tables["prices"].set_index(["ticker", "price_date"])
+    mine = raw.set_index(["ticker", "price_date"])
+    worst = float(((mine["close"] - dbt["close"]).abs() / dbt["close"]).max())
+    check("stg_prices matches a pandas back-adjustment of the raw file",
+          worst < 1e-12 and len(mine) == len(dbt),
+          f"{len(actions)} corporate action(s), max relative diff {worst:.1e}")
+
+
+def verify_large_moves_reviewed(tables: dict[str, pd.DataFrame]) -> None:
+    """Make sure that each large move is in the corporate_actions seed."""
     prices = tables["prices"].sort_values(["ticker", "price_date"])
-    prices = prices.assign(
-        raw_return=prices.groupby("ticker")["close"].pct_change()
-    )
-    extreme = prices[prices["raw_return"].abs() > CORP_ACTION_LIMIT]
-
-    returns = tables["returns"].set_index(["ticker", "price_date"])["daily_return"]
-    neutralized = True
-    print(f"      Found {len(extreme)} corporate-action day(s):")
-    for _, row in extreme.iterrows():
-        key = (row["ticker"], row["price_date"])
-        value = returns.get(key)
-        is_null = value is None or pd.isna(value)
-        neutralized = neutralized and is_null
-        print(f"        {row['ticker']:<6} {row['price_date'].date()} "
-              f"raw {row['raw_return']:+.1%} -> "
-              f"{'nulled' if is_null else 'KEPT'}")
-
-    check("int_daily_returns sets corporate actions to null", neutralized)
+    prices = prices.assign(ret=prices.groupby("ticker")["close"].pct_change())
+    large = prices[prices["ret"].abs() > LARGE_MOVE_LIMIT]
+    seed = read_seed("corporate_actions")
+    reviewed = set(zip(seed["ticker"], pd.to_datetime(seed["date"])))
+    missing = [(r.ticker, r.price_date.date()) for r in large.itertuples()
+               if (r.ticker, r.price_date) not in reviewed]
+    print(f"      {len(large)} move(s) beyond {LARGE_MOVE_LIMIT:.0%}, "
+          f"{len(missing)} not reviewed")
+    check("each large move is in the corporate_actions seed", not missing,
+          ", ".join(f"{t} {d}" for t, d in missing))
 
 
 # ---------------------------------------------------------------------------
@@ -391,7 +423,8 @@ def main() -> int:
     verify_indicators(tables)
     verify_risk_metrics(tables)
     print("\n== Data quality ==")
-    verify_corporate_actions_neutralized(tables)
+    verify_price_adjustment(con, tables)
+    verify_large_moves_reviewed(tables)
     print("\n== Point-in-time screen ==")
     verify_screen_history(con, tables)
     print("\n== Stats checks ==")

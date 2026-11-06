@@ -81,6 +81,24 @@ unit_tests:
         - {ticker: TST, price_date: "2023-01-04", close: 150, daily_return: 0.5}
         - {ticker: TST, price_date: "2023-01-05", close: 75, daily_return: -0.5}
 
+  - name: test_daily_return_keeps_a_large_real_move
+    description: >
+      A large move can be real, for example after an earnings report. The
+      model keeps it. The corporate_actions seed handles a corporate action
+      in stg_prices, before this model.
+    model: int_daily_returns
+    given:
+      - input: ref('stg_prices')
+        rows:
+          - {ticker: TST, price_date: "2024-01-02", close: 20}
+          - {ticker: TST, price_date: "2024-01-03", close: 60}
+          - {ticker: TST, price_date: "2024-01-04", close: 15}
+    expect:
+      rows:
+        - {ticker: TST, price_date: "2024-01-02", close: 20, daily_return: null}
+        - {ticker: TST, price_date: "2024-01-03", close: 60, daily_return: 2.0}
+        - {ticker: TST, price_date: "2024-01-04", close: 15, daily_return: -0.75}
+
   - name: test_ichimoku_score_counts_bullish_rules
     description: A fully bullish stock scores 5. A fully bearish stock scores 0.
     model: int_ichimoku_score

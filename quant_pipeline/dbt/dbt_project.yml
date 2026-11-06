@@ -30,9 +30,9 @@ vars:
   ichimoku_base: 26
   ichimoku_span_b: 52
   ichimoku_displacement: 26
-  # The data layer sets a one-day move larger than this limit to null.
-  # Such a move comes from a corporate action, for example a spinoff.
-  max_abs_daily_return: 0.5
+  # A one-day move larger than this limit needs a review. A test lists each
+  # such move that is not in the corporate_actions seed.
+  large_move_review_limit: 0.5
   # Screen gates.
   min_trading_days: 400
   min_avg_volume: 100000
@@ -58,6 +58,12 @@ seeds:
         ticker: varchar
         start_date: date
         end_date: date
+    corporate_actions:
+      +column_types:
+        ticker: varchar
+        date: date
+        kind: varchar
+        note: varchar
     price_data_exclusions:
       +column_types:
         ticker: varchar
