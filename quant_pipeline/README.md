@@ -56,6 +56,7 @@ quant_pipeline/
 │   ├── backtest.py     Walk-forward backtest.
 │   └── pipeline.py     Join the select and optimize steps.
 ├── data/               The raw prices as a Parquet file. dbt reads it.
+├── docs/               The decisions, the results log, and the open questions.
 ├── dbt/                The dbt-duckdb project.
 │   ├── seeds/          The S&P 500 membership and the sectors.
 │   ├── models/
@@ -115,7 +116,13 @@ python run_pipeline.py --skip-dbt # reuse the warehouse from the last run
 
 The pipeline writes the results to the `output/` folder: the weights, the
 share allocation, the efficient frontier, the backtest results, and the
-universe coverage.
+universe coverage. It also adds one row to `docs/results_log.md`. Use
+`--no-log` to skip that row.
+
+## Documentation
+
+The `docs/` folder records why the project changed and what the results
+showed. See [docs/README.md](docs/README.md) for how to use it.
 
 ## Tests
 

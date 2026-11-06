@@ -8,6 +8,7 @@ The steps are:
   5. Backtest the method with a walk-forward test against SPY. On each
      past date, the backtest uses only the screen of that date.
   6. Write the results to the output folder.
+  7. Add one row to docs/results_log.md. Use --no-log to skip this step.
 
 Run this file from the quant_pipeline folder. Use --skip-dbt to reuse the
 warehouse from an earlier run.
@@ -16,12 +17,14 @@ warehouse from an earlier run.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import subprocess
 from pathlib import Path
 
 import pandas as pd
 
-from quant import allocate, backtest, pipeline, universe, warehouse
+from quant import (allocate, backtest, pipeline, results_log, universe,
+                   warehouse)
 
 HERE = Path(__file__).resolve().parent
 DBT_DIR = HERE / "dbt"
@@ -91,6 +94,8 @@ def main() -> None:
                         help="The number of random portfolios to try.")
     parser.add_argument("--skip-dbt", action="store_true",
                         help="Do not build dbt. Use the warehouse from the last run.")
+    parser.add_argument("--no-log", action="store_true",
+                        help="Do not add a row to docs/results_log.md.")
     args = parser.parse_args()
 
     if not args.skip_dbt:
@@ -167,6 +172,17 @@ def main() -> None:
     print(weights_df.to_string(index=False))
     print("\nWalk-forward backtest:")
     print(backtest_df.to_string(index=False))
+    # Step 7: add one row to the results log.
+    if not args.no_log:
+        row = results_log.format_row(
+            run_date=dt.date.today().isoformat(),
+            revision=results_log.git_revision(HERE),
+            n_candidates=len(candidates), live_sharpe=result["sharpe"],
+            backtest=backtest_df)
+        added = results_log.append_row(results_log.LOG_FILE, row)
+        print("Step 7: " + ("added a row to" if added else
+                            "no new results for") + " docs/results_log.md.")
+
     print("\nS&P 500 members dropped for missing data (survivorship bias):")
     print(coverage[["date", "members", "usable", "dropped",
                     "dropped_tickers"]].to_string(index=False))
