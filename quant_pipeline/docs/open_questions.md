@@ -22,12 +22,12 @@ one, move it to the "Solved" section with the commit hash.
 
 ### Universe and data
 
-- **The Nasdaq large moves are not reviewed.** The price data holds 601
-  one-day moves larger than 50% that no person classified. 104 of them are
-  inside the `both` universe, and 34 of the affected tickers pass the
+- **The Nasdaq large moves are not reviewed.** The price data holds 598
+  one-day moves larger than 50% that no person classified. 102 of them are
+  inside the Nasdaq universe, and 31 to 34 of the affected tickers pass the
   screen. D11 requires a review of each large move, so
   `verify_indicators.py` fails its data quality check and the `nasdaq` and
-  `both` rows in the results log are provisional. A hand review of 601
+  `both` rows in the results log are provisional. A hand review of 598
   moves is not practical. The next decision must select a rule. Three
   options: classify each move by its volume (a real move has a volume
   spike, a split does not); add a liquidity floor to the universe so the

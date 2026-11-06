@@ -91,8 +91,11 @@ The user set these rules. Keep them.
   survivorship report (D8), Parquet prices (D9), PARA exclusion (D10),
   real large moves (D11), docs system (D12), and the universe comparison
   (D13, `23102b3`).
-- The Nasdaq prices are complete: 1,671,625 rows for 2,123 symbols, in
-  `data/raw_prices.parquet` (25 MB, in git).
+- The Nasdaq prices are complete, in `data/raw_prices.parquet` (25 MB, in
+  git). Two sessions downloaded the prices at the same time. The merge
+  `b1a5be4` keeps the file of commit `a8a44b3`. The two files are not the
+  same bytes, so a results row from before that merge can differ by a
+  small amount.
 - Two bugs are fixed. A unit test made every non-default universe build
   stop with an error (`0e11033`). The backtest selected dates that have no
   screen and counted them as 0% losses (`23102b3`).
@@ -104,7 +107,7 @@ The user set these rules. Keep them.
 
 `python verify_indicators.py` now **fails one check**:
 `each large move is in the corporate_actions seed`. This failure is known
-and expected. The Nasdaq prices hold 601 one-day moves larger than 50%
+and expected. The Nasdaq prices hold 598 one-day moves larger than 50%
 that no person classified, and D11 requires a review of each one. Every
 other check passes. `dbt build` gives 2 warnings for `sp500` and 3 for the
 other universes, for the same reason and for the tickers with no sector.
