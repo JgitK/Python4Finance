@@ -22,3 +22,5 @@ output/
 data/cache/
 # A temporary price file for development.
 data/*.stand_in.parquet
+# Download logs. quant.ingest writes them again.
+*.log

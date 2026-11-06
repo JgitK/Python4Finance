@@ -84,3 +84,29 @@ def test_the_default_universe_in_the_dbt_project_is_sp500():
 
     project = yaml.safe_load((run_pipeline.DBT_DIR / "dbt_project.yml").read_text())
     assert project["vars"]["universe"] == "sp500"
+
+
+def test_choose_selection_dates_skips_dates_before_the_screen_history(con):
+    # The screen history starts after the warm-up of the risk metrics and
+    # the Ichimoku lines. On a date before that, no stock passes the screen,
+    # so the backtest holds nothing and reports a 0% return. Such a window
+    # is not a result. The function must not return such a date.
+    import pandas as pd
+
+    index = pd.DatetimeIndex(pd.bdate_range("2022-11-01", periods=1002))
+    every_date = run_pipeline.choose_selection_dates(index)
+    assert len(every_date) == 3
+
+    # A cut-off on the newest date must drop the two older dates.
+    newest = max(every_date)
+    kept = run_pipeline.choose_selection_dates(index, first_screen_date=newest)
+    assert kept == [newest]
+
+    # The real screen history must keep all three dates of the live run.
+    _, history = run_pipeline.load_backtest_inputs(con)
+    first = pd.Timestamp(history["as_of_date"].min())
+    returns, _ = run_pipeline.load_backtest_inputs(con)
+    real = run_pipeline.choose_selection_dates(returns.index,
+                                               first_screen_date=first)
+    assert len(real) == 3
+    assert min(real) >= first

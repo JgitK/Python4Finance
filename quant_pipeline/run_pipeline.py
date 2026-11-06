@@ -47,12 +47,23 @@ def build_dbt(universe: str) -> None:
     subprocess.run(dbt_command(universe), cwd=DBT_DIR, check=True)
 
 
-def choose_selection_dates(index: pd.DatetimeIndex) -> list[pd.Timestamp]:
-    """Select three past dates. Each date must have a full holding window after it."""
+def choose_selection_dates(index: pd.DatetimeIndex,
+                           first_screen_date: pd.Timestamp | None = None
+                           ) -> list[pd.Timestamp]:
+    """Select three past dates. Each date must have a full holding window after it.
+
+    A date must also have a screen. The screen history starts after the
+    warm-up of the risk metrics and the Ichimoku lines. On an earlier date,
+    no stock passes the screen, so the backtest holds nothing and reports a
+    0% return. Such a window is not a result, so this function drops it.
+    """
     last = len(index) - 1
     offsets = [HOLDING_PERIOD + 1, HOLDING_PERIOD + 127, HOLDING_PERIOD + 253]
     positions = [last - offset for offset in offsets]
-    return [index[pos] for pos in positions if pos > 260]
+    dates = [index[pos] for pos in positions if pos > 260]
+    if first_screen_date is not None:
+        dates = [d for d in dates if d >= first_screen_date]
+    return dates
 
 
 def load_backtest_inputs(con) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -122,7 +133,9 @@ def main() -> None:
 
     # Step 3: build the portfolio from the most recent year.
     result = build_live_portfolio(con, params)
-    selection_dates = choose_selection_dates(backtest_returns.index)
+    selection_dates = choose_selection_dates(
+        backtest_returns.index,
+        first_screen_date=pd.Timestamp(screen_history["as_of_date"].min()))
     coverage = coverage_report(
         con, selection_dates + [backtest_returns.index[-1]])
     con.close()
