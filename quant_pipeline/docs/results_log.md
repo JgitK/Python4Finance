@@ -24,3 +24,4 @@ pipeline did not add them.
 | 2026-11-06 | 9c2addd | sp500 | 110 | 4.66 | 2026-02-11: +12.7% vs +11.2% | 2025-08-12: +5.3% vs +11.8% | 2025-02-10: -2.1% vs +13.6% | D7: S&P 500 on each date. |
 | 2026-11-06 | 4cfa116 | sp500 | 110 | 4.66 | 2026-02-11: +12.7% vs +11.2% | 2025-08-12: +5.3% vs +11.8% | 2025-02-10: -2.1% vs +13.6% | D11: real large moves stay. No change to the backtest. |
 | 2026-11-06 | f0509e1 | sp500 | 110 | 4.66 | 2026-02-11: +12.7% vs +11.2% | 2025-08-12: +5.3% vs +11.8% | 2025-02-10: -2.1% vs +13.6% | D12: first row from the pipeline. Same results as 4cfa116. |
+| 2026-11-06 | 5a2ddc3 | sp500 | 110 | 4.66 | 2026-02-11: +12.7% vs +11.2% | 2025-08-12: +5.3% vs +11.8% | 2025-02-10: -2.1% vs +13.6% | Baseline of the universe comparison. The universe switch did not change the sp500 results. |
