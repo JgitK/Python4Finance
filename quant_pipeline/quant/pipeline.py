@@ -72,16 +72,42 @@ def build_max_sharpe_portfolio(returns: pd.DataFrame,
     return result
 
 
+def candidates_as_of(screen_history: pd.DataFrame, date: Any) -> list[str]:
+    """Return the stocks that passed the screen on a date.
+
+    Use the latest screen on or before the date. A later screen is future
+    data, so this function does not use it. Return an empty list when no
+    screen exists on or before the date.
+    """
+    cut = pd.Timestamp(date)
+    dates = pd.to_datetime(screen_history["as_of_date"])
+    past = dates[dates <= cut]
+    if past.empty:
+        return []
+    latest = screen_history[dates == past.max()]
+    return sorted(latest["ticker"].tolist())
+
+
 def make_builder(sector_of: dict[str, str], params: PortfolioParams,
-                 benchmark: str) -> Callable[[pd.DataFrame], dict[str, float]]:
+                 benchmark: str,
+                 screen_history: pd.DataFrame | None = None
+                 ) -> Callable[[pd.DataFrame], dict[str, float]]:
     """Make a build_portfolio function for the backtest.
 
     The function that this returns uses a train frame as input.
     It returns weights by ticker.
     It drops the benchmark first, so the benchmark never enters the portfolio.
+    When you supply a screen history, the function uses only the stocks that
+    passed the screen on the last day of the train frame.
     """
     def build(train: pd.DataFrame) -> dict[str, float]:
-        tradeable = train.drop(columns=[benchmark], errors="ignore").dropna(axis=1)
+        tradeable = train.drop(columns=[benchmark], errors="ignore")
+        if screen_history is not None:
+            passed = candidates_as_of(screen_history, train.index.max())
+            tradeable = tradeable[[t for t in passed if t in tradeable.columns]]
+        tradeable = tradeable.dropna(axis=1)
+        if tradeable.shape[1] == 0:
+            return {}
         result = build_max_sharpe_portfolio(tradeable, sector_of, params)
         return result.get("weights", {})
 

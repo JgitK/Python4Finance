@@ -61,3 +61,58 @@ def test_make_builder_drops_the_benchmark():
     weights = build(returns)
     # The benchmark must never appear in the portfolio.
     assert "SPY" not in weights
+
+
+# --- point-in-time screen ---------------------------------------------------
+# The backtest must select from the stocks that passed the screen on the
+# selection date. A screen from a later date is future data.
+
+def _screen_history() -> pd.DataFrame:
+    """Build a screen history. Each row is one stock that passed on one date."""
+    return pd.DataFrame(
+        {
+            "as_of_date": pd.to_datetime(
+                ["2023-06-01", "2023-06-01", "2024-01-02", "2024-01-02"]
+            ),
+            "ticker": ["BBB", "CCC", "AAA", "BBB"],
+        }
+    )
+
+
+def test_candidates_as_of_uses_the_latest_screen_on_or_before_the_date():
+    history = _screen_history()
+    # On 2023-09-01, the latest screen is the screen of 2023-06-01.
+    assert pipeline.candidates_as_of(history, "2023-09-01") == ["BBB", "CCC"]
+    # On the screen date itself, that screen applies.
+    assert pipeline.candidates_as_of(history, "2024-01-02") == ["AAA", "BBB"]
+
+
+def test_candidates_as_of_is_empty_before_the_first_screen():
+    history = _screen_history()
+    assert pipeline.candidates_as_of(history, "2023-01-01") == []
+
+
+def test_make_builder_selects_only_stocks_that_passed_the_screen_then():
+    returns = _three_stocks()  # 2023-01-02 to late 2026.
+    train = returns[returns.index <= "2023-09-01"]
+    sector_of = {"AAA": "Tech", "BBB": "Health", "CCC": "Energy"}
+    build = pipeline.make_builder(
+        sector_of, pipeline.PortfolioParams(n_portfolios=500, seed=1),
+        benchmark="SPY", screen_history=_screen_history(),
+    )
+    weights = build(train)
+    # AAA has the best Sharpe ratio, but it passed the screen only in 2024.
+    # On 2023-09-01, the builder must not know that AAA passes later.
+    assert "AAA" not in weights
+    assert set(weights) <= {"BBB", "CCC"}
+
+
+def test_make_builder_returns_no_weights_when_no_stock_passed():
+    returns = _three_stocks()
+    train = returns[returns.index <= "2023-03-01"]
+    build = pipeline.make_builder(
+        {"AAA": "Tech", "BBB": "Health", "CCC": "Energy"},
+        pipeline.PortfolioParams(n_portfolios=500, seed=1),
+        benchmark="SPY", screen_history=_screen_history(),
+    )
+    assert build(train) == {}
