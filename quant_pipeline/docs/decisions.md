@@ -22,6 +22,54 @@ Use this template for a new entry:
 
 ---
 
+## D18. Say when the money cannot hold the weights
+
+- **Date:** 2026-11-06
+- **Role:** Protective measure, outside the core loop. It changes no
+  number of a plan. It reports a limit of the plan that the numbers alone
+  do not show.
+- **Question:** D17 spends the cash of the share rounding, but it cannot
+  make a part of a share. One share of a stock is a step, and the step is
+  the price over the investment amount. When the step is larger than the
+  target weight, no plan of whole shares can hold that weight: the plan
+  holds 0 shares, or more than the target. For $2,500 the plan drops 3 of
+  the 12 stocks and gives MPC 17.8% against a target of 11.6%. The output
+  showed none of this. A reader saw 9 positions and a cash figure of
+  $13.14, which looks correct. How does the pipeline report the limit?
+- **Options:**
+  1. Report nothing. The share counts are in `output/allocation.csv`, and
+     a reader can compare them with the target weights.
+  2. Print a warning for each weight that the plan cannot hold, and give
+     the smallest amount of money that has no such problem.
+  3. Change the selection: pick fewer stocks when the amount is small, so
+     the optimizer proposes only what the money can buy.
+- **Decision:** Option 2. Option 3 changes the core loop and the reported
+  numbers, so it needs its own decision and its own measurement. It stays
+  open.
+- **The rule, and why it needs no limit of its own:** A warning comes from
+  an exact condition, not from a threshold that a person selected. A stock
+  gets a warning when the plan holds 0 shares of it, or when one share is
+  larger than its target weight. `minimum_investment` returns the largest
+  price divided by its weight, which is the smallest amount for which no
+  step is larger than its target.
+- **Evidence:** The live portfolio of commit `b495496`, with three
+  amounts:
+
+  | Amount | Cash | Largest weight difference | Warnings |
+  |---|---|---|---|
+  | $2,500 | $13.14 | 6.78 points | 3 stocks dropped, 5 above target |
+  | $10,000 | $63.06 | 1.70 points | none |
+  | $50,000 | $168.35 | 0.31 points | none |
+
+  The pipeline reports $8,552.56 as the smallest amount for this
+  portfolio. The stock that sets it is NUE: one share costs $273.87, and
+  its target weight is 3.2%.
+- **A note on the cash figure:** The cash of the $2,500 plan is $13.14,
+  which is lower than the cash of the $10,000 plan. A low cash figure is
+  therefore not proof of a good plan. The $2,500 plan spends almost every
+  dollar, and it still holds the wrong portfolio.
+- **Commits:** See the commit that holds this entry.
+
 ## D17. Spend the cash that the share rounding leaves
 
 - **Date:** 2026-11-06

@@ -198,6 +198,12 @@ def main() -> None:
     print(f"Step 4: spent {spent:,.2f} of {args.investment:,.2f}, "
           f"so the cash is {args.investment - spent:,.2f}. "
           f"The largest weight difference is {drift:.2%}.")
+    # A plan of whole shares cannot always hold the weights. Say so.
+    warnings = allocate.plan_warnings(
+        dict(zip(plan["ticker"], plan["shares"])), weights, selected_prices,
+        args.investment)
+    for warning in warnings:
+        print(f"        WARNING: {warning}")
 
     # Step 5: backtest the method. On each selection date, the builder uses
     # only the stocks that passed the screen on that date.

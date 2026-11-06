@@ -137,3 +137,80 @@ def test_the_top_up_is_the_same_on_every_run():
     shares = {r.ticker: r.shares for r in first.itertuples()}
     assert shares == {r.ticker: r.shares for r in second.itertuples()}
     assert shares == {"A": 5, "B": 4}
+
+
+# ---------------------------------------------------------------------------
+# The warnings of a plan.
+#
+# Whole shares cannot always hold the weights of the optimizer. One share
+# of a stock is a step, and the step is the price over the investment
+# amount. When the step is larger than the target weight of the stock, the
+# plan must hold 0 shares or more than the target. No top-up pass can
+# repair that. The plan must say so.
+
+
+def test_a_plan_that_holds_every_weight_gives_no_warning():
+    weights = {"A": 0.5, "B": 0.5}
+    prices = {"A": 10.0, "B": 10.0}
+    shares = {"A": 5, "B": 4}
+    assert allocate.plan_warnings(shares, weights, prices, 95.0) == []
+
+
+def test_a_warning_names_each_stock_that_the_plan_drops():
+    weights = {"A": 0.9, "B": 0.1}
+    prices = {"A": 10.0, "B": 200.0}
+    shares = {"A": 9, "B": 0}
+    warnings = allocate.plan_warnings(shares, weights, prices, 100.0)
+    dropped = [w for w in warnings if w.startswith("The plan drops")]
+    assert len(dropped) == 1
+    assert "B" in dropped[0]
+    # The warning must give the target weight and the cost of one share.
+    assert "10.0%" in dropped[0] and "200.00" in dropped[0]
+
+
+def test_a_warning_names_each_stock_above_its_target():
+    # One share of A is 30% of the money, and the target is 10%. The plan
+    # holds one share, so A is 20 points above its target. The plan cannot
+    # hold less than one share, so this is not a mistake of the top-up.
+    weights = {"A": 0.1, "B": 0.9}
+    prices = {"A": 300.0, "B": 100.0}
+    shares = {"A": 1, "B": 7}
+    warnings = allocate.plan_warnings(shares, weights, prices, 1000.0)
+    above = [w for w in warnings if w.startswith("A holds")]
+    assert len(above) == 1
+    assert "30.0%" in above[0] and "10.0%" in above[0]
+
+
+def test_the_warnings_give_the_smallest_investment_amount():
+    # One share of a stock must not be larger than the target weight of
+    # that stock. The smallest amount that holds this rule for every stock
+    # is the largest price divided by its weight: 200 / 0.1 = 2000.
+    weights = {"A": 0.9, "B": 0.1}
+    prices = {"A": 10.0, "B": 200.0}
+    assert allocate.minimum_investment(weights, prices) == pytest.approx(2000.0)
+    warnings = allocate.plan_warnings({"A": 9, "B": 0}, weights, prices, 100.0)
+    assert any("2,000.00" in w for w in warnings)
+
+
+def test_the_warnings_are_in_the_same_order_on_every_run():
+    weights = {"C": 0.05, "A": 0.9, "B": 0.05}
+    prices = {"A": 10.0, "B": 200.0, "C": 300.0}
+    shares = {"A": 9, "B": 0, "C": 0}
+    first = allocate.plan_warnings(shares, weights, prices, 100.0)
+    second = allocate.plan_warnings(
+        {t: shares[t] for t in reversed(list(shares))},
+        {t: weights[t] for t in reversed(list(weights))}, prices, 100.0)
+    assert first == second
+    # The dropped stocks come in alphabetic order.
+    assert "B" in first[0] and "C" in first[1]
+
+
+def test_a_small_amount_gives_warnings_and_a_large_amount_does_not():
+    # The same stocks and the same weights, with two amounts of money.
+    weights = {"BIG": 0.12, "MID": 0.28, "SMALL": 0.60}
+    prices = {"BIG": 445.0, "MID": 150.0, "SMALL": 19.0}
+    for amount, expected in ((2500.0, True), (50000.0, False)):
+        plan = allocate.allocation_summary(weights, prices, amount)
+        shares = dict(zip(plan["ticker"], plan["shares"]))
+        warnings = allocate.plan_warnings(shares, weights, prices, amount)
+        assert bool(warnings) is expected

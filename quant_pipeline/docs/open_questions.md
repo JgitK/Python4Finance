@@ -46,6 +46,13 @@ one, move it to the "Solved" section with the commit hash.
 
 ### Method
 
+- **A small investment amount cannot hold the weights.** D18 reports the
+  problem, and it does not solve it. For $2,500 the plan of 12 stocks
+  drops 3 of them, because one share of each costs more than its target
+  weight. Two options are open: select fewer stocks when the amount is
+  small, which changes the core loop and needs a measurement; or allow a
+  part of a share, which depends on the broker of the user.
+
 - **The Monte Carlo search is not exact.** It finds a Sharpe ratio a little
   below the true maximum (2.90 against 3.00 on the old universe).
   `scipy.optimize` can find the true maximum.

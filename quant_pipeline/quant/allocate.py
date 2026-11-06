@@ -90,6 +90,63 @@ def top_up_shares(plan: dict[str, dict[str, float]],
                                      * prices[best_ticker])
 
 
+def minimum_investment(weights: dict[str, float],
+                       prices: dict[str, float]) -> float:
+    """Return the smallest amount of money that can hold every weight.
+
+    One share of a stock is a step. The step is the price of the share
+    over the investment amount. When the step is larger than the target
+    weight of the stock, no plan of whole shares can hold that weight: the
+    plan must hold 0 shares, or more than the target.
+
+    The smallest amount that keeps each step inside its target weight is
+    therefore the largest price divided by its weight.
+    """
+    return max(prices[ticker] / weight
+               for ticker, weight in weights.items() if weight > 0)
+
+
+def plan_warnings(shares: dict[str, int], weights: dict[str, float],
+                  prices: dict[str, float],
+                  investment_amount: float) -> list[str]:
+    """List the weights that the plan cannot hold.
+
+    A plan of whole shares cannot always hold the weights of the
+    optimizer. The investment amount can be too small for the price of a
+    share. The plan then drops a stock, or it holds more of a stock than
+    the target. The top-up pass cannot repair this, because a part of a
+    share does not exist.
+
+    Return one sentence for each stock with such a problem, then one
+    sentence with the smallest amount that has no such problem. Return an
+    empty list when the plan holds every weight. The order is alphabetic,
+    so the list is the same on every run.
+    """
+    dropped, above = [], []
+    for ticker in sorted(weights):
+        weight = weights[ticker]
+        if weight <= 0:
+            continue
+        step = prices[ticker] / investment_amount
+        if shares.get(ticker, 0) == 0:
+            dropped.append(
+                f"The plan drops {ticker}. Its target weight is "
+                f"{weight:.1%}, and one share costs "
+                f"{prices[ticker]:,.2f}, which is {step:.1%} of the money.")
+        elif step > weight:
+            held = shares[ticker] * step
+            above.append(
+                f"{ticker} holds {held:.1%} of the money against a target "
+                f"of {weight:.1%}. One share is {step:.1%}, so the plan "
+                f"cannot hold less.")
+    if not dropped and not above:
+        return []
+    smallest = minimum_investment(weights, prices)
+    return dropped + above + [
+        f"Invest at least {smallest:,.2f} to hold every stock at its "
+        f"target weight. A smaller amount needs fewer stocks."]
+
+
 def allocation_summary(weights: dict[str, float], prices: dict[str, float],
                        investment_amount: float,
                        top_up: bool = True) -> pd.DataFrame:

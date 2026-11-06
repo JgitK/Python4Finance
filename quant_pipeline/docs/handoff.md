@@ -124,6 +124,9 @@ price history is not one security. See D15.
 
 `allocate.py` runs a second pass that spends the cash of the share
 rounding. For $10,000 the cash is $63.06, and it was $1,680.44. See D17.
+Step 4 of a run also prints a warning for each target weight that whole
+shares cannot hold. A run with $10,000 prints no warning. A run with
+$2,500 prints 9. See D18.
 
 `run_pipeline.py --many-windows` runs the walk-forward test on every valid
 date, not only three. The row of the results log then holds the share of
