@@ -68,7 +68,7 @@ Use this template for a new entry:
   the target. MPC ends 1.70 points above its target, because the third
   share at $444.73 moves MPC from 2.75 points below to 1.70 points above.
   That plan is nearer to the target than the cash is.
-- **Commits:** See the commit that holds this entry.
+- **Commits:** `a20f26d`
 
 ## D16. Measure the method on many windows, not three
 
