@@ -29,7 +29,8 @@ def con():
 def test_backtest_inputs_hold_every_stock_and_the_benchmark(con):
     returns, _ = run_pipeline.load_backtest_inputs(con)
     every_stock = set(warehouse.read_sector_map(con))
-    assert set(returns.columns) == every_stock | {universe.BENCHMARK}
+    # A stock with prices but no sector can be in the frame too.
+    assert every_stock | {universe.BENCHMARK} <= set(returns.columns)
 
 
 def test_backtest_inputs_include_stocks_that_fail_the_screen_today(con):
@@ -55,3 +56,13 @@ def test_backtest_builder_on_the_last_date_equals_the_live_portfolio(con):
     build = pipeline.make_builder(warehouse.read_sector_map(con), params,
                                   universe.BENCHMARK, screen_history=history)
     assert build(returns) == pytest.approx(live["weights"])
+
+
+def test_coverage_report_has_one_row_for_each_date(con):
+    returns, _ = run_pipeline.load_backtest_inputs(con)
+    dates = run_pipeline.choose_selection_dates(returns.index) + [returns.index[-1]]
+    report = run_pipeline.coverage_report(con, dates)
+    assert len(report) == len(dates)
+    assert (report["members"] >= report["usable"]).all()
+    # The S&P 500 has about 500 members on each date.
+    assert report["members"].between(490, 510).all()

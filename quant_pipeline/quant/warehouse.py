@@ -79,3 +79,13 @@ def read_screen_history(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     ).fetchdf()
     frame["as_of_date"] = pd.to_datetime(frame["as_of_date"])
     return frame
+
+
+def read_universe_coverage(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    """Return each index member on each trading day, with data flags."""
+    frame = con.execute(
+        "select as_of_date, ticker, has_prices, has_sector "
+        "from main.mart_universe_coverage"
+    ).fetchdf()
+    frame["as_of_date"] = pd.to_datetime(frame["as_of_date"])
+    return frame

@@ -14,6 +14,8 @@ clean-targets: ["target", "dbt_packages"]
 
 # Variables hold the strategy parameters. Change a value here to tune the pipeline.
 vars:
+  # The Parquet file of raw prices. The path is relative to the dbt folder.
+  prices_file: "../data/raw_prices.parquet"
   # Risk-free rate for the Sharpe and Sortino ratios. 4.5% per year.
   risk_free_rate: 0.045
   # Trading days in one year. The code annualizes with this number.
@@ -51,15 +53,11 @@ models:
 
 seeds:
   quant_pipeline:
-    raw_prices:
+    sp500_membership:
       +column_types:
         ticker: varchar
-        date: date
-        open: double
-        high: double
-        low: double
-        close: double
-        volume: bigint
+        start_date: date
+        end_date: date
     stock_sectors:
       +column_types:
         ticker: varchar

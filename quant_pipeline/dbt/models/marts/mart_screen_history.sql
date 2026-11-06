@@ -1,4 +1,5 @@
 -- Apply the screen on each date with only the data up to that date.
+-- On each date, only the stocks in the S&P 500 on that date can pass.
 -- The backtest reads this mart. On a past selection date, the backtest
 -- selects only from the stocks that passed the screen on that date.
 -- The rules are in the passes_screen macro. mart_screen_candidates uses the
@@ -17,6 +18,10 @@ with joined as (
     from {{ ref('int_risk_metrics_daily') }} as m
     join {{ ref('dim_ticker') }} as d using (ticker)
     left join {{ ref('int_ichimoku_score_daily') }} as s using (ticker, as_of_date)
+    -- Keep a stock only on the dates when it is in the S&P 500.
+    join {{ ref('stg_membership') }} as mb
+        on mb.ticker = m.ticker
+        and {{ is_member_on('mb', 'm.as_of_date') }}
 ),
 
 screened as (

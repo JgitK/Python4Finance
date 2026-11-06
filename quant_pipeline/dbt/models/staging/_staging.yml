@@ -4,7 +4,7 @@ models:
   - name: stg_prices
     description: >
       Clean daily prices. One row per ticker per day.
-      The source is the raw_prices seed.
+      The source is the raw prices Parquet file.
     columns:
       - name: ticker
         description: The stock symbol.
@@ -17,6 +17,8 @@ models:
                 field: ticker
               config:
                 where: "ticker <> 'SPY'"
+                # A few stocks have no sector. mart_universe_coverage reports them.
+                severity: warn
       - name: price_date
         description: The trading day.
         data_tests:
@@ -40,3 +42,14 @@ models:
         description: The GICS sector name.
         data_tests:
           - not_null
+
+  - name: stg_membership
+    description: >
+      The S&P 500 membership. Each row is one stint of a stock in the index.
+      The end_date is the first day out of the index. A null end_date means
+      that the stock is still in the index.
+    columns:
+      - name: ticker
+        data_tests: [not_null]
+      - name: start_date
+        data_tests: [not_null]

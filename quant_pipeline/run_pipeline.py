@@ -61,6 +61,17 @@ def load_backtest_inputs(con) -> tuple[pd.DataFrame, pd.DataFrame]:
     return returns, history
 
 
+def coverage_report(con, dates: list[pd.Timestamp]) -> pd.DataFrame:
+    """Count the index members that the pipeline drops on each date.
+
+    A member is dropped when the price source has no data for it, or when
+    it has no sector. Such a stock cannot pass the screen. The backtest
+    cannot hold it, so this count shows the survivorship bias that remains.
+    """
+    coverage = warehouse.read_universe_coverage(con)
+    return pipeline.coverage_summary(coverage, dates)
+
+
 def build_live_portfolio(con, params: pipeline.PortfolioParams
                          ) -> dict:
     """Build the portfolio for today from the stocks that pass the screen."""
@@ -98,6 +109,9 @@ def main() -> None:
 
     # Step 3: build the portfolio from the most recent year.
     result = build_live_portfolio(con, params)
+    selection_dates = choose_selection_dates(backtest_returns.index)
+    coverage = coverage_report(
+        con, selection_dates + [backtest_returns.index[-1]])
     con.close()
     weights = result["weights"]
     selected = result["selected"]
@@ -114,7 +128,6 @@ def main() -> None:
     # only the stocks that passed the screen on that date.
     build = pipeline.make_builder(sector_of, params, universe.BENCHMARK,
                                   screen_history=screen_history)
-    selection_dates = choose_selection_dates(backtest_returns.index)
     windows = backtest.run_walk_forward(
         backtest_returns, selection_dates, HOLDING_PERIOD, build,
         universe.BENCHMARK, params.risk_free, params.trading_days,
@@ -147,12 +160,16 @@ def main() -> None:
     frontier.to_csv(OUTPUT_DIR / "efficient_frontier.csv", index=False)
     backtest_df.to_csv(OUTPUT_DIR / "backtest_results.csv", index=False)
     candidates.to_csv(OUTPUT_DIR / "screen_candidates.csv", index=False)
+    coverage.to_csv(OUTPUT_DIR / "universe_coverage.csv", index=False)
 
     print(f"Step 6: wrote the results to {OUTPUT_DIR}.")
     print("\nPortfolio weights:")
     print(weights_df.to_string(index=False))
     print("\nWalk-forward backtest:")
     print(backtest_df.to_string(index=False))
+    print("\nS&P 500 members dropped for missing data (survivorship bias):")
+    print(coverage[["date", "members", "usable", "dropped",
+                    "dropped_tickers"]].to_string(index=False))
 
 
 if __name__ == "__main__":

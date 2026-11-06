@@ -1,4 +1,5 @@
 -- Screen the universe. Keep the stocks that are liquid, calm, and bullish.
+-- Only the stocks in the S&P 500 on the last date can pass.
 -- A stock must pass four gates:
 --   1. It has enough history.
 --   2. It trades enough volume.
@@ -46,6 +47,10 @@ joined as (
     join {{ ref('dim_ticker') }} as d using (ticker)
     left join score as s using (ticker)
     left join latest_price as p using (ticker)
+    -- Keep a stock only when it is in the S&P 500 on the last date.
+    join {{ ref('stg_membership') }} as mb
+        on mb.ticker = m.ticker
+        and {{ is_member_on('mb', '(select max(price_date) from ' ~ ref('stg_prices') ~ ')') }}
 ),
 
 screened as (

@@ -173,3 +173,36 @@ def test_lookback_equals_the_dbt_analysis_window():
     project = pathlib.Path(__file__).resolve().parents[1] / "dbt" / "dbt_project.yml"
     dbt_vars = yaml.safe_load(project.read_text())["vars"]
     assert pipeline.PortfolioParams().lookback_days == dbt_vars["analysis_window"]
+
+
+# --- universe coverage --------------------------------------------------------
+# The pipeline reports how many index members it drops for missing data.
+
+def _coverage() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "as_of_date": pd.to_datetime(
+                ["2025-01-02"] * 3 + ["2025-06-02"] * 3),
+            "ticker": ["AAA", "BBB", "CCC", "AAA", "BBB", "DDD"],
+            "has_prices": [True, False, True, True, True, True],
+            "has_sector": [True, True, False, True, True, True],
+        }
+    )
+
+
+def test_coverage_summary_counts_the_dropped_members():
+    summary = pipeline.coverage_summary(_coverage(), ["2025-01-02", "2025-06-02"])
+    first = summary.iloc[0]
+    assert first["members"] == 3
+    assert first["usable"] == 1
+    assert first["dropped"] == 2
+    # BBB has no prices. CCC has no sector.
+    assert first["dropped_tickers"] == "BBB CCC"
+    assert summary.iloc[1]["dropped"] == 0
+
+
+def test_coverage_summary_uses_the_latest_date_on_or_before_each_date():
+    # 2025-03-03 is not a trading day in this data. Use 2025-01-02.
+    summary = pipeline.coverage_summary(_coverage(), ["2025-03-03"])
+    assert summary.iloc[0]["coverage_date"] == pd.Timestamp("2025-01-02")
+    assert summary.iloc[0]["dropped"] == 2

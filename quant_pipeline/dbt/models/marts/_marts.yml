@@ -91,24 +91,38 @@ unit_tests:
           - {ticker: DULL, total_trading_days: 500, avg_volume: 1000000,
              daily_volatility: 0.02, annual_return: 0.30, annual_volatility: 0.25,
              sharpe_ratio: 4.0, sortino_ratio: 5.0, cvar_5: -0.04, cum_return_window: 0.28}
+          # GONE: passes every gate, but it left the index before the last date.
+          - {ticker: GONE, total_trading_days: 500, avg_volume: 1000000,
+             daily_volatility: 0.02, annual_return: 0.30, annual_volatility: 0.25,
+             sharpe_ratio: 5.0, sortino_ratio: 6.0, cvar_5: -0.04, cum_return_window: 0.28}
       - input: ref('dim_ticker')
         rows:
           - {ticker: PASS, sector: Tech}
           - {ticker: THIN, sector: Tech}
           - {ticker: WILD, sector: Tech}
           - {ticker: DULL, sector: Tech}
+          - {ticker: GONE, sector: Tech}
       - input: ref('int_ichimoku_score')
         rows:
           - {ticker: PASS, ichimoku_score: 5}
           - {ticker: THIN, ichimoku_score: 5}
           - {ticker: WILD, ichimoku_score: 5}
           - {ticker: DULL, ichimoku_score: 1}
+          - {ticker: GONE, ichimoku_score: 5}
       - input: ref('stg_prices')
         rows:
           - {ticker: PASS, price_date: "2025-01-02", close: 120}
           - {ticker: THIN, price_date: "2025-01-02", close: 120}
           - {ticker: WILD, price_date: "2025-01-02", close: 120}
           - {ticker: DULL, price_date: "2025-01-02", close: 120}
+          - {ticker: GONE, price_date: "2025-01-02", close: 120}
+      - input: ref('stg_membership')
+        rows:
+          - {ticker: PASS, start_date: "2000-01-03", end_date: null}
+          - {ticker: THIN, start_date: "2000-01-03", end_date: null}
+          - {ticker: WILD, start_date: "2000-01-03", end_date: null}
+          - {ticker: DULL, start_date: "2000-01-03", end_date: null}
+          - {ticker: GONE, start_date: "2000-01-03", end_date: "2024-12-23"}
     expect:
       rows:
         - {ticker: PASS, sector: Tech, total_trading_days: 500, avg_volume: 1000000,
@@ -156,8 +170,75 @@ unit_tests:
           - {ticker: AAA, sector: Tech}
           - {ticker: BBB, sector: Tech}
           - {ticker: CCC, sector: Energy}
+      # In this test, every stock is in the index on every date.
+      - input: ref('stg_membership')
+        rows:
+          - {ticker: AAA, start_date: "2000-01-03", end_date: null}
+          - {ticker: BBB, start_date: "2000-01-03", end_date: null}
+          - {ticker: CCC, start_date: "2000-01-03", end_date: null}
     expect:
       rows:
         - {as_of_date: "2024-01-02", ticker: BBB, sector_rank: 1}
         - {as_of_date: "2024-01-02", ticker: CCC, sector_rank: 1}
         - {as_of_date: "2025-01-02", ticker: AAA, sector_rank: 1}
+
+  - name: test_screen_history_uses_index_membership_on_each_date
+    description: >
+      A stock passes the screen on a date only when it is in the index on
+      that date. The end date is the first day out of the index.
+    model: mart_screen_history
+    given:
+      - input: ref('int_risk_metrics_daily')
+        rows:
+          - {ticker: MEM, as_of_date: "2024-01-02", total_trading_days: 500,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0}
+          - {ticker: MEM, as_of_date: "2024-06-03", total_trading_days: 600,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0}
+          - {ticker: MEM, as_of_date: "2025-01-02", total_trading_days: 750,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0}
+      - input: ref('int_ichimoku_score_daily')
+        rows:
+          - {ticker: MEM, as_of_date: "2024-01-02", ichimoku_score: 5}
+          - {ticker: MEM, as_of_date: "2024-06-03", ichimoku_score: 5}
+          - {ticker: MEM, as_of_date: "2025-01-02", ichimoku_score: 5}
+      - input: ref('dim_ticker')
+        rows:
+          - {ticker: MEM, sector: Tech}
+      # MEM joins on 2024-06-03 and leaves on 2025-01-02.
+      - input: ref('stg_membership')
+        rows:
+          - {ticker: MEM, start_date: "2024-06-03", end_date: "2025-01-02"}
+    expect:
+      rows:
+        - {as_of_date: "2024-06-03", ticker: MEM}
+
+  - name: test_universe_coverage_flags_members_without_prices
+    description: >
+      The coverage mart lists each index member on each trading day. It flags
+      a member that has no price on that day. A stock out of the index is
+      not listed.
+    model: mart_universe_coverage
+    given:
+      - input: ref('stg_prices')
+        rows:
+          - {ticker: SPY, price_date: "2024-01-02"}
+          - {ticker: SPY, price_date: "2024-01-03"}
+          - {ticker: HAS, price_date: "2024-01-02"}
+          - {ticker: HAS, price_date: "2024-01-03"}
+          - {ticker: OUT, price_date: "2024-01-02"}
+          - {ticker: OUT, price_date: "2024-01-03"}
+      - input: ref('stg_membership')
+        rows:
+          - {ticker: HAS, start_date: "2000-01-03", end_date: null}
+          # GONE is in the index, but the price source has no data for it.
+          - {ticker: GONE, start_date: "2000-01-03", end_date: "2024-01-03"}
+          - {ticker: OUT, start_date: "2000-01-03", end_date: "2010-01-04"}
+      - input: ref('stg_sectors')
+        rows:
+          - {ticker: HAS, sector: Tech}
+          - {ticker: GONE, sector: Tech}
+    expect:
+      rows:
+        - {as_of_date: "2024-01-02", ticker: HAS, has_prices: true, has_sector: true}
+        - {as_of_date: "2024-01-03", ticker: HAS, has_prices: true, has_sector: true}
+        - {as_of_date: "2024-01-02", ticker: GONE, has_prices: false, has_sector: true}

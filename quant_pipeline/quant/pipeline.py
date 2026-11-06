@@ -125,3 +125,28 @@ def make_builder(sector_of: dict[str, str], params: PortfolioParams,
         return result.get("weights", {})
 
     return build
+
+
+def coverage_summary(coverage: pd.DataFrame, dates: list[Any]) -> pd.DataFrame:
+    """Count the index members that the pipeline drops on each date.
+
+    A member is usable when it has a price and a sector. The screen cannot
+    select a member that is not usable. For each date, use the latest
+    coverage date on or before it. Return one row for each date.
+    """
+    covered = pd.to_datetime(coverage["as_of_date"])
+    rows = []
+    for date in dates:
+        cut = pd.Timestamp(date)
+        day = covered[covered <= cut].max()
+        members = coverage[covered == day]
+        usable = members["has_prices"] & members["has_sector"]
+        rows.append({
+            "date": cut,
+            "coverage_date": day,
+            "members": int(len(members)),
+            "usable": int(usable.sum()),
+            "dropped": int((~usable).sum()),
+            "dropped_tickers": " ".join(sorted(members.loc[~usable, "ticker"])),
+        })
+    return pd.DataFrame(rows)

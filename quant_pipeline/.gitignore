@@ -14,3 +14,8 @@ dbt/.user.yml
 
 # Pipeline outputs.
 output/
+
+# The download cache. quant.ingest can make it again.
+data/cache/
+# A temporary price file for development.
+data/*.stand_in.parquet

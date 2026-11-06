@@ -78,6 +78,8 @@ def load_tables(con) -> dict[str, pd.DataFrame]:
         "ichimoku": read("select ticker, price_date, conversion_line, base_line, "
                          "span_a, span_b, lagging_line from main.int_ichimoku"),
         "risk": read("select * from main.int_risk_metrics"),
+        "membership": read("select ticker, start_date, end_date "
+                           "from main.stg_membership"),
     }
 
 
@@ -226,8 +228,17 @@ def verify_corporate_actions_neutralized(tables: dict[str, pd.DataFrame]) -> Non
 # Point-in-time screen check.
 # ---------------------------------------------------------------------------
 
+def members_on(membership: pd.DataFrame, date: pd.Timestamp) -> set[str]:
+    """Return the S&P 500 members on a date. The end date is the first day out."""
+    start = pd.to_datetime(membership["start_date"])
+    end = pd.to_datetime(membership["end_date"])
+    inside = (start <= date) & (end.isna() | (date < end))
+    return set(membership.loc[inside, "ticker"])
+
+
 def pandas_screen_as_of(prices: pd.DataFrame, sector_of: dict[str, str],
-                        date: pd.Timestamp) -> set[str]:
+                        date: pd.Timestamp,
+                        members: set[str] | None = None) -> set[str]:
     """Rebuild the screen on a date with pandas.
 
     First remove every price after the date. Then calculate each gate from
@@ -237,7 +248,7 @@ def pandas_screen_as_of(prices: pd.DataFrame, sector_of: dict[str, str],
     past = prices[prices["price_date"] <= date]
     rows = []
     for tk, p in past.groupby("ticker"):
-        if tk not in sector_of:
+        if tk not in sector_of or (members is not None and tk not in members):
             continue
         mine = pandas_indicators(p)
         # dbt has no metrics row on a date that has no return.
@@ -275,7 +286,8 @@ def verify_screen_history(con, tables: dict[str, pd.DataFrame]) -> None:
     all_match = True
     for date in dates:
         dbt_screen = set(pipeline.candidates_as_of(history, date))
-        mine = pandas_screen_as_of(tables["prices"], sector_of, date)
+        mine = pandas_screen_as_of(tables["prices"], sector_of, date,
+                                   members_on(tables["membership"], date))
         all_match = all_match and dbt_screen == mine
         print(f"      {date.date()}: {len(dbt_screen)} stocks pass, "
               f"{len(dbt_screen ^ mine)} differ from pandas, "

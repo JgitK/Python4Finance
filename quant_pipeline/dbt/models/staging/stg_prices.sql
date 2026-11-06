@@ -1,8 +1,12 @@
--- Clean the raw price seed.
+-- Clean the raw prices from the Parquet source.
+-- This model is a table, not a view. A view would keep the relative path of
+-- the Parquet file, and a reader in another folder could not find the file.
+
+{{ config(materialized='table') }}
 -- Keep one row per ticker per day. Drop any row without a positive close.
 
 with source as (
-    select * from {{ ref('raw_prices') }}
+    select * from {{ source('raw', 'prices') }}
 ),
 
 deduped as (

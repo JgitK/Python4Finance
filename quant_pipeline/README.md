@@ -19,14 +19,16 @@ the work that it does best.
 
 The pipeline runs these steps in order:
 
-1. **Ingest.** Download daily prices for 43 large stocks and the SPY benchmark
-   from the nasdaq API. The stocks cover all 11 GICS sectors.
+1. **Ingest.** Download daily prices from the nasdaq API for the SPY
+   benchmark and for each stock that was in the S&P 500 at some time in
+   the date range.
 2. **Clean and index.** dbt builds the daily return, the cumulative return,
    the Bollinger Bands, and the five Ichimoku Cloud lines for every stock.
 3. **Measure risk.** dbt measures each stock over the last 252 trading days:
    the Sharpe ratio, the Sortino ratio, the CVaR, and the volatility.
 4. **Screen.** dbt keeps the stocks that pass four gates: enough history,
    enough volume, calm enough daily moves, and a bullish Ichimoku score.
+   On each date, only the stocks in the S&P 500 on that date can pass.
 5. **Select.** Python picks a diversified set. It avoids stocks that move
    together. It selects a maximum of three stocks from one sector.
 6. **Optimize.** Python runs a Monte Carlo search. It tries 10,000 random
@@ -44,21 +46,23 @@ The pipeline runs these steps in order:
 quant_pipeline/
 ├── quant/              The Python package.
 │   ├── nasdaq.py       Download and clean the price data.
-│   ├── ingest.py       Write the dbt seed files.
-│   ├── universe.py     The list of stocks and sectors.
+│   ├── reference.py    Build the S&P 500 membership and sector seeds.
+│   ├── ingest.py       Download the prices to a Parquet file.
+│   ├── universe.py     The benchmark ticker.
 │   ├── warehouse.py    Read the dbt marts from DuckDB.
 │   ├── select_portfolio.py  Low-correlation stock selection.
 │   ├── optimize.py     Markowitz Max Sharpe optimization.
 │   ├── allocate.py     Weights to whole shares.
 │   ├── backtest.py     Walk-forward backtest.
 │   └── pipeline.py     Join the select and optimize steps.
+├── data/               The raw prices as a Parquet file. dbt reads it.
 ├── dbt/                The dbt-duckdb project.
-│   ├── seeds/          The raw price and sector CSV files.
+│   ├── seeds/          The S&P 500 membership and the sectors.
 │   ├── models/
 │   │   ├── staging/        Clean the prices and the sectors.
 │   │   ├── intermediate/   Returns, Bollinger, Ichimoku, risk metrics.
-│   │   └── marts/          Screen candidates, screen history, returns.
-│   ├── macros/         The screen rules. Two marts use the same rules.
+│   │   └── marts/          Screens, universe coverage, returns.
+│   ├── macros/         The screen and membership rules.
 │   └── tests/          Singular tests for uniqueness and consistency.
 ├── tests/              The pytest suite for the Python layer.
 ├── run_pipeline.py     Run the whole pipeline end to end.
@@ -76,7 +80,19 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Refresh the data (optional, needs network access to the nasdaq API):
+Refresh the data (optional). First, refresh the reference seeds. Clone the
+two source repositories, then build the seeds from them:
+
+```bash
+git clone https://github.com/fja05680/sp500.git ../sp500
+git clone https://github.com/datasets/s-and-p-500-companies.git ../spc
+python -m quant.reference --sp500 ../sp500 --companies ../spc
+```
+
+Then download the prices. This step needs network access to the nasdaq
+API. It downloads approximately 580 symbols. With the default settings, this
+step takes approximately 30 to 60 minutes. If the download stops, run it again.
+The cache in `data/cache/` keeps the symbols that are complete.
 
 ```bash
 python -m quant.ingest
@@ -98,7 +114,8 @@ python run_pipeline.py --skip-dbt # reuse the warehouse from the last run
 ```
 
 The pipeline writes the results to the `output/` folder: the weights, the
-share allocation, the efficient frontier, and the backtest results.
+share allocation, the efficient frontier, the backtest results, and the
+universe coverage.
 
 ## Tests
 
@@ -112,7 +129,8 @@ python -m pytest
 cd dbt && dbt build --profiles-dir .
 ```
 
-The dbt layer has 6 unit tests for the return, score, and screen logic.
+The dbt layer has 8 unit tests for the return, score, screen, membership,
+and coverage logic.
 Three of these tests put a large future value in the input. They make sure
 that an earlier row does not change.
 It also has schema tests for not-null, unique, and relationship rules.
@@ -147,9 +165,19 @@ Run it after a dbt build. It needs the warehouse file.
 - The backtest has no look-ahead in the screen. On each selection date, it
   uses `mart_screen_history` for that date. The verify script calculates
   that screen again from prices that stop on that date. The two must agree.
-- The backtest still has a survivorship bias. The universe is a list of 43
-  stocks that are large today. A stock that failed before today is not in
-  the list. Because of this, the backtest result can be too high.
+- The universe is the S&P 500 on each date. The membership data comes from
+  fja05680/sp500 (MIT license). The sectors come from
+  datasets/s-and-p-500-companies (ODC-PDDL). This rule removes most of the
+  survivorship bias of a list of stocks that are large today.
+- Some survivorship bias remains. The nasdaq API has no prices for a stock
+  that does not trade now, for example after a takeover or a bankruptcy.
+  The screen cannot select such a stock. The pipeline counts these stocks
+  on each selection date. See `output/universe_coverage.csv`.
+- A renamed stock is a removal and an addition in the membership data. On
+  the dates before the rename, the old ticker has no prices, so the
+  coverage report counts it as dropped.
+- The sectors are the newest GICS sectors, not the sectors on each date.
+  For example, GICS moved Visa and Mastercard to Financials in 2023.
 - The live run and the backtest use the same build step and the same
   window: the last 252 trading days up to the selection date. A test makes
   sure that, on the last date, the backtest gives the same weights as the

@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: raw
+    description: The raw files that the ingest step writes.
+    tables:
+      - name: prices
+        description: >
+          Daily prices of every stock that was in the S&P 500 in the date
+          range, and the benchmark. quant.ingest writes this Parquet file.
+        config:
+          external_location: "read_parquet('{{ var('prices_file') }}')"
