@@ -92,7 +92,7 @@ Use this template for a new entry:
   the period only. The result of a past window is therefore the result of
   a portfolio of the companies that are still here. This decision makes
   the size of that hole a number in the output. It does not fill it.
-- **Commits:** See the commit that holds this entry.
+- **Commits:** `895fabe`
 
 ## D18. Say when the money cannot hold the weights
 
