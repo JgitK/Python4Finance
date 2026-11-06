@@ -74,3 +74,13 @@ def test_dbt_command_passes_the_universe():
     assert command[:2] == ["dbt", "build"]
     assert "--vars" in command
     assert command[command.index("--vars") + 1] == '{"universe": "nasdaq"}'
+
+
+def test_the_default_universe_in_the_dbt_project_is_sp500():
+    # A dbt unit test cannot prove this. A --vars flag on the command line
+    # replaces the project value, so each unit test pins its own universe.
+    # This test reads the project file, which no flag changes.
+    import yaml
+
+    project = yaml.safe_load((run_pipeline.DBT_DIR / "dbt_project.yml").read_text())
+    assert project["vars"]["universe"] == "sp500"
