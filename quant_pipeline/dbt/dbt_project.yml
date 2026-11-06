@@ -1,0 +1,62 @@
+name: "quant_pipeline"
+version: "0.1.0"
+config-version: 2
+
+# This project uses the quant_pipeline profile. See profiles.yml.
+profile: "quant_pipeline"
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+# Variables hold the strategy parameters. Change a value here to tune the pipeline.
+vars:
+  # Risk-free rate for the Sharpe and Sortino ratios. 4.5% per year.
+  risk_free_rate: 0.045
+  # Trading days in one year. The code annualizes with this number.
+  trading_days_per_year: 252
+  # The analysis window for the risk metrics. One year of trading days.
+  analysis_window: 252
+  # Bollinger Band settings.
+  bollinger_window: 20
+  bollinger_sd: 2
+  # Ichimoku settings.
+  ichimoku_conversion: 9
+  ichimoku_base: 26
+  ichimoku_span_b: 52
+  ichimoku_displacement: 26
+  # Screening gates.
+  min_trading_days: 400
+  min_avg_volume: 100000
+  max_daily_volatility: 0.05
+  top_n_per_sector: 10
+  min_ichimoku_score: 2
+  # The number of top stocks to show per sector in the sector leaders mart.
+  sector_leaders_n: 3
+
+models:
+  quant_pipeline:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table
+
+seeds:
+  quant_pipeline:
+    raw_prices:
+      +column_types:
+        ticker: varchar
+        date: date
+        open: double
+        high: double
+        low: double
+        close: double
+        volume: bigint
+    stock_sectors:
+      +column_types:
+        ticker: varchar
+        sector: varchar

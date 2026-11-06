@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: stg_prices
+    description: >
+      Clean daily prices. One row per ticker per day.
+      The source is the raw_prices seed.
+    columns:
+      - name: ticker
+        description: The stock symbol.
+        data_tests:
+          - not_null
+          # The benchmark SPY has no sector, so leave it out of this check.
+          - relationships:
+              arguments:
+                to: ref('stg_sectors')
+                field: ticker
+              config:
+                where: "ticker <> 'SPY'"
+      - name: price_date
+        description: The trading day.
+        data_tests:
+          - not_null
+      - name: close
+        description: The closing price. Always positive.
+        data_tests:
+          - not_null
+    # The singular test assert_unique_ticker_date.sql checks that a ticker
+    # and a date together are unique. See the tests folder.
+
+  - name: stg_sectors
+    description: The GICS sector of each stock.
+    columns:
+      - name: ticker
+        description: The stock symbol.
+        data_tests:
+          - not_null
+          - unique
+      - name: sector
+        description: The GICS sector name.
+        data_tests:
+          - not_null

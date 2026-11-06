@@ -1,0 +1,79 @@
+version: 2
+
+models:
+  - name: int_daily_returns
+    description: The daily return of each stock. The first day of each stock is null.
+    columns:
+      - name: ticker
+        data_tests: [not_null]
+      - name: price_date
+        data_tests: [not_null]
+
+  - name: int_cumulative_returns
+    description: The compounded return of each stock. It starts at 1.0.
+    columns:
+      - name: cum_return
+        data_tests: [not_null]
+
+  - name: int_bollinger
+    description: The Bollinger Bands of each stock. The bands are null until 20 days exist.
+
+  - name: int_ichimoku
+    description: The five Ichimoku Cloud lines of each stock.
+
+  - name: int_ichimoku_score
+    description: The bullish Ichimoku score of each stock, from 0 to 5.
+    columns:
+      - name: ticker
+        data_tests: [not_null, unique]
+      - name: ichimoku_score
+        description: A whole number from 0 to 5. A higher score is more bullish.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1, 2, 3, 4, 5]
+
+  - name: int_risk_metrics
+    description: The risk and return metrics of each stock over the analysis window.
+    columns:
+      - name: ticker
+        data_tests: [not_null, unique]
+      - name: total_trading_days
+        data_tests: [not_null]
+
+unit_tests:
+  - name: test_daily_return_is_pct_change
+    description: The daily return is the percent change of the close.
+    model: int_daily_returns
+    given:
+      - input: ref('stg_prices')
+        rows:
+          - {ticker: TST, price_date: "2023-01-03", close: 100}
+          - {ticker: TST, price_date: "2023-01-04", close: 150}
+          - {ticker: TST, price_date: "2023-01-05", close: 75}
+    expect:
+      rows:
+        # The first day has no prior close, so the return is null.
+        - {ticker: TST, price_date: "2023-01-03", close: 100, daily_return: null}
+        - {ticker: TST, price_date: "2023-01-04", close: 150, daily_return: 0.5}
+        - {ticker: TST, price_date: "2023-01-05", close: 75, daily_return: -0.5}
+
+  - name: test_ichimoku_score_counts_bullish_rules
+    description: A fully bullish stock scores 5. A fully bearish stock scores 0.
+    model: int_ichimoku_score
+    given:
+      - input: ref('int_ichimoku')
+        rows:
+          # BULL: the close leads every line and the cloud is green.
+          - {ticker: BULL, price_date: "2023-01-10", close: 100,
+             conversion_line: 95, base_line: 85, span_a: 90, span_b: 80}
+          # BEAR: the close trails every line and the cloud is red.
+          - {ticker: BEAR, price_date: "2023-01-10", close: 50,
+             conversion_line: 55, base_line: 60, span_a: 65, span_b: 70}
+    expect:
+      rows:
+        - {ticker: BULL, as_of_date: "2023-01-10", close: 100,
+           conversion_line: 95, base_line: 85, span_a: 90, span_b: 80, ichimoku_score: 5}
+        - {ticker: BEAR, as_of_date: "2023-01-10", close: 50,
+           conversion_line: 55, base_line: 60, span_a: 65, span_b: 70, ichimoku_score: 0}

@@ -1,0 +1,100 @@
+version: 2
+
+models:
+  - name: fct_prices
+    description: The wide price fact table. One row per ticker per day with all indicators.
+    columns:
+      - name: ticker
+        data_tests: [not_null]
+      - name: close
+        data_tests: [not_null]
+
+  - name: dim_ticker
+    description: One row per stock. It holds the sector and the history span.
+    columns:
+      - name: ticker
+        data_tests: [not_null, unique]
+      - name: sector
+        data_tests: [not_null]
+
+  - name: mart_daily_returns
+    description: The daily return of every stock and the benchmark, for the Python layer.
+    columns:
+      - name: daily_return
+        data_tests: [not_null]
+
+  - name: mart_screen_candidates
+    description: The screened, ranked candidate stocks for the portfolio.
+    columns:
+      - name: ticker
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('dim_ticker')
+                field: ticker
+      - name: ichimoku_score
+        description: Every candidate meets the minimum score, so this is at least 2.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [2, 3, 4, 5]
+      - name: sector_rank
+        data_tests: [not_null]
+
+  - name: mart_sector_leaders
+    description: The top stocks in each sector by one-year return.
+    columns:
+      - name: ticker
+        data_tests: [not_null]
+
+unit_tests:
+  - name: test_screen_applies_all_gates
+    description: >
+      A candidate must pass every gate. This test sends four stocks through
+      the screen. Only the stock that passes all gates should survive.
+    model: mart_screen_candidates
+    given:
+      - input: ref('int_risk_metrics')
+        rows:
+          # PASS: meets every gate.
+          - {ticker: PASS, total_trading_days: 500, avg_volume: 1000000,
+             daily_volatility: 0.02, annual_return: 0.30, annual_volatility: 0.25,
+             sharpe_ratio: 1.0, sortino_ratio: 1.6, cvar_5: -0.04, cum_return_window: 0.28}
+          # THIN: too little history.
+          - {ticker: THIN, total_trading_days: 100, avg_volume: 1000000,
+             daily_volatility: 0.02, annual_return: 0.30, annual_volatility: 0.25,
+             sharpe_ratio: 2.0, sortino_ratio: 3.0, cvar_5: -0.04, cum_return_window: 0.28}
+          # WILD: daily moves are too large.
+          - {ticker: WILD, total_trading_days: 500, avg_volume: 1000000,
+             daily_volatility: 0.09, annual_return: 0.30, annual_volatility: 0.25,
+             sharpe_ratio: 3.0, sortino_ratio: 4.0, cvar_5: -0.04, cum_return_window: 0.28}
+          # DULL: the Ichimoku trend is not bullish enough.
+          - {ticker: DULL, total_trading_days: 500, avg_volume: 1000000,
+             daily_volatility: 0.02, annual_return: 0.30, annual_volatility: 0.25,
+             sharpe_ratio: 4.0, sortino_ratio: 5.0, cvar_5: -0.04, cum_return_window: 0.28}
+      - input: ref('dim_ticker')
+        rows:
+          - {ticker: PASS, sector: Tech}
+          - {ticker: THIN, sector: Tech}
+          - {ticker: WILD, sector: Tech}
+          - {ticker: DULL, sector: Tech}
+      - input: ref('int_ichimoku_score')
+        rows:
+          - {ticker: PASS, ichimoku_score: 5}
+          - {ticker: THIN, ichimoku_score: 5}
+          - {ticker: WILD, ichimoku_score: 5}
+          - {ticker: DULL, ichimoku_score: 1}
+      - input: ref('stg_prices')
+        rows:
+          - {ticker: PASS, price_date: "2025-01-02", close: 120}
+          - {ticker: THIN, price_date: "2025-01-02", close: 120}
+          - {ticker: WILD, price_date: "2025-01-02", close: 120}
+          - {ticker: DULL, price_date: "2025-01-02", close: 120}
+    expect:
+      rows:
+        - {ticker: PASS, sector: Tech, total_trading_days: 500, avg_volume: 1000000,
+           daily_volatility: 0.02, annual_return: 0.30, annual_volatility: 0.25,
+           sharpe_ratio: 1.0, sortino_ratio: 1.6, cvar_5: -0.04, cum_return_window: 0.28,
+           ichimoku_score: 5, current_price: 120, sector_rank: 1}

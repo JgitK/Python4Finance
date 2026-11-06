@@ -1,0 +1,9 @@
+# The dbt connection profile.
+# The project uses DuckDB. DuckDB writes the warehouse to one local file.
+quant_pipeline:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: warehouse.duckdb
+      threads: 4
