@@ -26,8 +26,8 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from quant import (allocate, backtest, pipeline, results_log, universe,
-                   warehouse)
+from quant import (allocate, backtest, null_benchmark, pipeline,
+                   results_log, universe, warehouse)
 
 HERE = Path(__file__).resolve().parent
 DBT_DIR = HERE / "dbt"
@@ -203,6 +203,14 @@ def make_parser() -> argparse.ArgumentParser:
                         help="The measure that ranks the candidates inside "
                              "each sector. The default is "
                              f"{default.rank_metric}.")
+    # The null benchmark. See decision D23.
+    parser.add_argument("--null-draws", type=int, default=0,
+                        help="Run the random-selection null benchmark with "
+                             "this many draws. Each draw repeats the whole "
+                             "walk-forward test with the same candidates in "
+                             "a random order. 0 skips it.")
+    parser.add_argument("--null-seed", type=int, default=0,
+                        help="The seed of the null benchmark draws.")
     return parser
 
 
@@ -326,6 +334,25 @@ def main() -> None:
               f"Mean Sharpe {summary['mean_sharpe']:.2f} against "
               f"{summary['mean_benchmark_sharpe']:.2f}.")
 
+    # Step 5c: the null benchmark. SPY says whether the method beats the
+    # market. It does not say whether the rank order adds anything. The
+    # null keeps every other step and randomizes only the order.
+    null_draws = None
+    if args.null_draws and summary is not None:
+        print(f"Step 5c: run {args.null_draws} random-order draws of the "
+              "same walk-forward test ...")
+        null_draws = null_benchmark.run_random_selection(
+            backtest_returns, many_dates, HOLDING_PERIOD, sector_of, params,
+            universe.BENCHMARK, screen_history=screen_history,
+            n_draws=args.null_draws, seed=args.null_seed)
+        comparison = null_benchmark.compare_with_null(summary, null_draws)
+        print("         the real method against the random order:")
+        print(comparison.to_string(index=False))
+        print("         A percentile near 0.5 means that the rank order "
+              "does nothing.")
+    elif args.null_draws:
+        print("Step 5c: the null benchmark needs --many-windows. Skipped.")
+
     # Step 6: write the results.
     weights_df = pd.DataFrame(
         {"ticker": list(weights),
@@ -342,6 +369,9 @@ def main() -> None:
     backtest_df.to_csv(OUTPUT_DIR / "backtest_results.csv", index=False)
     candidates.to_csv(OUTPUT_DIR / "screen_candidates.csv", index=False)
     coverage.to_csv(OUTPUT_DIR / "universe_coverage.csv", index=False)
+    if null_draws is not None:
+        null_draws.to_csv(OUTPUT_DIR / "null_benchmark.csv", index=False)
+        comparison.to_csv(OUTPUT_DIR / "null_comparison.csv", index=False)
 
     print(f"Step 6: wrote the results to {OUTPUT_DIR}.")
     print("\nPortfolio weights:")

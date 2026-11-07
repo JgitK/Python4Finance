@@ -150,10 +150,11 @@ def test_make_builder_uses_only_the_lookback_window(monkeypatch):
     seen = {}
     real_build = pipeline.build_max_sharpe_portfolio
 
-    def spy(frame, sector_of, params):
-        # Record the rows that the build step gets.
+    def spy(frame, *args, **kwargs):
+        # Record the rows that the build step gets. This test is about the
+        # window, so the spy passes every other argument through.
         seen["rows"], seen["last"] = len(frame), frame.index[-1]
-        return real_build(frame, sector_of, params)
+        return real_build(frame, *args, **kwargs)
 
     monkeypatch.setattr(pipeline, "build_max_sharpe_portfolio", spy)
     params = pipeline.PortfolioParams(n_portfolios=200, seed=1, lookback_days=100)
@@ -298,6 +299,23 @@ def test_rank_by_cumulative_return_compounds_the_window():
     ranked = pipeline.rank_by_cumulative_return(returns)
     compound = (1.0 + returns).prod() - 1.0
     assert ranked == list(compound.sort_values(ascending=False).index)
+
+
+def test_the_cumulative_return_is_not_the_average_return():
+    # The volatility drag. DRAG has the higher average daily return and it
+    # compounds to a loss, because a fall of 40% needs a rise of 67% to
+    # recover. CREEP has the lower average and it compounds to a gain.
+    # An average return would rank DRAG first. A compound return must not.
+    days = 60
+    drag = [0.50 if i % 2 else -0.40 for i in range(days)]
+    creep = [0.004] * days
+    index = pd.bdate_range("2025-01-01", periods=days)
+    returns = pd.DataFrame({"DRAG": drag, "CREEP": creep}, index=index)
+
+    assert returns["DRAG"].mean() > returns["CREEP"].mean()
+    compound = (1.0 + returns).prod() - 1.0
+    assert compound["DRAG"] < 0.0 < compound["CREEP"]
+    assert pipeline.rank_by_cumulative_return(returns) == ["CREEP", "DRAG"]
 
 
 def test_rank_candidates_follows_the_rank_metric():

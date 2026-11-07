@@ -89,7 +89,8 @@ def rank_candidates(returns: pd.DataFrame,
 
 def build_max_sharpe_portfolio(returns: pd.DataFrame,
                                sector_of: dict[str, str],
-                               params: PortfolioParams | None = None
+                               params: PortfolioParams | None = None,
+                               rng: Any = None
                                ) -> dict[str, Any]:
     """Build one Max Sharpe portfolio from a return matrix.
 
@@ -99,10 +100,17 @@ def build_max_sharpe_portfolio(returns: pd.DataFrame,
     that the rank selected, so the rank metric and the weight objective
     are two different measures.
     Return an empty result when no stock passes the selection.
+
+    An `rng` replaces the rank order with a random order of the same
+    candidates. Every other step stays the same. This is the null
+    benchmark of `quant.null_benchmark`, which measures what the rank
+    order is worth.
     """
     params = params or PortfolioParams()
 
     ranked = rank_candidates(returns, params)
+    if rng is not None:
+        ranked = [str(ticker) for ticker in rng.permutation(ranked)]
     candidates = [
         {"ticker": ticker, "sector": sector_of.get(ticker, "Unknown")}
         for ticker in ranked
@@ -141,7 +149,8 @@ def candidates_as_of(screen_history: pd.DataFrame, date: Any) -> list[str]:
 
 def make_builder(sector_of: dict[str, str], params: PortfolioParams,
                  benchmark: str,
-                 screen_history: pd.DataFrame | None = None
+                 screen_history: pd.DataFrame | None = None,
+                 rng: Any = None
                  ) -> Callable[[pd.DataFrame], dict[str, float]]:
     """Make a build_portfolio function for the backtest.
 
@@ -150,6 +159,9 @@ def make_builder(sector_of: dict[str, str], params: PortfolioParams,
     It drops the benchmark first, so the benchmark never enters the portfolio.
     When you supply a screen history, the function uses only the stocks that
     passed the screen on the last day of the train frame.
+
+    An `rng` gives the null benchmark: the same candidates in a random
+    order. See `quant.null_benchmark`.
     """
     def build(train: pd.DataFrame) -> dict[str, float]:
         tradeable = train.drop(columns=[benchmark], errors="ignore")
@@ -159,7 +171,7 @@ def make_builder(sector_of: dict[str, str], params: PortfolioParams,
         tradeable = lookback_window(tradeable, params)
         if tradeable.shape[1] == 0:
             return {}
-        result = build_max_sharpe_portfolio(tradeable, sector_of, params)
+        result = build_max_sharpe_portfolio(tradeable, sector_of, params, rng)
         return result.get("weights", {})
 
     return build
