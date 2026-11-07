@@ -8,6 +8,8 @@ these tests. The tests skip when the warehouse file is not there.
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 
@@ -158,3 +160,78 @@ def test_choose_many_selection_dates_on_the_real_warehouse(con):
     # The experiment of 2026-11-06 found 84 valid windows with this step.
     assert len(dates) >= 80
     assert min(dates) >= first
+
+
+# ---------------------------------------------------------------------------
+# The two caps of the exposure (D20).
+#
+# `top_n_per_sector` caps the candidates of each sector in dbt.
+# `target_size` and `max_per_sector` cap the portfolio in Python.
+# A measurement of the exposure must set the three from the command line,
+# because a hand edit of dbt_project.yml does not reach the results log.
+
+
+def test_dbt_command_passes_the_sector_cap():
+    command = run_pipeline.dbt_command("nasdaq", top_n_per_sector=25)
+    variables = json.loads(command[command.index("--vars") + 1])
+    assert variables == {"universe": "nasdaq", "top_n_per_sector": 25}
+
+
+def test_dbt_command_without_a_cap_keeps_the_project_default():
+    # No cap on the command line means no cap in the vars. dbt then reads
+    # the value of dbt_project.yml.
+    command = run_pipeline.dbt_command("sp500")
+    variables = json.loads(command[command.index("--vars") + 1])
+    assert variables == {"universe": "sp500"}
+
+
+def test_the_parser_defaults_match_the_portfolio_params():
+    args = run_pipeline.make_parser().parse_args([])
+    default = pipeline.PortfolioParams()
+    assert args.target_size == default.target_size
+    assert args.max_per_sector == default.max_per_sector
+    assert args.top_n_per_sector is None
+
+
+def test_the_parser_reads_the_three_caps():
+    args = run_pipeline.make_parser().parse_args(
+        ["--top-n-per-sector", "50", "--target-size", "30",
+         "--max-per-sector", "6"])
+    assert args.top_n_per_sector == 50
+    assert args.target_size == 30
+    assert args.max_per_sector == 6
+
+
+def test_params_from_args_carries_the_two_python_caps():
+    args = run_pipeline.make_parser().parse_args(
+        ["--target-size", "30", "--max-per-sector", "6",
+         "--n-portfolios", "500"])
+    params = run_pipeline.params_from_args(args)
+    assert params.target_size == 30
+    assert params.max_per_sector == 6
+    assert params.n_portfolios == 500
+
+
+def test_caps_label_names_the_three_caps():
+    # The results log must say which caps made a row. Without the label,
+    # two rows of the same commit look like the same experiment.
+    args = run_pipeline.make_parser().parse_args(
+        ["--top-n-per-sector", "50", "--target-size", "30",
+         "--max-per-sector", "6"])
+    assert run_pipeline.caps_label(args) == "50/30/6"
+
+
+def test_caps_label_reads_the_sector_cap_of_the_project_file():
+    # Without --top-n-per-sector, the run reads the cap from
+    # dbt_project.yml. The label must still state the number, or a reader
+    # of the results log cannot repeat the run.
+    args = run_pipeline.make_parser().parse_args([])
+    cap = run_pipeline.project_default_top_n()
+    assert isinstance(cap, int)
+    assert run_pipeline.caps_label(args) == f"{cap}/12/3"
+
+
+def test_the_project_file_still_holds_the_sector_cap_of_the_handoff():
+    # D20 measured the caps from this start value. A change of the project
+    # file moves every baseline, so this test states the start value.
+    assert run_pipeline.project_default_top_n() == 10

@@ -27,7 +27,8 @@ def _row(revision: str = "abc1234", universe: str = "sp500") -> str:
 
 def test_format_row_shows_each_window_against_the_benchmark():
     row = _row()
-    assert row.startswith("| 2026-11-06 | abc1234 | sp500 | 110 | 4.66 |")
+    # The caps cell is between the universe and the candidate count.
+    assert row.startswith("| 2026-11-06 | abc1234 | sp500 |  | 110 | 4.66 |")
     assert "2026-02-11: +12.7% vs +11.2%" in row
     assert "2025-08-12: -2.1% vs +13.6%" in row
     assert row.endswith("|  |")  # The note cell is empty. You fill it in.
@@ -152,3 +153,46 @@ def test_the_measure_says_when_a_window_has_no_result():
         n_candidates=110, live_sharpe=4.6573, backtest=_backtest(),
         summary=summary)
     assert "84 of 114 windows" in row
+
+
+# ---------------------------------------------------------------------------
+# The caps column (D20).
+#
+# A run can change the three caps of the exposure from the command line.
+# The row must say which caps made it, or two rows of the same commit look
+# like the same experiment.
+
+
+def test_format_row_holds_the_caps_after_the_universe():
+    row = results_log.format_row(
+        run_date="2026-11-06", revision="abc1234", universe="both",
+        caps="50/30/6", n_candidates=755, live_sharpe=4.6573,
+        backtest=_backtest())
+    assert row.startswith("| 2026-11-06 | abc1234 | both | 50/30/6 | 755 |")
+
+
+def test_format_row_without_caps_leaves_the_cell_empty():
+    row = results_log.format_row(
+        run_date="2026-11-06", revision="abc1234", universe="sp500",
+        n_candidates=110, live_sharpe=4.6573, backtest=_backtest())
+    assert row.startswith("| 2026-11-06 | abc1234 | sp500 |  | 110 |")
+
+
+def test_the_table_header_names_the_caps_column():
+    assert "| Caps " in results_log.TABLE_HEADER
+
+
+def test_append_row_separates_two_runs_that_differ_only_in_the_caps(tmp_path):
+    # Two cap settings of the same commit are two experiments. The log
+    # must hold both rows.
+    path = tmp_path / "results_log.md"
+
+    def row(caps: str) -> str:
+        return results_log.format_row(
+            run_date="2026-11-06", revision="abc1234", universe="sp500",
+            caps=caps, n_candidates=110, live_sharpe=4.66,
+            backtest=_backtest())
+
+    assert results_log.append_row(path, row("10/12/3")) is True
+    assert results_log.append_row(path, row("50/30/6")) is True
+    assert path.read_text().count("abc1234") == 2

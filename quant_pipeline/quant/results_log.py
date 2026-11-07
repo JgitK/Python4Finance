@@ -16,11 +16,14 @@ import pandas as pd
 
 LOG_FILE = Path(__file__).resolve().parents[1] / "docs" / "results_log.md"
 
+# The Caps cell holds the three caps of the exposure, in the order
+# top_n_per_sector/target_size/max_per_sector. See decision D20.
 TABLE_HEADER = (
-    "| Run date | Commit | Universe | Candidates | Live Sharpe (in-sample) "
+    "| Run date | Commit | Universe | Caps | Candidates "
+    "| Live Sharpe (in-sample) "
     "| Window 1: portfolio vs SPY | Window 2 | Window 3 "
     "| Walk-forward, many windows | Note |\n"
-    "|---|---|---|---|---|---|---|---|---|---|"
+    "|---|---|---|---|---|---|---|---|---|---|---|"
 )
 
 
@@ -63,12 +66,18 @@ def format_summary(summary: dict | None) -> str:
 
 def format_row(run_date: str, revision: str, universe: str,
                n_candidates: int, live_sharpe: float,
-               backtest: pd.DataFrame, summary: dict | None = None) -> str:
+               backtest: pd.DataFrame, summary: dict | None = None,
+               caps: str = "") -> str:
     """Make one Markdown table row from the results of a run.
 
     `summary` holds the measure of a many-window run. See
     `quant.backtest.summarize_windows`. A run without that measure leaves
     the cell empty.
+
+    `caps` holds the three caps of the exposure, in the order
+    top_n_per_sector/target_size/max_per_sector. Two runs of one commit
+    with different caps are two experiments, so the log needs this cell to
+    keep both rows.
     """
     windows = [
         f"{pd.Timestamp(r.selection_date).date()}: "
@@ -77,7 +86,7 @@ def format_row(run_date: str, revision: str, universe: str,
     ]
     # The table has three window columns.
     windows = (windows + ["", "", ""])[:3]
-    cells = [run_date, revision, universe, str(n_candidates),
+    cells = [run_date, revision, universe, caps, str(n_candidates),
              f"{live_sharpe:.2f}",
              *windows, format_summary(summary), ""]
     return "| " + " | ".join(cells) + " |"

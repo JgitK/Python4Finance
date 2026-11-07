@@ -215,3 +215,32 @@ def test_the_default_universe_is_the_sp500():
 
     project = pathlib.Path(__file__).resolve().parents[1] / "dbt" / "dbt_project.yml"
     assert yaml.safe_load(project.read_text())["vars"]["universe"] == "sp500"
+
+
+# ---------------------------------------------------------------------------
+# The sector mix of a portfolio (D20).
+#
+# `top_n_per_sector` caps the candidates of each sector, so the cap also
+# balances the sectors. A measurement of a larger cap must show the mix
+# before and after the change.
+
+
+def test_sector_mix_counts_the_stocks_of_each_sector():
+    sector_of = {"AAA": "Energy", "BBB": "Energy", "CCC": "Utilities"}
+    mix = pipeline.sector_mix(["AAA", "BBB", "CCC"], sector_of)
+    assert mix == {"Energy": 2, "Utilities": 1}
+
+
+def test_sector_mix_sorts_the_largest_sector_first():
+    sector_of = {"AAA": "Utilities", "BBB": "Energy", "CCC": "Energy"}
+    mix = pipeline.sector_mix(["AAA", "BBB", "CCC"], sector_of)
+    assert list(mix) == ["Energy", "Utilities"]
+
+
+def test_sector_mix_names_a_stock_with_no_sector_unknown():
+    mix = pipeline.sector_mix(["AAA"], {})
+    assert mix == {"Unknown": 1}
+
+
+def test_sector_mix_of_an_empty_portfolio_is_empty():
+    assert pipeline.sector_mix([], {"AAA": "Energy"}) == {}

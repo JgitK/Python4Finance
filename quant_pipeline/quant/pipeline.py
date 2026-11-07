@@ -127,6 +127,21 @@ def make_builder(sector_of: dict[str, str], params: PortfolioParams,
     return build
 
 
+def sector_mix(selected: list[str],
+               sector_of: dict[str, str]) -> dict[str, int]:
+    """Count the stocks of each sector in a portfolio.
+
+    The sector cap of the screen also balances the sectors. A change of
+    the cap therefore moves the mix. Return the largest sector first, and
+    name a stock with no sector "Unknown".
+    """
+    counts: dict[str, int] = {}
+    for ticker in selected:
+        sector = sector_of.get(ticker, "Unknown")
+        counts[sector] = counts.get(sector, 0) + 1
+    return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+
+
 def coverage_summary(coverage: pd.DataFrame, dates: list[Any]) -> pd.DataFrame:
     """Count the index members that the pipeline drops on each date.
 

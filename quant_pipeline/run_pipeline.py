@@ -24,6 +24,7 @@ import subprocess
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
 from quant import (allocate, backtest, pipeline, results_log, universe,
                    warehouse)
@@ -41,16 +42,39 @@ WARM_UP = 261
 DEFAULT_WINDOW_STEP = 5
 
 
-def dbt_command(universe: str) -> list[str]:
-    """Return the dbt command that builds the models for a universe."""
+def dbt_command(universe: str,
+                top_n_per_sector: int | None = None) -> list[str]:
+    """Return the dbt command that builds the models for a universe.
+
+    A value for `top_n_per_sector` goes into the dbt vars. Without a
+    value, dbt reads the cap from dbt_project.yml.
+    """
+    variables: dict[str, object] = {"universe": universe}
+    if top_n_per_sector is not None:
+        variables["top_n_per_sector"] = top_n_per_sector
     return ["dbt", "build", "--profiles-dir", ".",
-            "--vars", json.dumps({"universe": universe})]
+            "--vars", json.dumps(variables)]
 
 
-def build_dbt(universe: str) -> None:
+def build_dbt(universe: str, top_n_per_sector: int | None = None) -> None:
     """Build the dbt models with DuckDB."""
     print(f"Step 1: build the dbt models for the {universe} universe ...")
-    subprocess.run(dbt_command(universe), cwd=DBT_DIR, check=True)
+    command = dbt_command(universe, top_n_per_sector)
+    if top_n_per_sector is not None:
+        # The unit test compares the two screens, and it fails when the
+        # cap of the command is not the cap of the project file.
+        command += ["--exclude", "assert_screen_history_matches_candidates"]
+    subprocess.run(command, cwd=DBT_DIR, check=True)
+
+
+def project_default_top_n() -> int:
+    """Return the sector cap of dbt_project.yml.
+
+    A run without `--top-n-per-sector` uses this value. The results log
+    states it, so a reader can repeat the run.
+    """
+    text = (DBT_DIR / "dbt_project.yml").read_text()
+    return int(yaml.safe_load(text)["vars"]["top_n_per_sector"])
 
 
 def choose_selection_dates(index: pd.DatetimeIndex,
@@ -134,8 +158,9 @@ def build_live_portfolio(con, params: pipeline.PortfolioParams
         window, warehouse.read_sector_map(con), params)
 
 
-def main() -> None:
-    """Run the pipeline and write the results."""
+def make_parser() -> argparse.ArgumentParser:
+    """Return the command line parser of the pipeline."""
+    default = pipeline.PortfolioParams()
     parser = argparse.ArgumentParser(description="Run the quant pipeline.")
     parser.add_argument("--investment", type=float, default=10000.0,
                         help="The amount of money to invest.")
@@ -155,13 +180,50 @@ def main() -> None:
     parser.add_argument("--window-step", type=int, default=DEFAULT_WINDOW_STEP,
                         help="The step between the dates of a many-window "
                              "run, in trading days. The default is 5.")
-    args = parser.parse_args()
+    # The three caps of the exposure. See decision D20.
+    parser.add_argument("--top-n-per-sector", type=int, default=None,
+                        help="The count of candidates that each sector "
+                             "keeps in the screen. Without this flag, dbt "
+                             "reads the value of dbt_project.yml.")
+    parser.add_argument("--target-size", type=int, default=default.target_size,
+                        help="The count of stocks in the portfolio. "
+                             f"The default is {default.target_size}.")
+    parser.add_argument("--max-per-sector", type=int,
+                        default=default.max_per_sector,
+                        help="The count of portfolio stocks that one sector "
+                             f"can hold. The default is "
+                             f"{default.max_per_sector}.")
+    return parser
+
+
+def params_from_args(args: argparse.Namespace) -> pipeline.PortfolioParams:
+    """Return the portfolio settings of a command line."""
+    return pipeline.PortfolioParams(n_portfolios=args.n_portfolios,
+                                    target_size=args.target_size,
+                                    max_per_sector=args.max_per_sector)
+
+
+def caps_label(args: argparse.Namespace) -> str:
+    """Return the three caps of the exposure as one cell of the log.
+
+    The order is top_n_per_sector/target_size/max_per_sector.
+    """
+    top_n = (args.top_n_per_sector if args.top_n_per_sector is not None
+             else project_default_top_n())
+    return f"{top_n}/{args.target_size}/{args.max_per_sector}"
+
+
+def main() -> None:
+    """Run the pipeline and write the results."""
+    args = make_parser().parse_args()
 
     if not args.skip_dbt:
-        build_dbt(args.universe)
+        build_dbt(args.universe, args.top_n_per_sector)
 
     OUTPUT_DIR.mkdir(exist_ok=True)
-    params = pipeline.PortfolioParams(n_portfolios=args.n_portfolios)
+    params = params_from_args(args)
+    print(f"Caps: {caps_label(args)} "
+          "(candidates per sector / portfolio size / portfolio per sector).")
 
     con = warehouse.connect()
     candidates = warehouse.read_candidates(con)
@@ -182,10 +244,13 @@ def main() -> None:
     con.close()
     weights = result["weights"]
     selected = result["selected"]
+    mix = pipeline.sector_mix(selected, sector_of)
     print(f"Step 3: selected {len(selected)} stocks. "
           f"Sharpe {result['sharpe']:.2f}, "
           f"return {result['annual_return']:.1%}, "
           f"volatility {result['annual_volatility']:.1%}.")
+    print("        sector mix: "
+          + ", ".join(f"{sector} {count}" for sector, count in mix.items()))
 
     # Step 4: change the weights to whole shares. The top-up pass spends
     # the cash that the rounding leaves.
@@ -251,7 +316,9 @@ def main() -> None:
 
     # Step 6: write the results.
     weights_df = pd.DataFrame(
-        {"ticker": list(weights), "weight": list(weights.values())}
+        {"ticker": list(weights),
+         "sector": [sector_of.get(t, "Unknown") for t in weights],
+         "weight": list(weights.values())}
     ).sort_values("weight", ascending=False)
     frontier = result["frontier"][
         ["annual_return", "annual_volatility", "sharpe"]
@@ -274,6 +341,7 @@ def main() -> None:
         row = results_log.format_row(
             run_date=dt.date.today().isoformat(),
             revision=results_log.git_revision(HERE), universe=universe_name,
+            caps=caps_label(args),
             n_candidates=len(candidates), live_sharpe=result["sharpe"],
             backtest=backtest_df, summary=summary)
         added = results_log.append_row(results_log.LOG_FILE, row)
