@@ -22,6 +22,76 @@ Use this template for a new entry:
 
 ---
 
+## D25. Measure the beta and the alpha
+
+- **Date:** 2026-11-07
+- **Role:** Protective measure, outside the core loop. It changes no
+  weight and no selection. It adds measures to the live run and to each
+  backtest window.
+- **Question:** The user asked for CAPM measures after the efficient
+  frontier, and for beta and alpha where they apply. The method beats SPY
+  on the return. Does it do so because it takes more market risk (beta)
+  or because it earns a return that the market does not explain (alpha)?
+- **Options:**
+  1. Beta and alpha of each stock and of the portfolio in the live run
+     only.
+  2. Option 1, plus the realized beta and alpha of each backtest window.
+  3. A factor regression with more factors than the market (for example
+     momentum). This needs factor data that the project does not have.
+- **Decision:** Option 2. The live numbers are in-sample, so only the
+  backtest can answer the question. Option 3 stays open.
+- **The design:** `quant/capm.py` holds the functions.
+  - `regress_on_market` regresses the daily excess return of one series
+    on the daily excess return of SPY. The excess return is the return
+    minus the daily risk-free rate. It gives the beta, the annual alpha
+    (the daily intercept times 252), the R squared, and the systematic and
+    idiosyncratic parts of the variance. The two parts add to the total
+    variance.
+  - `portfolio_capm` regresses the blended daily return of the portfolio.
+    The portfolio beta is then the weighted sum of the stock betas, and a
+    test holds that property.
+  - `capital_allocation_line` mixes the Max Sharpe portfolio with cash.
+    Each mix has the same Sharpe ratio. `fraction_for_volatility` gives
+    the share in the portfolio for a target volatility.
+  - The live run prints Step 3b and writes `output/capm.csv` and
+    `output/capital_allocation.csv`. Each backtest window holds a `capm`
+    entry, and Step 5b prints the mean realized beta and the alpha.
+- **Evidence:** `sp500`, 10/10/3, `cum_return`, gate 2, 85 windows with
+  a step of 5 days.
+
+  | Measure | In-sample (live, last 252 days) | Realized (85 windows) |
+  |---|---|---|
+  | Beta | 0.52 | **1.41** (mean) |
+  | Alpha, annual | +69.5% | +7.29% mean, +6.17% median |
+  | Share of windows with a positive alpha | - | 60.0% |
+  | Systematic share of the variance | 17% | - |
+
+  To get the volatility of SPY (12.8%), the live plan holds 80% in the
+  portfolio and 20% in cash.
+- **What this says:**
+  1. **A large part of the excess return is beta.** The portfolios held
+     1.41 times the market risk on average over their holding windows.
+     In a rising market a beta above 1 beats the market with no skill.
+     This also explains a part of the Sharpe gap of D22: more beta adds
+     return and volatility together.
+  2. **A positive alpha remains after the beta.** The median window
+     earned +6.17% a year above what its beta predicts. But the momentum
+     premium is a known factor, and this regression has only the market
+     factor. Option 3 must separate the two.
+  3. **The in-sample numbers are not a result.** The live alpha of +69.5%
+     comes from the same window that selected the stocks, the same as the
+     in-sample Sharpe ratio of 4.51.
+  4. **The in-sample beta is low because of energy.** APA, VLO and TRGP
+     have a negative beta over the last year. XOM, which the portfolio
+     does not hold, has a correlation of -0.34 with SPY over the same
+     year, and APA had a beta of 1.55 in the year before. So the low beta
+     is a property of one year for one sector. It is not a stable property
+     of the stocks.
+- **Results:** The row of 2026-11-07 with the note "D25". The selection
+  and the weights did not change, so the other columns equal the
+  control row of D24.
+- **Commits:** `6fc9b9a`
+
 ## D24. Measure the Ichimoku gate
 
 - **Date:** 2026-11-07
@@ -114,7 +184,7 @@ Use this template for a new entry:
 - **Results:** Four rows in `results_log.md`, dated 2026-11-07, with the
   note "D24". The commit cell `91ac40b-dirty` means a change to the
   settings only. The strict-rule row holds the code change above.
-- **Commits:** This entry.
+- **Commits:** `6fc9b9a`
 
 ## D23. Measure the rank order against a random order
 

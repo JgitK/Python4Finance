@@ -140,6 +140,12 @@ two values and it has no default of its own.
   the median excess return from +4.84% to +7.05%, and the mean Sharpe
   ratio from 0.68 to 0.78 against 0.80 for SPY. A stricter gate gives a
   lower result. The default is still 2.
+- **A large part of the excess return is beta (D25).** The realized
+  beta of the portfolio is 1.41 on average over the 85 windows, so the
+  portfolio takes more market risk than SPY. After the beta, the median
+  alpha is +6.17% a year and it is positive in 60.0% of the windows. The
+  regression has only the market factor, so the alpha can still be a
+  momentum premium.
 - **Two independent benchmarks agree.** SPY and the random order both say
   the same thing: the selection rule adds return, not risk-adjusted
   return.
@@ -161,7 +167,7 @@ two values and it has no default of its own.
   or no sector, so the survivorship bias that remains stays visible.
 - `run_pipeline.py` adds one row to `docs/results_log.md` with the commit
   hash, the caps and the rank metric.
-- The results log holds 46 rows. The Caps column and the Rank column say
+- The results log holds 47 rows. The Caps column and the Rank column say
   which settings made each row.
 
 ## What is not solved
@@ -282,7 +288,7 @@ question that is wrong when a part is wrong.
 
 | What | Where |
 |---|---|
-| Why each decision was made | `docs/decisions.md` (D1 to D24) |
+| Why each decision was made | `docs/decisions.md` (D1 to D25) |
 | How the results changed | `docs/results_log.md` (one row for each run) |
 | Problems that are not solved | `docs/open_questions.md` |
 | The work that comes next | `docs/handoff.md` |
@@ -290,6 +296,7 @@ question that is wrong when a part is wrong.
 | Screen rules | `dbt/macros/screen.sql`, `dbt/macros/membership.sql` |
 | The rank metric, in two layers | `dbt/macros/screen.sql` (`rank_column`), `quant/pipeline.py` (`rank_candidates`) |
 | The portfolio selection | `quant/select_portfolio.py`, `quant/optimize.py` |
+| Beta, alpha and the capital allocation line | `quant/capm.py`, `pipeline.live_capm` |
 | The share plan | `quant/allocate.py` |
 | The random-order null benchmark | `quant/null_benchmark.py` |
 | The rule for a large price move | `quant/large_moves.py`, `classify_large_moves.py` |
@@ -299,7 +306,7 @@ question that is wrong when a part is wrong.
 
 ## The state of the checks
 
-191 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
+209 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
 warnings, for `cum_return` and for `sharpe`. `verify_indicators.py`
 passes every check. A fresh sparse clone of the branch reproduces the
 build, the tests and the live run exactly.

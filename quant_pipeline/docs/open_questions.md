@@ -7,6 +7,12 @@ one, move it to the "Solved" section with the commit hash.
 
 ### Results
 
+- **How much of the alpha is the momentum premium (D25)?** After the
+  beta, the median window keeps an alpha of +6.17% a year. The rank on
+  the cumulative return is a momentum signal, and the regression of D25
+  has only the market factor. A regression with a momentum factor can
+  separate a factor premium from skill. The project has no factor data.
+
 - **The Ichimoku gate makes the result worse (D24).** A stricter gate
   gives a lower result, and the gate off gives the highest result on
   every date grid: a mean Sharpe ratio of 0.78 against 0.80 for SPY, and
