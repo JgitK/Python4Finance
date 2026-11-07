@@ -244,3 +244,16 @@ def test_sector_mix_names_a_stock_with_no_sector_unknown():
 
 def test_sector_mix_of_an_empty_portfolio_is_empty():
     assert pipeline.sector_mix([], {"AAA": "Energy"}) == {}
+
+
+# ---------------------------------------------------------------------------
+# The default portfolio size (D21).
+
+
+def test_the_default_portfolio_holds_ten_stocks():
+    # The user selected 10 stocks. D20 measured 12, 24, 40 and 60, and D21
+    # measured 10. A change of this number moves every new results row, so
+    # this test states the value.
+    default = pipeline.PortfolioParams()
+    assert default.target_size == 10
+    assert default.max_per_sector == 3

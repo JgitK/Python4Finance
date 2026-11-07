@@ -227,8 +227,10 @@ def test_caps_label_reads_the_sector_cap_of_the_project_file():
     # of the results log cannot repeat the run.
     args = run_pipeline.make_parser().parse_args([])
     cap = run_pipeline.project_default_top_n()
+    default = pipeline.PortfolioParams()
     assert isinstance(cap, int)
-    assert run_pipeline.caps_label(args) == f"{cap}/12/3"
+    assert run_pipeline.caps_label(args) == (
+        f"{cap}/{default.target_size}/{default.max_per_sector}")
 
 
 def test_the_project_file_still_holds_the_sector_cap_of_the_handoff():

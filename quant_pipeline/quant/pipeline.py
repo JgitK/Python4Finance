@@ -22,7 +22,9 @@ from quant import optimize, select_portfolio
 class PortfolioParams:
     """The settings for one portfolio build."""
 
-    target_size: int = 12
+    # The user selected 10 stocks. D20 and D21 measured 10, 12, 24, 40 and
+    # 60 stocks. This dataclass is the one place that holds the two caps.
+    target_size: int = 10
     max_per_sector: int = 3
     max_avg_correlation: float = 0.6
     risk_free: float = 0.045

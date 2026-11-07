@@ -29,13 +29,18 @@ def average_correlation(ticker: str, selected: list[str],
 
 
 def greedy_low_correlation(candidates: list[dict[str, Any]], corr: pd.DataFrame,
-                           target_size: int = 12, max_per_sector: int = 3,
+                           target_size: int, max_per_sector: int,
                            max_avg_correlation: float = 0.6) -> list[str]:
     """Choose a diversified set of stocks.
 
     The candidates come sorted from best to worst. The rule adds a stock when
     two tests pass: its sector still has room, and its mean correlation to the
     chosen stocks is not too high. Stop at the target size.
+
+    `target_size` and `max_per_sector` have no default here.
+    `pipeline.PortfolioParams` is the one place that holds them. Two
+    defaults can drift, and then the live run and a direct caller select
+    different portfolios.
     """
     selected: list[str] = []
     sector_counts: dict[str, int] = {}

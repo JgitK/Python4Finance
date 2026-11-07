@@ -68,3 +68,19 @@ def test_selector_stops_at_target_size():
         max_avg_correlation=0.6,
     )
     assert len(selected) == 4
+
+
+# ---------------------------------------------------------------------------
+# One place holds the default (D21).
+
+
+def test_the_selector_has_no_cap_default_of_its_own():
+    # The caps lived in two places: PortfolioParams and the signature of
+    # this function. Two defaults can drift, and then the live run and a
+    # direct caller select different portfolios. PortfolioParams is the one
+    # place, so each cap of this function must be a required parameter.
+    import inspect
+
+    signature = inspect.signature(select_portfolio.greedy_low_correlation)
+    for name in ("target_size", "max_per_sector"):
+        assert signature.parameters[name].default is inspect.Parameter.empty
