@@ -82,6 +82,7 @@ cache in `data/cache/`.
 | `max_per_sector` | 3 | `PortfolioParams`, `--max-per-sector` | The portfolio stocks that one sector can hold. |
 | `rank_metric` | cum_return | `dbt_project.yml` and `PortfolioParams`, `--rank-metric` | The measure that ranks the candidates inside each sector. |
 | `--null-draws` | 0 | `run_pipeline.py` | The draws of the random-order null benchmark. It needs `--many-windows`. |
+| `--fractional-shares` | off | `run_pipeline.py` | Buy a part of a share where necessary. The plan then holds every weight and gives no warning (D26). |
 
 Two settings live in two layers that must agree. `rank_metric` drives the
 `rank_column` macro for the screen in dbt, and it drives
@@ -210,7 +211,9 @@ These are facts about the state, not a plan.
   reader.** Every build makes them and nothing selects from them.
 - **The whole-share rounding is not in the backtest.** The backtest holds
   exact weights, so it measures a portfolio that the money cannot always
-  buy, and the error grows with the portfolio size.
+  buy, and the error grows with the portfolio size. With
+  `--fractional-shares`, the live plan holds the exact weights, and the
+  live plan and the backtest agree (D26).
 
 ## The rules of work
 
@@ -288,7 +291,7 @@ question that is wrong when a part is wrong.
 
 | What | Where |
 |---|---|
-| Why each decision was made | `docs/decisions.md` (D1 to D25) |
+| Why each decision was made | `docs/decisions.md` (D1 to D26) |
 | How the results changed | `docs/results_log.md` (one row for each run) |
 | Problems that are not solved | `docs/open_questions.md` |
 | The work that comes next | `docs/handoff.md` |
@@ -297,7 +300,7 @@ question that is wrong when a part is wrong.
 | The rank metric, in two layers | `dbt/macros/screen.sql` (`rank_column`), `quant/pipeline.py` (`rank_candidates`) |
 | The portfolio selection | `quant/select_portfolio.py`, `quant/optimize.py` |
 | Beta, alpha and the capital allocation line | `quant/capm.py`, `pipeline.live_capm` |
-| The share plan | `quant/allocate.py` |
+| The share plan, whole or fractional | `quant/allocate.py`, `run_pipeline.share_plan` |
 | The random-order null benchmark | `quant/null_benchmark.py` |
 | The rule for a large price move | `quant/large_moves.py`, `classify_large_moves.py` |
 | Manual data fixes, with reasons | `dbt/seeds/corporate_actions.csv` (532 rows), `dbt/seeds/price_data_exclusions.csv` (11 tickers) |
@@ -306,7 +309,7 @@ question that is wrong when a part is wrong.
 
 ## The state of the checks
 
-209 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
+218 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
 warnings, for `cum_return` and for `sharpe`. `verify_indicators.py`
 passes every check. A fresh sparse clone of the branch reproduces the
 build, the tests and the live run exactly.

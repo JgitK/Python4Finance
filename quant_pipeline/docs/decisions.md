@@ -22,6 +22,58 @@ Use this template for a new entry:
 
 ---
 
+## D26. Let the share plan buy a part of a share
+
+- **Date:** 2026-11-07
+- **Role:** Protective measure, outside the core loop. It changes no
+  weight, no selection and no backtest number. It changes only the share
+  plan of Step 4, and only when the user asks for it.
+- **Question:** The user asked for a switch between whole shares and
+  fractional shares. Many brokers sell a part of a share. D18 found that a
+  plan of whole shares cannot always hold the weights: a small amount of
+  money drops a stock or holds too much of it.
+- **Options:**
+  1. Whole shares only (the state before this decision).
+  2. A switch. Whole shares stay the default, and `--fractional-shares`
+     buys a part of a share.
+  3. Fractional shares only.
+- **Decision:** Option 2. The user selected it. Whole shares stay the
+  default, because not every broker sells a part of a share, and a plan
+  that the broker cannot fill is worse than a plan with a warning.
+- **The design:**
+  - `allocate.allocate_fractional` gives each stock its share of the
+    money, divides it by the price, and rounds it down to 6 decimals. Most
+    brokers that sell a part of a share accept 6 decimals. The round-down
+    keeps each cost at or below the budget of the stock.
+  - The binary rounding can give 28.999999999999996 for 29. The function
+    first rounds the scaled value to 3 more decimals, then it rounds down.
+    A test holds this case. A mutation check showed that the first test
+    set did not catch a plain round-down, so the test was added.
+  - `allocation_summary(..., fractional=True)` uses that plan and skips
+    the top-up pass of D17.
+  - `run_pipeline.share_plan` gives the plan and the warnings. A
+    fractional plan gives no warning.
+- **Evidence:** The live `sp500` portfolio, 10/10/3, `cum_return`.
+
+  | Money | Mode | Spent | Largest weight difference | Warnings |
+  |---|---|---|---|---|
+  | 10,000 | whole | 9,952.53 | 1.21% | 0 |
+  | 10,000 | fractional | 10,000.00 | 0.00% | 0 |
+  | 3,000 | whole | 2,940.35 | 4.15% | 3 (drops CRWD) |
+  | 3,000 | fractional | 3,000.00 | 0.00% | 0 |
+
+- **A mutation that survives, and why:** A top-up pass after a
+  fractional plan changes no test result. The fractional plan leaves less
+  than one millionth of a share of cash for each stock, so the top-up pass
+  can never buy a share. The code skips the pass all the same, so a later
+  change cannot make it run.
+- **What this does not change:** The backtest holds exact weights, so it
+  was already a fractional plan. With the switch on, the live plan now
+  agrees with the backtest. With the switch off, the open question "The
+  whole-share rounding is not in the backtest" stays open.
+- **Results:** No new row. The selection and the weights did not change.
+- **Commits:** `d5f6645`
+
 ## D25. Measure the beta and the alpha
 
 - **Date:** 2026-11-07
