@@ -7,6 +7,14 @@ one, move it to the "Solved" section with the commit hash.
 
 ### Results
 
+- **The Ichimoku gate makes the result worse (D24).** A stricter gate
+  gives a lower result, and the gate off gives the highest result on
+  every date grid: a mean Sharpe ratio of 0.78 against 0.80 for SPY, and
+  0.68 at the default gate of 2. Three questions follow: should the
+  default change to 0; does the Ichimoku chart help as a rank or as an
+  entry signal and not as a gate; and does the result hold on the `nasdaq`
+  and `both` universes?
+
 - **The method beats SPY on the return and not on the Sharpe ratio.**
   D22 changed the ranking to the cumulative return, and the `sp500`
   portfolio now beats SPY on the return in 57.6% of 85 windows with a

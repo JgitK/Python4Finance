@@ -22,6 +22,100 @@ Use this template for a new entry:
 
 ---
 
+## D24. Measure the Ichimoku gate
+
+- **Date:** 2026-11-07
+- **Role:** Protective measure, outside the core loop. It changes no
+  number of a run. It measures one gate of the screen that nobody had
+  tested.
+- **Question:** The R version of the pipeline screens the stocks on the
+  Ichimoku signals after the return screen. The user asked what "good"
+  means on an Ichimoku chart, and whether the Ichimoku screen helps. The
+  dbt screen already has an Ichimoku gate: `min_ichimoku_score` is 2, so
+  a stock needs 2 of the 5 points of the `ichimoku_score` macro. With 2
+  points, a stock can be below the cloud and still pass.
+- **Options:**
+  1. Keep the gate at 2.
+  2. Make the gate stricter: a score of 3, 4 or 5.
+  3. Use a strict rule. A stock needs all four conditions of a strong
+     bullish chart: the close is above the whole cloud, the conversion
+     line is above the base line, the cloud that today's data projects 26
+     days forward is green, and the close is above the close of 26 days
+     back. The last condition is the Chikou check without future data.
+  4. Remove the gate: a score of 0.
+- **Decision:** Record the measurement. Keep the default at 2 for now.
+  The evidence favours option 4, but a change of the default needs the
+  user's choice and test work: the `accepted_values` test of
+  `mart_screen_candidates.ichimoku_score` allows only 2 to 5, so a build
+  with a gate below 2 fails that test.
+- **Method:** A sparse clone of `91ac40b`. Each run changed only
+  `min_ichimoku_score` in `dbt_project.yml`, and built with
+  `--exclude test_type:unit`, because two unit tests state the old rule.
+  The strict rule (option 3) is not in a commit. It added three columns
+  to `int_ichimoku`:
+
+  ```sql
+  (conversion_line + base_line) / 2 as future_span_a,
+  span_b_raw as future_span_b,
+  lag(close, {{ disp }}) over (partition by ticker order by price_date) as close_26_ago
+  ```
+
+  and it changed the `ichimoku_score` macro to four points, with
+  `min_ichimoku_score: 4`:
+
+  ```sql
+  case when close > greatest(span_a, span_b) then 1 else 0 end
+  + case when conversion_line > base_line then 1 else 0 end
+  + case when future_span_a > future_span_b then 1 else 0 end
+  + case when close > close_26_ago then 1 else 0 end
+  ```
+
+- **Evidence:** `sp500`, 10/10/3, `cum_return`, 85 windows with a step
+  of 5 days. SPY has a mean Sharpe ratio of 0.80.
+
+  | Gate | Candidates today | Beat SPY on return | Beat SPY on Sharpe | Median excess | Mean Sharpe |
+  |---|---|---|---|---|---|
+  | 0 (off) | 110 | **63.5%** | 50.6% | **+7.05%** | **0.78** |
+  | 1 | 110 | 63.5% | 50.6% | +7.05% | 0.78 |
+  | 2 (default) | 110 | 57.6% | 50.6% | +4.84% | 0.68 |
+  | 3 | 107 | 60.0% | 51.8% | +5.91% | 0.68 |
+  | 4 | 101 | 55.3% | 44.7% | +4.05% | 0.60 |
+  | 5 | 67 | 60.0% | 50.6% | +2.29% | 0.64 |
+  | Strict rule | 99 | 61.2% | 54.1% | +4.44% | 0.69 |
+
+  The mean Sharpe ratio on the other date grids of D16:
+
+  | Step | Gate 0 | Gate 2 | Gate 3 | Gate 4 | Gate 5 | Strict | SPY |
+  |---|---|---|---|---|---|---|---|
+  | 3 days | 0.81 | 0.74 | 0.74 | 0.67 | 0.64 | 0.74 | 0.81 |
+  | 5 days | 0.78 | 0.68 | 0.68 | 0.60 | 0.64 | 0.69 | 0.80 |
+  | 10 days | 0.83 | 0.74 | 0.71 | 0.57 | 0.65 | 0.65 | 0.79 |
+  | 21 days | 0.91 | 0.90 | 0.90 | 0.82 | 0.57 | 0.84 | 0.82 |
+
+  With the gate off, 50 random-order draws (D23, seed 0) put the method
+  at the 100th percentile on the mean and the median excess return, and
+  at the **94th percentile on the mean Sharpe ratio**. With the gate at
+  2, D23 measured the 72nd percentile.
+- **What this says:** A stricter gate gives a lower result, and the gate
+  off gives the highest result on all four date grids. With the gate off,
+  the mean Sharpe ratio is approximately equal to SPY for the first time
+  at 10 stocks. A probable cause: the rank on the cumulative return
+  already selects momentum, and a bullish Ichimoku chart also measures
+  momentum, so the gate adds little information. The gate does remove
+  strong stocks during a short pullback into the cloud, and that is
+  frequently the time before the next rise.
+- **Limits:** The measurement tried 7 settings on the same data and
+  selected the best, so a part of the gain can be luck. The 85 windows
+  cover approximately two independent holding periods (D16). The trend
+  over the gate values is stronger evidence than one good number. The
+  test examines the Ichimoku chart as a gate only. It does not examine
+  the Ichimoku chart as a rank or as an entry signal, for example a cross
+  of the conversion line above the base line.
+- **Results:** Four rows in `results_log.md`, dated 2026-11-07, with the
+  note "D24". The commit cell `91ac40b-dirty` means a change to the
+  settings only. The strict-rule row holds the code change above.
+- **Commits:** This entry.
+
 ## D23. Measure the rank order against a random order
 
 - **Date:** 2026-11-06

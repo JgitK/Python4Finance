@@ -134,6 +134,12 @@ two values and it has no default of its own.
   better, and 9 of them beat SPY at 0.80, which the method does not. A
   random order of the same candidates gives a median excess return of
   +0.22%, which is SPY.
+- **The Ichimoku gate lowers the result (D24).** The screen keeps a
+  stock with an Ichimoku score of 2 or more. With the gate off, the share
+  of the windows that beat SPY on the return rose from 57.6% to 63.5%,
+  the median excess return from +4.84% to +7.05%, and the mean Sharpe
+  ratio from 0.68 to 0.78 against 0.80 for SPY. A stricter gate gives a
+  lower result. The default is still 2.
 - **Two independent benchmarks agree.** SPY and the random order both say
   the same thing: the selection rule adds return, not risk-adjusted
   return.
@@ -155,7 +161,7 @@ two values and it has no default of its own.
   or no sector, so the survivorship bias that remains stays visible.
 - `run_pipeline.py` adds one row to `docs/results_log.md` with the commit
   hash, the caps and the rank metric.
-- The results log holds 42 rows. The Caps column and the Rank column say
+- The results log holds 46 rows. The Caps column and the Rank column say
   which settings made each row.
 
 ## What is not solved
@@ -276,7 +282,7 @@ question that is wrong when a part is wrong.
 
 | What | Where |
 |---|---|
-| Why each decision was made | `docs/decisions.md` (D1 to D23) |
+| Why each decision was made | `docs/decisions.md` (D1 to D24) |
 | How the results changed | `docs/results_log.md` (one row for each run) |
 | Problems that are not solved | `docs/open_questions.md` |
 | The work that comes next | `docs/handoff.md` |
