@@ -275,3 +275,28 @@ def test_a_rank_metric_change_reaches_dbt_as_well_as_python():
     variables = json.loads(command[command.index("--vars") + 1])
     assert variables["rank_metric"] == "sharpe"
     assert run_pipeline.params_from_args(args).rank_metric == "sharpe"
+
+
+# --- the share plan (D26) -------------------------------------------------
+
+def test_whole_shares_are_the_default():
+    args = run_pipeline.make_parser().parse_args([])
+    assert args.fractional_shares is False
+
+
+def test_the_flag_turns_on_fractional_shares():
+    args = run_pipeline.make_parser().parse_args(["--fractional-shares"])
+    assert args.fractional_shares is True
+
+
+def test_a_fractional_plan_holds_every_stock_and_gives_no_warning():
+    weights = {"A": 0.5, "B": 0.5}
+    prices = {"A": 10.0, "B": 4000.0}
+    whole, whole_warnings = run_pipeline.share_plan(
+        weights, prices, 1000.0, fractional=False)
+    assert whole.set_index("ticker").loc["B", "shares"] == 0
+    assert any("drops B" in w for w in whole_warnings)
+    part, part_warnings = run_pipeline.share_plan(
+        weights, prices, 1000.0, fractional=True)
+    assert part.set_index("ticker").loc["B", "shares"] == pytest.approx(0.125)
+    assert part_warnings == []

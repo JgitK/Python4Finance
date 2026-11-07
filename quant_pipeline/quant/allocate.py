@@ -9,6 +9,10 @@ weights of the optimizer. An expensive share loses more of its weight than
 a cheap one, because the money that it cannot use is larger. A second pass
 spends that cash: it buys one more share at a time, and each step takes
 the share that moves the weights nearest to the target. See decision D17.
+
+Many brokers sell a part of a share. `allocate_fractional` gives that
+plan. It holds the weights of the optimizer, and the price of a share does
+not matter. See decision D26.
 """
 
 from __future__ import annotations
@@ -30,6 +34,35 @@ def allocate_shares(weights: dict[str, float], prices: dict[str, float],
     for ticker, weight in weights.items():
         budget = investment_amount * weight
         shares = int(math.floor(budget / prices[ticker]))
+        plan[ticker] = {"shares": shares, "cost": shares * prices[ticker]}
+    return plan
+
+
+# Brokers that sell a part of a share usually accept 6 decimals.
+FRACTION_DECIMALS = 6
+
+
+def allocate_fractional(weights: dict[str, float], prices: dict[str, float],
+                        investment_amount: float,
+                        decimals: int = FRACTION_DECIMALS
+                        ) -> dict[str, dict[str, float]]:
+    """Buy a part of a share where necessary, for each stock.
+
+    Give each stock its share of the money. Divide by the price. Round down
+    to `decimals` decimals, so the plan never spends more than the budget
+    of a stock. Return the share count and the cash cost for each stock.
+    """
+    if decimals < 0:
+        raise ValueError("The count of decimals must not be below 0.")
+    scale = 10 ** decimals
+    plan: dict[str, dict[str, float]] = {}
+    for ticker, weight in weights.items():
+        exact = investment_amount * weight / prices[ticker]
+        # The binary rounding can give 28.999999999999996 for 29. First
+        # round the scaled value to 3 more decimals, then round it down.
+        # Without the first step, the plan loses one unit of the last
+        # decimal.
+        shares = math.floor(round(exact * scale, 3)) / scale
         plan[ticker] = {"shares": shares, "cost": shares * prices[ticker]}
     return plan
 
@@ -149,17 +182,22 @@ def plan_warnings(shares: dict[str, int], weights: dict[str, float],
 
 def allocation_summary(weights: dict[str, float], prices: dict[str, float],
                        investment_amount: float,
-                       top_up: bool = True) -> pd.DataFrame:
+                       top_up: bool = True,
+                       fractional: bool = False) -> pd.DataFrame:
     """Build a table of the final plan.
 
     The table has the weight, the price, the shares, the cost, and the
     actual weight. The actual weight is the real share of the money spent.
 
     The plan runs the top-up pass. Use `top_up=False` for the first pass
-    alone.
+    alone. Use `fractional=True` for a plan with parts of a share. That
+    plan needs no top-up pass.
     """
-    plan = allocate_shares(weights, prices, investment_amount)
-    if top_up:
+    if fractional:
+        plan = allocate_fractional(weights, prices, investment_amount)
+    else:
+        plan = allocate_shares(weights, prices, investment_amount)
+    if top_up and not fractional:
         plan = top_up_shares(plan, weights, prices, investment_amount)
     rows = [
         {

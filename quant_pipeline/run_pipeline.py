@@ -161,12 +161,34 @@ def build_live_portfolio(con, params: pipeline.PortfolioParams
         window, warehouse.read_sector_map(con), params)
 
 
+def share_plan(weights: dict[str, float], prices: dict[str, float],
+               investment: float, fractional: bool
+               ) -> tuple[pd.DataFrame, list[str]]:
+    """Change the weights to a plan of shares, and list its problems.
+
+    A plan of whole shares cannot always hold the weights, so it gives
+    warnings (D18). A plan of fractional shares holds every weight, so it
+    gives no warning (D26).
+    """
+    plan = allocate.allocation_summary(weights, prices, investment,
+                                       fractional=fractional)
+    if fractional:
+        return plan, []
+    warnings = allocate.plan_warnings(
+        dict(zip(plan["ticker"], plan["shares"])), weights, prices,
+        investment)
+    return plan, warnings
+
+
 def make_parser() -> argparse.ArgumentParser:
     """Return the command line parser of the pipeline."""
     default = pipeline.PortfolioParams()
     parser = argparse.ArgumentParser(description="Run the quant pipeline.")
     parser.add_argument("--investment", type=float, default=10000.0,
                         help="The amount of money to invest.")
+    parser.add_argument("--fractional-shares", action="store_true",
+                        help="Buy a part of a share where necessary. The "
+                        "default is whole shares only.")
     parser.add_argument("--n-portfolios", type=int, default=10000,
                         help="The number of random portfolios to try.")
     parser.add_argument("--skip-dbt", action="store_true",
@@ -288,21 +310,21 @@ def main() -> None:
           "portfolio and the rest in cash gives the volatility of "
           f"{universe.BENCHMARK} ({live['benchmark_volatility']:.1%}).")
 
-    # Step 4: change the weights to whole shares. The top-up pass spends
-    # the cash that the rounding leaves.
+    # Step 4: change the weights to shares. With whole shares, the top-up
+    # pass spends the cash that the rounding leaves. With fractional
+    # shares, the plan holds the weights (D26).
     selected_prices = {ticker: prices[ticker] for ticker in selected}
-    plan = allocate.allocation_summary(weights, selected_prices,
-                                       args.investment)
+    plan, warnings = share_plan(weights, selected_prices, args.investment,
+                                args.fractional_shares)
     spent = float(plan["cost"].sum())
     drift = float((plan["cost"] / args.investment
                    - plan["target_weight"]).abs().max())
-    print(f"Step 4: spent {spent:,.2f} of {args.investment:,.2f}, "
+    kind = "fractional" if args.fractional_shares else "whole"
+    print(f"Step 4 ({kind} shares): spent {spent:,.2f} of "
+          f"{args.investment:,.2f}, "
           f"so the cash is {args.investment - spent:,.2f}. "
           f"The largest weight difference is {drift:.2%}.")
     # A plan of whole shares cannot always hold the weights. Say so.
-    warnings = allocate.plan_warnings(
-        dict(zip(plan["ticker"], plan["shares"])), weights, selected_prices,
-        args.investment)
     for warning in warnings:
         print(f"        WARNING: {warning}")
 

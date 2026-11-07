@@ -214,3 +214,64 @@ def test_a_small_amount_gives_warnings_and_a_large_amount_does_not():
         shares = dict(zip(plan["ticker"], plan["shares"]))
         warnings = allocate.plan_warnings(shares, weights, prices, amount)
         assert bool(warnings) is expected
+
+
+# ---------------------------------------------------------------------------
+# Fractional shares (D26). Many brokers sell a part of a share. The plan
+# then holds the weights of the optimizer, and the price of a share does
+# not matter.
+
+
+def test_fractional_shares_round_down_to_the_given_decimals():
+    plan = allocate.allocate_fractional({"A": 1.0}, {"A": 3.0}, 10.0,
+                                        decimals=6)
+    # 10 / 3 = 3.3333333..., and the plan keeps 6 decimals, rounded down.
+    assert plan["A"]["shares"] == pytest.approx(3.333333, abs=1e-12)
+    assert plan["A"]["cost"] == pytest.approx(9.999999, abs=1e-9)
+
+
+def test_fractional_shares_never_spend_more_than_the_budget():
+    weights = {"A": 0.37, "B": 0.41, "C": 0.22}
+    prices = {"A": 917.13, "B": 3.07, "C": 4501.99}
+    for amount in [10.0, 333.33, 10000.0]:
+        plan = allocate.allocate_fractional(weights, prices, amount)
+        for ticker, weight in weights.items():
+            assert plan[ticker]["cost"] <= weight * amount + 1e-9
+        assert sum(p["cost"] for p in plan.values()) <= amount
+
+
+def test_fractional_shares_hold_a_stock_that_whole_shares_drop():
+    # One share of B costs 4,000. With 1,000 of money, a plan of whole
+    # shares must drop B. A plan of fractional shares holds it.
+    weights = {"A": 0.5, "B": 0.5}
+    prices = {"A": 10.0, "B": 4000.0}
+    whole = allocate.allocation_summary(weights, prices, 1000.0)
+    assert whole.set_index("ticker").loc["B", "shares"] == 0
+    part = allocate.allocation_summary(weights, prices, 1000.0,
+                                       fractional=True)
+    by_ticker = part.set_index("ticker")
+    assert by_ticker.loc["B", "shares"] == pytest.approx(0.125)
+    assert by_ticker.loc["B", "actual_weight"] == pytest.approx(0.5, abs=1e-6)
+
+
+def test_fractional_shares_match_the_target_weights():
+    weights = {"A": 0.188, "B": 0.179, "C": 0.633}
+    prices = {"A": 12.31, "B": 417.11, "C": 1650.0}
+    summary = allocate.allocation_summary(weights, prices, 10000.0,
+                                          fractional=True)
+    drift = (summary["cost"] / 10000.0 - summary["target_weight"]).abs()
+    # The only loss is the rounding to 6 decimals of a share.
+    assert drift.max() < 1e-6 * max(prices.values()) / 10000.0 + 1e-12
+
+
+def test_fractional_shares_refuse_a_negative_decimal_count():
+    with pytest.raises(ValueError):
+        allocate.allocate_fractional({"A": 1.0}, {"A": 3.0}, 10.0,
+                                     decimals=-1)
+
+
+def test_fractional_shares_do_not_lose_a_unit_to_binary_rounding():
+    # 0.29 * 100 gives 28.999999999999996 in binary, not 29. A plain
+    # round-down then gives 28.999999 shares and loses a unit.
+    plan = allocate.allocate_fractional({"A": 0.29}, {"A": 1.0}, 100.0)
+    assert plan["A"]["shares"] == 29.0
