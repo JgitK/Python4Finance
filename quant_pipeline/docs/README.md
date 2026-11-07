@@ -49,6 +49,7 @@ proof that the results are correct.
 | D18 | The pipeline prints a warning for each target weight that whole shares cannot hold, and it gives the smallest investment amount that has no such problem. |
 | D20 | A run states the three caps of the exposure in the results log, so two settings of one commit are two rows. It also prints the sector mix of the portfolio, because the caps balance the sectors. |
 | D21 | `PortfolioParams` is the one place that holds the two portfolio caps. `greedy_low_correlation` requires them, so a second default cannot drift away from the first. |
+| D22 | The `rank_column` macro holds the rank metric for both screen marts, and `rank_candidates` holds it for the selection. An unknown value stops the build and raises an error, so a wrong setting cannot pass in silence. A point-in-time `cum_return_window` is compared with the latest version on the last day of each stock. |
 | D1 | The 48 data tests and the 15 unit tests in the dbt project check each model on every build. |
 
 ### Correctness fixes, in the core loop
@@ -65,6 +66,7 @@ each fix are not valid.
 | D11 | A real large move stays in the returns. Only a confirmed corporate action gets a back-adjustment. | The screens changed. MRNA now fails the volatility gate. |
 | D14 | The volume rule classifies each large one-day move. The seed grew from 10 rows to 532 rows, and 24 of them get a back-adjustment. | The `nasdaq` prices changed. The `sp500` prices did not: HON is the only S&P 500 member with a corporate action. |
 | D17 | The allocator spends the cash that the share rounding leaves. It buys the shares that move the weights back to the target. | For $10,000 the cash fell from $1,680.44 to $63.06, and the largest weight difference fell from 3.65 points to 1.70. |
+| D22 | The screen and the selection rank the candidates on the cumulative return of the lookback window, not on the Sharpe ratio. | The share of the 85 windows that beat SPY on the return rises from 47.1% to 57.6%, and the median excess return from -1.40% to +4.84%. The median is positive on every date grid. The mean Sharpe ratio moves only from 0.66 to 0.68 against 0.80 for SPY, so the method beats SPY on the return and not on a risk-adjusted measure. |
 | D21 | The default portfolio holds 10 stocks, not 12. | The live portfolio drops CSX and ADI. The in-sample Sharpe ratio falls from 4.66 to 4.47, and the median window from -0.27% to -1.40%, which is inside the noise of the date grid. |
 | D15 | `stg_prices` drops 10 more tickers. The close of each one spans a factor of 1000 or more, so the file mixes two price regimes. | The Nasdaq universe lost 10 of approximately 1,000 members. None of them passed the screen. |
 

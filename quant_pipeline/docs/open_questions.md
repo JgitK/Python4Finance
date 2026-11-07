@@ -7,9 +7,25 @@ one, move it to the "Solved" section with the commit hash.
 
 ### Results
 
-- **The default settings do not beat SPY, and a larger portfolio does.**
-  With the default caps (10/10/3) the `sp500` portfolio beats SPY on the
-  return in 47.1% of 85 windows, and the median window is 1.40% below SPY.
+- **The method beats SPY on the return and not on the Sharpe ratio.**
+  D22 changed the ranking to the cumulative return, and the `sp500`
+  portfolio now beats SPY on the return in 57.6% of 85 windows with a
+  median window 4.84% above SPY. The median is positive on every date grid
+  that D16 tried, so this result is stable. The Sharpe ratio is not: the
+  mean is 0.68 against 0.80 for SPY, and the share of the windows that
+  beat SPY on the Sharpe ratio is 50.6%, a coin flip. **The stated goal of
+  the project is the Max Sharpe portfolio, so the headline number is still
+  a loss.** The ranking buys return with volatility (13.3% to 16.1% on the
+  live portfolio). Two questions follow: is a risk-adjusted ranking that
+  is not the Sharpe ratio better, for example the Sortino ratio or the
+  return over the maximum drawdown; and does the Sharpe gap close at a
+  larger portfolio size, where D20 measured 0.82 against 0.80 under the
+  old ranking?
+
+- **The old default did not beat SPY either.**
+  With the Sharpe ranking (10/10/3) the `sp500` portfolio beat SPY on the
+  return in 47.1% of 85 windows, and the median window was 1.40% below
+  SPY.
   D20 found that 40 stocks with at most 10 of a sector beats SPY on the
   median window (+3.68%), on the share of the windows (64.7%) and on the
   mean Sharpe ratio (0.82 against 0.80). The user selected 10 stocks (D21),
@@ -18,6 +34,15 @@ one, move it to the "Solved" section with the commit hash.
   40-stock plan needs $916,335 to hold every weight. The open part is
   whether a backtest with whole-share rounding still favours 40 stocks for
   the amount that the user really invests. See the next item.
+
+- **Is the momentum ranking of D22 only a factor tilt?** A ranking on the
+  trailing compound return is the classic momentum signal. A gain from it
+  is a known factor premium, not proof that this pipeline has skill. The
+  separation needs a factor regression of the portfolio returns on a
+  momentum factor, or a comparison with a plain momentum portfolio of the
+  same universe. Note that `07_factor_decomposition.R` in the repository
+  root does this kind of work for the R modules, and `quant_pipeline` has
+  no equivalent.
 
 - **Is the gain of a large portfolio only the equal-weight premium?** A
   random weight vector of 40 assets sits near equal weight, so a 40-stock

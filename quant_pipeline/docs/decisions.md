@@ -22,6 +22,101 @@ Use this template for a new entry:
 
 ---
 
+## D22. Rank the candidates on the cumulative return
+
+- **Date:** 2026-11-06
+- **Role:** Correctness fix and method choice, in the core loop. It
+  changes which stocks pass the screen and which stocks the selection
+  takes, so it changes every reported number. Each row before this
+  decision ranked on the Sharpe ratio.
+- **Question:** The user asked that the stocks which reach the Ichimoku
+  gate be the top cumulative return securities. Both screen marts ranked
+  the stocks inside each sector by `sharpe_ratio`, and `rank_by_sharpe`
+  ordered the candidates for the greedy selection. What measure must do
+  the ranking?
+- **Options:**
+  1. Keep the Sharpe ratio.
+  2. Rank on the cumulative return of the lookback window.
+  3. Make the measure a setting, and measure both.
+- **Decision:** Option 3, with `cum_return` as the default, which is the
+  request of the user. A setting is necessary here: the measure lives in
+  two layers, and a change in one layer only gives a screen and a
+  selection that disagree.
+  - dbt: the variable `rank_metric` drives the `rank_column` macro, which
+    `mart_screen_candidates` and `mart_screen_history` both use. The two
+    screens therefore always rank on the same measure.
+  - Python: `PortfolioParams.rank_metric` drives `rank_candidates`, which
+    orders the candidates for `greedy_low_correlation`.
+  - The flag `--rank-metric` reaches both. An unknown value stops the dbt
+    build with a compiler error and raises `ValueError` in Python. A
+    silent default would give a portfolio that nobody asked for.
+- **A note on the two measures in one method:** The rank metric and the
+  weight objective are now different measures. The rank selects the stocks
+  on the compound return, and the optimizer then finds the **Max Sharpe**
+  weights of the stocks that the rank selected. That is not a
+  contradiction, and it is worth saying out loud: the method picks on
+  momentum and weights on risk.
+- **Evidence 1, the comparison:** `sp500`, 10 stocks, 85 windows, step 5
+  days, commit `d65aef4`. The two rows differ in the rank metric only.
+
+  | Rank | Beat SPY on return | On Sharpe | Mean excess | Median excess | Mean Sharpe | Live volatility |
+  |---|---|---|---|---|---|---|
+  | sharpe | 47.1% | 42.4% | +1.70% | -1.40% | 0.66 | 13.3% |
+  | **cum_return** | **57.6%** | **50.6%** | **+6.65%** | **+4.84%** | 0.68 | 16.1% |
+
+  SPY has a mean Sharpe ratio of 0.80 over the same windows. The control
+  row is identical to the `845ce69` row, which proves that the
+  `rank_metric` machinery changed nothing by itself.
+- **Evidence 2, the date grid:** D16 found that the grid of the dates
+  moves the share by approximately 5 points, so one grid cannot carry this
+  result. Every grid agrees:
+
+  | Step | Windows | sharpe: share / median | cum_return: share / median |
+  |---|---|---|---|
+  | 3 | 141 | 49.6% / -0.01% | 60.3% / +7.13% |
+  | 5 | 85 | 47.1% / -1.40% | 57.6% / +4.84% |
+  | 10 | 43 | 46.5% / -1.40% | 62.8% / +7.05% |
+  | 21 | 20 | 45.0% / -0.67% | 65.0% / +6.87% |
+
+  The cumulative-return ranking wins on all four grids, by 11 to 20
+  points. The median excess return is **positive on all four grids** for
+  `cum_return` and **negative on all four** for `sharpe`. That is the
+  stable sign that D16 asks for, and it is the strongest result of the
+  project so far.
+- **The honest limit of this result:** The gain is in the return, and it
+  is paid for with volatility. The mean Sharpe ratio moves from 0.66 to
+  0.68 against 0.80 for SPY, and the share of the windows that beat SPY
+  **on the Sharpe ratio** is 50.6%, which is a coin flip. Across the four
+  grids that share is 54.6%, 50.6%, 48.8% and 60.0%, and the mean Sharpe
+  ratio is below SPY on three of the four. So:
+
+  **The method now beats SPY on the return. It still does not beat SPY on
+  a risk-adjusted measure.** The stated goal of the project is the Max
+  Sharpe portfolio, so this is the number that matters, and the ranking
+  change does not move it. A reader who wants the return will take this
+  change. A reader who wants the Sharpe ratio gains almost nothing.
+- **The point-in-time column:** `int_risk_metrics_daily` had no cumulative
+  return, so the change needed one. It uses the same trailing window as
+  the other metrics, with `exp(sum(ln(1 + daily_return)) over w) - 1`.
+  `assert_risk_metrics_daily_matches_latest` now compares that column with
+  `int_risk_metrics` on the last day of each stock, to a tolerance of
+  1e-12, so the point-in-time version is proved against the latest
+  version. The ranking therefore uses no future data, and the tamper test
+  of D5 still passes.
+- **The discriminating test:** The screen history unit test gives AAA the
+  better Sharpe ratio and BBB the better cumulative return on the second
+  date, with one place in the Tech sector. The `cum_return` version
+  expects BBB and the `sharpe` version expects AAA. Each test overrides
+  `rank_metric`, so the pair proves that the macro selects the column and
+  neither test depends on the build. `dbt build` gives PASS=89 for both
+  settings.
+- **Results:** The live portfolio changes from 6 sectors to 4 (Energy 3,
+  Health Care 3, Information Technology 3, Materials 1), the annual return
+  rises from 64.0% to 77.0%, and the volatility rises from 13.3% to 16.1%.
+  The results log gains a Rank column, and every row before this decision
+  used `sharpe`.
+- **Commits:** `4837eeb`, `d65aef4`
+
 ## D21. Hold 10 stocks by default
 
 - **Date:** 2026-11-06
