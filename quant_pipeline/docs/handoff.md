@@ -3,7 +3,7 @@
 Give this file to a new chat. It holds the state of the project and the
 rules of work. Update it at the end of each session.
 
-Last update: 2026-11-06 (fourth session of that day). HEAD is `PLACEHOLDER`.
+Last update: 2026-11-06 (fourth session of that day). HEAD is `3509364`.
 
 ## Paste this into the new chat
 
