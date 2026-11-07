@@ -257,3 +257,80 @@ def test_the_default_portfolio_holds_ten_stocks():
     default = pipeline.PortfolioParams()
     assert default.target_size == 10
     assert default.max_per_sector == 3
+
+
+# ---------------------------------------------------------------------------
+# The rank metric (D22).
+#
+# The screen and the selection rank the stocks inside each sector. The
+# measure of that rank is the cumulative return of the lookback window, not
+# the Sharpe ratio. dbt holds the same choice in the rank_metric variable,
+# so the two layers must agree.
+
+
+def _disagreeing_returns() -> pd.DataFrame:
+    """Return a frame where the Sharpe order and the return order disagree.
+
+    STEADY compounds less and it is calm, so it has the better Sharpe
+    ratio. JUMPY compounds more and it is wild, so it has the better
+    cumulative return.
+
+    STEADY needs a small movement. A series of one value has a volatility
+    of 0, and then the Sharpe ratio of a one-stock portfolio is not a
+    number.
+    """
+    days = 60
+    steady = [0.0025 if i % 2 else 0.0015 for i in range(days)]
+    jumpy = [0.05 if i % 2 else -0.02 for i in range(days)]
+    index = pd.bdate_range("2025-01-01", periods=days)
+    return pd.DataFrame({"STEADY": steady, "JUMPY": jumpy}, index=index)
+
+
+def test_the_two_rankings_disagree_on_this_frame():
+    # A guard for the tests below. Without this property they prove nothing.
+    returns = _disagreeing_returns()
+    assert pipeline.rank_by_sharpe(returns)[0] == "STEADY"
+    assert pipeline.rank_by_cumulative_return(returns)[0] == "JUMPY"
+
+
+def test_rank_by_cumulative_return_compounds_the_window():
+    returns = _disagreeing_returns()
+    ranked = pipeline.rank_by_cumulative_return(returns)
+    compound = (1.0 + returns).prod() - 1.0
+    assert ranked == list(compound.sort_values(ascending=False).index)
+
+
+def test_rank_candidates_follows_the_rank_metric():
+    returns = _disagreeing_returns()
+    by_return = pipeline.PortfolioParams(rank_metric="cum_return")
+    by_sharpe = pipeline.PortfolioParams(rank_metric="sharpe")
+    assert pipeline.rank_candidates(returns, by_return)[0] == "JUMPY"
+    assert pipeline.rank_candidates(returns, by_sharpe)[0] == "STEADY"
+
+
+def test_rank_candidates_refuses_an_unknown_metric():
+    # A silent default would give a portfolio that nobody asked for.
+    returns = _disagreeing_returns()
+    params = pipeline.PortfolioParams(rank_metric="magic")
+    with pytest.raises(ValueError, match="magic"):
+        pipeline.rank_candidates(returns, params)
+
+
+def test_the_default_rank_metric_is_the_cumulative_return():
+    assert pipeline.PortfolioParams().rank_metric == "cum_return"
+
+
+def test_the_build_selects_on_the_rank_metric():
+    # One place of each sector, so the rank decides which stock gets it.
+    returns = _disagreeing_returns()
+    sector_of = {"STEADY": "Tech", "JUMPY": "Tech"}
+    by_return = pipeline.PortfolioParams(
+        rank_metric="cum_return", target_size=1, max_per_sector=1,
+        n_portfolios=50, seed=3)
+    by_sharpe = pipeline.PortfolioParams(
+        rank_metric="sharpe", target_size=1, max_per_sector=1,
+        n_portfolios=50, seed=3)
+    assert pipeline.build_max_sharpe_portfolio(
+        returns, sector_of, by_return)["selected"] == ["JUMPY"]
+    assert pipeline.build_max_sharpe_portfolio(
+        returns, sector_of, by_sharpe)["selected"] == ["STEADY"]

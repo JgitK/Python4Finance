@@ -17,3 +17,6 @@ where d.ticker is null
     or abs(d.daily_volatility - m.daily_volatility) > 1e-12
     or abs(d.annual_return - m.annual_return) > 1e-12
     or abs(d.sharpe_ratio - m.sharpe_ratio) > 1e-12
+    -- The screen ranks on this column, so a point-in-time version of it
+    -- must equal the latest version on the last day of each stock.
+    or abs(d.cum_return_window - m.cum_return_window) > 1e-12

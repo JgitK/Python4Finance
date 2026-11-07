@@ -14,6 +14,7 @@ with joined as (
         m.avg_volume,
         m.daily_volatility,
         m.sharpe_ratio,
+        m.cum_return_window,
         coalesce(s.ichimoku_score, 0) as ichimoku_score
     from {{ ref('int_risk_metrics_daily') }} as m
     join {{ ref('dim_ticker') }} as d using (ticker)
@@ -34,7 +35,7 @@ select
     *,
     row_number() over (
         partition by as_of_date, sector
-        order by sharpe_ratio desc
+        order by {{ rank_column() }} desc
     ) as sector_rank
 from screened
 qualify sector_rank <= {{ var('top_n_per_sector') }}

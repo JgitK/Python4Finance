@@ -18,12 +18,14 @@ LOG_FILE = Path(__file__).resolve().parents[1] / "docs" / "results_log.md"
 
 # The Caps cell holds the three caps of the exposure, in the order
 # top_n_per_sector/target_size/max_per_sector. See decision D20.
+# The Rank cell holds the measure that ranks the candidates inside each
+# sector: cum_return or sharpe. See decision D22.
 TABLE_HEADER = (
-    "| Run date | Commit | Universe | Caps | Candidates "
+    "| Run date | Commit | Universe | Caps | Rank | Candidates "
     "| Live Sharpe (in-sample) "
     "| Window 1: portfolio vs SPY | Window 2 | Window 3 "
     "| Walk-forward, many windows | Note |\n"
-    "|---|---|---|---|---|---|---|---|---|---|---|"
+    "|---|---|---|---|---|---|---|---|---|---|---|---|"
 )
 
 
@@ -67,7 +69,7 @@ def format_summary(summary: dict | None) -> str:
 def format_row(run_date: str, revision: str, universe: str,
                n_candidates: int, live_sharpe: float,
                backtest: pd.DataFrame, summary: dict | None = None,
-               caps: str = "") -> str:
+               caps: str = "", rank_metric: str = "") -> str:
     """Make one Markdown table row from the results of a run.
 
     `summary` holds the measure of a many-window run. See
@@ -78,6 +80,10 @@ def format_row(run_date: str, revision: str, universe: str,
     top_n_per_sector/target_size/max_per_sector. Two runs of one commit
     with different caps are two experiments, so the log needs this cell to
     keep both rows.
+
+    `rank_metric` holds the measure that ranks the candidates inside each
+    sector. It changes which stocks the screen keeps, so it belongs beside
+    the caps.
     """
     windows = [
         f"{pd.Timestamp(r.selection_date).date()}: "
@@ -86,7 +92,8 @@ def format_row(run_date: str, revision: str, universe: str,
     ]
     # The table has three window columns.
     windows = (windows + ["", "", ""])[:3]
-    cells = [run_date, revision, universe, caps, str(n_candidates),
+    cells = [run_date, revision, universe, caps, rank_metric,
+             str(n_candidates),
              f"{live_sharpe:.2f}",
              *windows, format_summary(summary), ""]
     return "| " + " | ".join(cells) + " |"

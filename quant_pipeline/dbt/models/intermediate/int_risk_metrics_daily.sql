@@ -41,7 +41,11 @@ metrics as (
         avg(volume) over w as avg_volume,
         stddev_samp(daily_return) over w as daily_volatility,
         avg(daily_return) over w * {{ tdays }} as annual_return,
-        stddev_samp(daily_return) over w * sqrt({{ tdays }}) as annual_volatility
+        stddev_samp(daily_return) over w * sqrt({{ tdays }}) as annual_volatility,
+        -- The compound return of the window. The screen can rank on this
+        -- column. int_risk_metrics has the same expression without the
+        -- window, and a test compares the two on the last day.
+        exp(sum(ln(1 + daily_return)) over w) - 1 as cum_return_window
     from returns
     window w as (
         partition by ticker

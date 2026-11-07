@@ -28,7 +28,8 @@ def _row(revision: str = "abc1234", universe: str = "sp500") -> str:
 def test_format_row_shows_each_window_against_the_benchmark():
     row = _row()
     # The caps cell is between the universe and the candidate count.
-    assert row.startswith("| 2026-11-06 | abc1234 | sp500 |  | 110 | 4.66 |")
+    # The caps and the rank cells sit between the universe and the count.
+    assert row.startswith("| 2026-11-06 | abc1234 | sp500 |  |  | 110 | 4.66 |")
     assert "2026-02-11: +12.7% vs +11.2%" in row
     assert "2025-08-12: -2.1% vs +13.6%" in row
     assert row.endswith("|  |")  # The note cell is empty. You fill it in.
@@ -168,14 +169,14 @@ def test_format_row_holds_the_caps_after_the_universe():
         run_date="2026-11-06", revision="abc1234", universe="both",
         caps="50/30/6", n_candidates=755, live_sharpe=4.6573,
         backtest=_backtest())
-    assert row.startswith("| 2026-11-06 | abc1234 | both | 50/30/6 | 755 |")
+    assert row.startswith("| 2026-11-06 | abc1234 | both | 50/30/6 |  | 755 |")
 
 
 def test_format_row_without_caps_leaves_the_cell_empty():
     row = results_log.format_row(
         run_date="2026-11-06", revision="abc1234", universe="sp500",
         n_candidates=110, live_sharpe=4.6573, backtest=_backtest())
-    assert row.startswith("| 2026-11-06 | abc1234 | sp500 |  | 110 |")
+    assert row.startswith("| 2026-11-06 | abc1234 | sp500 |  |  | 110 |")
 
 
 def test_the_table_header_names_the_caps_column():
@@ -195,4 +196,35 @@ def test_append_row_separates_two_runs_that_differ_only_in_the_caps(tmp_path):
 
     assert results_log.append_row(path, row("10/12/3")) is True
     assert results_log.append_row(path, row("50/30/6")) is True
+    assert path.read_text().count("abc1234") == 2
+
+
+# ---------------------------------------------------------------------------
+# The rank column (D22).
+
+
+def test_format_row_holds_the_rank_metric_after_the_caps():
+    row = results_log.format_row(
+        run_date="2026-11-06", revision="abc1234", universe="sp500",
+        caps="10/10/3", rank_metric="cum_return", n_candidates=110,
+        live_sharpe=4.47, backtest=_backtest())
+    assert row.startswith(
+        "| 2026-11-06 | abc1234 | sp500 | 10/10/3 | cum_return | 110 |")
+
+
+def test_the_table_header_names_the_rank_column():
+    assert "| Rank " in results_log.TABLE_HEADER
+
+
+def test_append_row_separates_two_runs_that_differ_only_in_the_rank(tmp_path):
+    path = tmp_path / "results_log.md"
+
+    def row(metric: str) -> str:
+        return results_log.format_row(
+            run_date="2026-11-06", revision="abc1234", universe="sp500",
+            caps="10/10/3", rank_metric=metric, n_candidates=110,
+            live_sharpe=4.47, backtest=_backtest())
+
+    assert results_log.append_row(path, row("cum_return")) is True
+    assert results_log.append_row(path, row("sharpe")) is True
     assert path.read_text().count("abc1234") == 2

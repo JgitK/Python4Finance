@@ -42,24 +42,27 @@ WARM_UP = 261
 DEFAULT_WINDOW_STEP = 5
 
 
-def dbt_command(universe: str,
-                top_n_per_sector: int | None = None) -> list[str]:
+def dbt_command(universe: str, top_n_per_sector: int | None = None,
+                rank_metric: str | None = None) -> list[str]:
     """Return the dbt command that builds the models for a universe.
 
-    A value for `top_n_per_sector` goes into the dbt vars. Without a
-    value, dbt reads the cap from dbt_project.yml.
+    A value for `top_n_per_sector` or for `rank_metric` goes into the dbt
+    vars. Without a value, dbt reads that setting from dbt_project.yml.
     """
     variables: dict[str, object] = {"universe": universe}
     if top_n_per_sector is not None:
         variables["top_n_per_sector"] = top_n_per_sector
+    if rank_metric is not None:
+        variables["rank_metric"] = rank_metric
     return ["dbt", "build", "--profiles-dir", ".",
             "--vars", json.dumps(variables)]
 
 
-def build_dbt(universe: str, top_n_per_sector: int | None = None) -> None:
+def build_dbt(universe: str, top_n_per_sector: int | None = None,
+              rank_metric: str | None = None) -> None:
     """Build the dbt models with DuckDB."""
     print(f"Step 1: build the dbt models for the {universe} universe ...")
-    command = dbt_command(universe, top_n_per_sector)
+    command = dbt_command(universe, top_n_per_sector, rank_metric)
     if top_n_per_sector is not None:
         # The unit test compares the two screens, and it fails when the
         # cap of the command is not the cap of the project file.
@@ -193,6 +196,13 @@ def make_parser() -> argparse.ArgumentParser:
                         help="The count of portfolio stocks that one sector "
                              f"can hold. The default is "
                              f"{default.max_per_sector}.")
+    # The measure that ranks the candidates inside each sector. The flag
+    # reaches dbt and Python, so the screen and the selection agree.
+    parser.add_argument("--rank-metric", default=default.rank_metric,
+                        choices=["cum_return", "sharpe"],
+                        help="The measure that ranks the candidates inside "
+                             "each sector. The default is "
+                             f"{default.rank_metric}.")
     return parser
 
 
@@ -200,7 +210,8 @@ def params_from_args(args: argparse.Namespace) -> pipeline.PortfolioParams:
     """Return the portfolio settings of a command line."""
     return pipeline.PortfolioParams(n_portfolios=args.n_portfolios,
                                     target_size=args.target_size,
-                                    max_per_sector=args.max_per_sector)
+                                    max_per_sector=args.max_per_sector,
+                                    rank_metric=args.rank_metric)
 
 
 def caps_label(args: argparse.Namespace) -> str:
@@ -218,12 +229,13 @@ def main() -> None:
     args = make_parser().parse_args()
 
     if not args.skip_dbt:
-        build_dbt(args.universe, args.top_n_per_sector)
+        build_dbt(args.universe, args.top_n_per_sector, args.rank_metric)
 
     OUTPUT_DIR.mkdir(exist_ok=True)
     params = params_from_args(args)
     print(f"Caps: {caps_label(args)} "
-          "(candidates per sector / portfolio size / portfolio per sector).")
+          "(candidates per sector / portfolio size / portfolio per sector). "
+          f"Rank: {args.rank_metric}.")
 
     con = warehouse.connect()
     candidates = warehouse.read_candidates(con)
@@ -341,7 +353,7 @@ def main() -> None:
         row = results_log.format_row(
             run_date=dt.date.today().isoformat(),
             revision=results_log.git_revision(HERE), universe=universe_name,
-            caps=caps_label(args),
+            caps=caps_label(args), rank_metric=args.rank_metric,
             n_candidates=len(candidates), live_sharpe=result["sharpe"],
             backtest=backtest_df, summary=summary)
         added = results_log.append_row(results_log.LOG_FILE, row)

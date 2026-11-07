@@ -43,6 +43,10 @@ vars:
   min_avg_volume: 100000
   max_daily_volatility: 0.05
   top_n_per_sector: 10
+  # The column that ranks the stocks inside each sector: cum_return or
+  # sharpe. The screen keeps the top names of each sector by this measure.
+  # See decision D22.
+  rank_metric: cum_return
   min_ichimoku_score: 2
   # The number of top stocks to show per sector in the sector leaders mart.
   sector_leaders_n: 3

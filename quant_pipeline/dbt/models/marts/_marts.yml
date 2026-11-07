@@ -142,20 +142,30 @@ unit_tests:
     given:
       - input: ref('int_risk_metrics_daily')
         rows:
-          # D1: AAA is too new. BBB passes. CCC passes with a lower Sharpe.
+          # D1: AAA is too new. BBB passes. CCC passes in its own sector.
           - {ticker: AAA, as_of_date: "2024-01-02", total_trading_days: 100,
-             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 3.0}
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 3.0,
+             cum_return_window: 0.90}
           - {ticker: BBB, as_of_date: "2024-01-02", total_trading_days: 500,
-             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0}
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0,
+             cum_return_window: 0.40}
           - {ticker: CCC, as_of_date: "2024-01-02", total_trading_days: 500,
-             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 0.5}
-          # D2: AAA has enough history and the best Sharpe.
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 0.5,
+             cum_return_window: 0.20}
+          # D2: AAA has enough history and the best Sharpe ratio, and BBB
+          # has the best cumulative return. The screen ranks on the
+          # cumulative return, so BBB wins the one Tech place, not AAA.
+          # This pair is the discriminating case: under a Sharpe ranking
+          # the expected rows below are wrong.
           - {ticker: AAA, as_of_date: "2025-01-02", total_trading_days: 450,
-             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 3.0}
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 3.0,
+             cum_return_window: 0.10}
           - {ticker: BBB, as_of_date: "2025-01-02", total_trading_days: 750,
-             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0}
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0,
+             cum_return_window: 0.40}
           - {ticker: CCC, as_of_date: "2025-01-02", total_trading_days: 750,
-             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 0.5}
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 0.5,
+             cum_return_window: 0.20}
       - input: ref('int_ichimoku_score_daily')
         rows:
           - {ticker: AAA, as_of_date: "2024-01-02", ichimoku_score: 5}
@@ -180,7 +190,7 @@ unit_tests:
       rows:
         - {as_of_date: "2024-01-02", ticker: BBB, sector_rank: 1}
         - {as_of_date: "2024-01-02", ticker: CCC, sector_rank: 1}
-        - {as_of_date: "2025-01-02", ticker: AAA, sector_rank: 1}
+        - {as_of_date: "2025-01-02", ticker: BBB, sector_rank: 1}
 
   - name: test_screen_history_uses_index_membership_on_each_date
     description: >
@@ -191,11 +201,14 @@ unit_tests:
       - input: ref('int_risk_metrics_daily')
         rows:
           - {ticker: MEM, as_of_date: "2024-01-02", total_trading_days: 500,
-             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0}
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0,
+             cum_return_window: 0.25}
           - {ticker: MEM, as_of_date: "2024-06-03", total_trading_days: 600,
-             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0}
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0,
+             cum_return_window: 0.25}
           - {ticker: MEM, as_of_date: "2025-01-02", total_trading_days: 750,
-             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0}
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0,
+             cum_return_window: 0.25}
       - input: ref('int_ichimoku_score_daily')
         rows:
           - {ticker: MEM, as_of_date: "2024-01-02", ichimoku_score: 5}

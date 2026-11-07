@@ -5,8 +5,9 @@
 --   2. It trades enough volume.
 --   3. Its daily moves are not too wild.
 --   4. Its Ichimoku score shows a bullish trend.
--- The model then ranks the stocks inside each sector by Sharpe ratio
--- and keeps the top names. These are the candidates for the portfolio.
+-- The model then ranks the stocks inside each sector by the rank_metric
+-- variable and keeps the top names. These are the candidates for the
+-- portfolio. See the rank_column macro and decision D22.
 
 {% set top_n = var('top_n_per_sector') %}
 
@@ -63,7 +64,7 @@ select
     *,
     row_number() over (
         partition by sector
-        order by sharpe_ratio desc
+        order by {{ rank_column() }} desc
     ) as sector_rank
 from screened
 -- Keep the top names in each sector.

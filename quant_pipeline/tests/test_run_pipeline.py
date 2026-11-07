@@ -237,3 +237,41 @@ def test_the_project_file_still_holds_the_sector_cap_of_the_handoff():
     # D20 measured the caps from this start value. A change of the project
     # file moves every baseline, so this test states the start value.
     assert run_pipeline.project_default_top_n() == 10
+
+
+# ---------------------------------------------------------------------------
+# The rank metric on the command line (D22).
+
+
+def test_dbt_command_passes_the_rank_metric():
+    command = run_pipeline.dbt_command("sp500", rank_metric="sharpe")
+    variables = json.loads(command[command.index("--vars") + 1])
+    assert variables == {"universe": "sp500", "rank_metric": "sharpe"}
+
+
+def test_dbt_command_without_a_rank_metric_keeps_the_project_default():
+    command = run_pipeline.dbt_command("sp500")
+    variables = json.loads(command[command.index("--vars") + 1])
+    assert "rank_metric" not in variables
+
+
+def test_the_parser_default_rank_metric_matches_the_portfolio_params():
+    args = run_pipeline.make_parser().parse_args([])
+    assert args.rank_metric == pipeline.PortfolioParams().rank_metric
+
+
+def test_params_from_args_carries_the_rank_metric():
+    args = run_pipeline.make_parser().parse_args(["--rank-metric", "sharpe"])
+    assert run_pipeline.params_from_args(args).rank_metric == "sharpe"
+
+
+def test_a_rank_metric_change_reaches_dbt_as_well_as_python():
+    # The screen ranks in dbt and the selection ranks in Python. A flag
+    # that reaches only one of the two gives a screen and a selection that
+    # disagree.
+    args = run_pipeline.make_parser().parse_args(["--rank-metric", "sharpe"])
+    command = run_pipeline.dbt_command(args.universe, args.top_n_per_sector,
+                                       args.rank_metric)
+    variables = json.loads(command[command.index("--vars") + 1])
+    assert variables["rank_metric"] == "sharpe"
+    assert run_pipeline.params_from_args(args).rank_metric == "sharpe"

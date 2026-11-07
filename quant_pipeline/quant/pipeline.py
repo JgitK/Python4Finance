@@ -34,6 +34,10 @@ class PortfolioParams:
     # The build step uses this many recent rows. The dbt analysis_window
     # has the same value, so the screen and the build use the same year.
     lookback_days: int = 252
+    # The measure that ranks the candidates: cum_return or sharpe. The dbt
+    # variable rank_metric holds the same choice for the screen, so a
+    # change here needs the same change there. See decision D22.
+    rank_metric: str = "cum_return"
 
 
 def lookback_window(returns: pd.DataFrame,
@@ -55,18 +59,50 @@ def rank_by_sharpe(returns: pd.DataFrame, risk_free: float = 0.045,
     return list(sharpe.sort_values(ascending=False).index)
 
 
+def rank_by_cumulative_return(returns: pd.DataFrame) -> list[str]:
+    """Order the stocks from the highest compound return to the lowest.
+
+    The measure is the compound return of the whole frame, so the caller
+    must cut the frame to the lookback window first. This measure takes no
+    account of the risk. A wild stock that rose can rank above a calm
+    stock that rose less.
+    """
+    compound = (1.0 + returns).prod() - 1.0
+    return list(compound.sort_values(ascending=False).index)
+
+
+def rank_candidates(returns: pd.DataFrame,
+                    params: PortfolioParams) -> list[str]:
+    """Order the stocks by the rank metric of the settings.
+
+    Raise ValueError for an unknown metric. A silent default would give a
+    portfolio that nobody asked for.
+    """
+    if params.rank_metric == "cum_return":
+        return rank_by_cumulative_return(returns)
+    if params.rank_metric == "sharpe":
+        return rank_by_sharpe(returns, params.risk_free, params.trading_days)
+    raise ValueError(
+        f"rank_metric must be 'cum_return' or 'sharpe', not "
+        f"{params.rank_metric!r}")
+
+
 def build_max_sharpe_portfolio(returns: pd.DataFrame,
                                sector_of: dict[str, str],
                                params: PortfolioParams | None = None
                                ) -> dict[str, Any]:
     """Build one Max Sharpe portfolio from a return matrix.
 
-    Rank the stocks, pick a diversified set, then optimize the weights.
+    Rank the stocks on `params.rank_metric`, pick a diversified set, then
+    optimize the weights. The rank decides which stock takes a place of a
+    sector. The optimizer then finds the Max Sharpe weights of the stocks
+    that the rank selected, so the rank metric and the weight objective
+    are two different measures.
     Return an empty result when no stock passes the selection.
     """
     params = params or PortfolioParams()
 
-    ranked = rank_by_sharpe(returns, params.risk_free, params.trading_days)
+    ranked = rank_candidates(returns, params)
     candidates = [
         {"ticker": ticker, "sector": sector_of.get(ticker, "Unknown")}
         for ticker in ranked
