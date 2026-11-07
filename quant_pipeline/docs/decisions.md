@@ -184,7 +184,7 @@ Use this template for a new entry:
 - **Results:** Four rows in `results_log.md`, dated 2026-11-07, with the
   note "D24". The commit cell `91ac40b-dirty` means a change to the
   settings only. The strict-rule row holds the code change above.
-- **Commits:** `6fc9b9a`
+- **Commits:** `6dd84e6`
 
 ## D23. Measure the rank order against a random order
 
