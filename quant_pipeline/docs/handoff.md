@@ -3,7 +3,7 @@
 Give this file to a new chat. It holds the state of the project and the
 rules of work. Update it at the end of each session.
 
-Last update: 2026-11-06 (third session of that day). HEAD is `a2cdfc6`.
+Last update: 2026-11-06 (fourth session of that day). HEAD is `PLACEHOLDER`.
 
 ## Paste this into the new chat
 
@@ -19,15 +19,23 @@ dbt and DuckDB do the data work (prices, indicators, screens). Python does
 the statistics (low-correlation selection, Max Sharpe weights, a
 walk-forward backtest). The universe is point-in-time: the S&P 500 on each
 date, a Nasdaq universe, or both (`run_pipeline.py --universe`). The
-honest result so far: the method does not beat SPY. On 85 walk-forward
-windows the `sp500` portfolio beats SPY on the return in 48.2% of them and
+honest result so far: the method beats SPY, but only with a larger
+portfolio than the default. With the default 12 stocks, the `sp500`
+portfolio beats SPY on the return in 48.2% of 85 walk-forward windows and
 on the Sharpe ratio in 45.9%, and the median window is 0.27% below SPY.
+With 40 stocks and at most 10 of a sector, the same universe beats SPY on
+the return in 64.7% of the windows, on the Sharpe ratio in 61.2%, and the
+median window is 3.68% above SPY. See D20.
 
 ## What the user wants now
 
 The user wants **as much market exposure as possible**, and the user wants
-the survivorship bias under control. Read "The two limits of the exposure"
-below before you change anything. The universe is not the limit.
+the survivorship bias under control. D20 answered where the exposure is.
+Read "The limit of the exposure" below before you change anything.
+**Neither the universe nor the screen cap is the limit. The portfolio size
+is.** The open question for the user is whether the default changes from 12
+stocks to 24 or 40, because whole shares of $10,000 cannot hold 40 target
+weights.
 
 ## How to start
 
@@ -41,6 +49,12 @@ python verify_indicators.py
 python run_pipeline.py --universe sp500 --investment 10000
 ```
 
+The three caps of the exposure come from the command line:
+`--top-n-per-sector`, `--target-size` and `--max-per-sector`. A run states
+them in the Caps column of the results log, in that order. The best setting
+of the project is
+`python run_pipeline.py --universe sp500 --target-size 40 --max-per-sector 10 --many-windows`.
+
 The price file `data/raw_prices.parquet` is in git, so no download is
 necessary. `python -m quant.ingest` downloads the prices again (about one
 hour; it continues after a stop because of the cache in `data/cache/`).
@@ -49,7 +63,7 @@ hour; it continues after a stop because of the cache in `data/cache/`).
 
 | What | Where |
 |---|---|
-| Why each decision was made | `docs/decisions.md` (D1 to D19; D20 is next) |
+| Why each decision was made | `docs/decisions.md` (D1 to D20; D21 is next) |
 | How the results changed | `docs/results_log.md` (one row for each run) |
 | Problems that are not solved | `docs/open_questions.md` |
 | The groups of the decisions | the Safeguards section of `docs/README.md` |
@@ -85,36 +99,88 @@ The user set these rules. Keep them.
 8. **Explain with analogies.** The user learns by doing and likes
    analogies.
 
-## The two limits of the exposure
+## The limit of the exposure
 
-The Nasdaq universe is already in the pipeline. `--universe both` gives
-1,418 members. The universe is not the limit. Two caps are:
+D20 measured the three caps. The result is short: only the portfolio size
+matters.
 
-| Universe | Members | Have prices | Pass all 4 gates | Candidates | Portfolio |
-|---|---|---|---|---|---|
-| sp500 | 503 | 499 | 359 | 110 | 12 |
-| nasdaq | 1,074 | 1,056 | 499 | 103 | 12 |
-| both | 1,418 | 1,398 | **755** | 110 | 12 |
+| Cap | Where | Does it hold the exposure? |
+|---|---|---|
+| `top_n_per_sector` (10) | `dbt/dbt_project.yml`, `--top-n-per-sector` | **No.** |
+| `target_size` (12) | `quant/pipeline.py`, `--target-size` | **Yes.** |
+| `max_per_sector` (3) | `quant/pipeline.py`, `--max-per-sector` | **Yes.** |
 
-1. `top_n_per_sector: 10` in `dbt/dbt_project.yml` keeps the top 10 names
-   of each sector, so `mart_screen_candidates` holds 110 rows at most.
-   This is why `both` reports the same 110 candidates as `sp500`: the cap
-   binds in both. 645 of the 755 eligible stocks never reach the selection.
-2. `greedy_low_correlation(target_size=12, max_per_sector=3)` in
-   `quant/select_portfolio.py` keeps 12 of the 110.
+`top_n_per_sector` is slack. The selection reads the candidates in Sharpe
+order, and it takes at most `max_per_sector` names of one sector, so it can
+never look deeper than the top `max_per_sector` names of a sector. While
+`top_n_per_sector >= max_per_sector`, a larger candidate pool gives the
+same portfolio. The measurement shows it:
 
-To measure the eligible pool, build with the cap removed:
-`dbt build --profiles-dir . --vars '{"universe": "both", "top_n_per_sector": 100000}' --exclude assert_screen_history_matches_candidates`.
-That unit test compares the mart with the screen history, and it fails
-when the cap changes, so exclude it for the measurement only.
+| Universe | Caps | Candidates | Beat SPY on return | Median excess |
+|---|---|---|---|---|
+| sp500 | 10/12/3 | 110 | 48.2% | -0.27% |
+| sp500 | 100000/12/3 | 359 | 48.2% | -0.27% |
+| both | 10/40/10 | 110 | 61.2% | +3.52% |
+| both | 100000/40/10 | 755 | 61.2% | +3.52% |
 
-**Before you raise the caps:** the cap also does the sector balance. The
-eligible stocks of `both` are not balanced: Health Care 164, Financials
-142, Information Technology 110, Consumer Discretionary 101, Industrials
-69, Consumer Staples 41, Utilities 36, Energy 27, Real Estate 26,
-Materials 20, Communication Services 19. A larger cap gives a pool of
-biotechnology and banks. `nasdaq` alone holds only 3 eligible Materials
-names, so `both` is the better of the two Nasdaq options.
+The earlier handoff said that 645 of the 755 eligible stocks of `both`
+never reach the selection. That is true, and it does not matter: those 645
+rank below the third name of their sector, and a 12-stock portfolio holds
+at most 3 names of a sector. **Do not spend time on the screen cap.**
+
+The portfolio size does move the measure. `sp500`, 85 windows, step 5 days:
+
+| Stocks (caps) | Beat SPY on return | On Sharpe | Median excess | Mean Sharpe |
+|---|---|---|---|---|
+| 12 (100000/12/3) | 48.2% | 45.9% | -0.27% | 0.68 |
+| 24 (100000/24/6) | 62.4% | 56.5% | +2.46% | 0.82 |
+| **40 (100000/40/10)** | **64.7%** | **61.2%** | **+3.68%** | **0.82** |
+| 60 (100000/60/15) | 61.2% | 56.5% | +3.43% | 0.76 |
+
+SPY has a mean Sharpe ratio of 0.80 over the same windows. The measure
+rises to 40 stocks and then falls. `sp500` at 40 stocks also measures
+better than `both` at 40 stocks (+3.68% against +3.52%), and `both` carries
+2 to 3 times more survivorship bias, so `sp500` stays the default universe
+(D13 stands).
+
+**The price of the exposure.** The backtest holds the exact weights. A plan
+of whole shares cannot. `sp500`, $10,000:
+
+| Stocks | Dropped by the rounding | Their target weight | Smallest amount that holds every weight |
+|---|---|---|---|
+| 12 | 0 | 0.0% | $10,000 is enough |
+| 24 | 3 | 6.6% | $39,675 |
+| 40 | 11 | 9.5% | $916,335 |
+| 60 | 19 | 16.6% | $1,638,602 |
+
+So the 40-stock measure is the measure of the method, not of a plan that
+$10,000 can place. This is the reason that D20 changed no default.
+
+**Two things that the measure does not prove.** First, a random weight
+vector of 40 assets sits near equal weight, so the 40-stock portfolio is
+near an equal-weight portfolio of the eligible pool. An equal-weight
+portfolio of large companies can beat the capitalisation weight of SPY with
+no skill in the screen. The test is an equal-weight benchmark of the
+eligible pool, and nobody ran it. Second, the windows overlap and the date
+grid moves the share by approximately 5 points (D16), so 48.2% against
+64.7% is a real difference and 61.2% against 64.7% is not.
+
+**The eligible pool of each universe**, for a reader who still wants it:
+
+| Universe | Members | Have prices | Pass all 4 gates |
+|---|---|---|---|
+| sp500 | 503 | 499 | 359 |
+| nasdaq | 1,074 | 1,056 | 499 |
+| both | 1,418 | 1,398 | 755 |
+
+The eligible stocks of `both` are not balanced: Health Care 164,
+Financials 142, Information Technology 110, Consumer Discretionary 101,
+Industrials 69, Consumer Staples 41, Utilities 36, Energy 27, Real Estate
+26, Materials 20, Communication Services 19. `max_per_sector` holds the
+sector balance of the portfolio, so the imbalance of the pool does not
+reach the portfolio. No `sp500` setting reaches Communication Services or
+Utilities, because no name of those two sectors passes the four gates on
+the last day.
 
 ## The survivorship bias
 
@@ -167,6 +233,10 @@ The state of the data fixes:
   valid date. Use it for each new result. The measure moves by
   approximately 5 points with the grid of the dates, so read the median
   excess return, not the mean. See D16.
+- A run with `--top-n-per-sector` excludes
+  `assert_screen_history_matches_candidates`, so its build reports PASS=87
+  for `sp500`, not PASS=88. That unit test compares the two screens, and
+  the screens read the cap of the project file. See D20.
 - `allocate.py` runs a second pass that spends the cash of the share
   rounding. For $10,000 the cash is $63.06, and it was $1,680.44. See D17.
 - Step 4 of a run prints a warning for each target weight that whole
@@ -199,48 +269,69 @@ The state of the data fixes:
 
 ## State at the end of this session
 
-The session started from the universe comparison (D13) and added six
-decisions. Each one has a clean-clone check.
+The session answered "Raise the two caps, and measure what happens", which
+was step 1 of the earlier handoff. It added one decision.
 
-- **D14, D15 (`895fabe` is later; the pair is `81e83c3`):** the volume rule
-  classifies every large one-day move, and 10 tickers with a broken price
-  history leave the universe. 598 moves had no review, and now 0 have
-  none. **The numbers did not change at all**: a run on the old price data
-  with the same 85 dates gives the same measure to every decimal, because
-  none of those tickers passed the screen.
-- **D16 (`06862e6`, `31d2a09`):** the results log holds the measure of 85
-  windows. The measure moves by approximately 5 points with the grid of
-  the dates, and the mean excess return changes its sign between grids.
-  D13 holds an update: its 84-window table cannot separate the universes.
-- **D17 (`a20f26d`):** the allocator spends the cash of the share
-  rounding. For $10,000 the cash falls from $1,680.44 to $63.06.
-- **D18 (`d90c665`):** a run says when whole shares cannot hold the target
-  weights. The cash figure alone hides this: the $2,500 plan holds $13.14
-  in cash and drops 3 of the 12 stocks.
-- **D19 (`895fabe`, `a2cdfc6`):** the download separates a refusal of the
-  API from a quiet symbol, and `data/missing_symbols.csv` records each
-  refusal. I deleted the 333 cached empty answers and asked the API again:
-  0 came back with data, so the cache was not the cause.
+- **D20 (`9ad5e17`):** the three caps come from the command line, the
+  results log holds a Caps column, and a run prints the sector mix of the
+  portfolio. 14 new results rows hold the measurement.
+  - `top_n_per_sector` holds nothing. A 3.3 times larger candidate pool
+    gives the same portfolio and the same measure to every decimal, in
+    `sp500` and in `both`.
+  - `target_size` and `max_per_sector` hold the exposure. 40 stocks with
+    at most 10 of a sector is the first setting of the project that beats
+    SPY on the median window, on the share of the windows, and on the mean
+    Sharpe ratio at the same time.
+  - A 10 times larger Monte Carlo search does not remove the gain, so the
+    gain is not an artifact of the weight search.
+  - **No default changed.** $10,000 of whole shares drops 11 of the 40
+    stocks, which is 9.5% of the target weight, and a plan that holds
+    every weight needs $916,335. The user must choose the default.
 
-143 tests pass. The live `sp500` run gives 110 candidates, an in-sample
-Sharpe ratio of 4.66, and a $10,000 plan that spends $9,936.94.
+159 tests pass, up from 143. `dbt build` for `sp500` gives PASS=88 and 2
+warnings, as before. `verify_indicators.py` passes every check. The live
+`sp500` run at the default caps gives 110 candidates, an in-sample Sharpe
+ratio of 4.66, and a $10,000 plan that spends $9,936.94. None of those
+numbers moved.
 
 ## Next steps
 
-1. **Raise the two caps, and measure what happens.** This is the request
-   of the user: more exposure. Read "The two limits of the exposure"
-   first. The work is a decision entry, a change of
-   `top_n_per_sector` and of `target_size` and `max_per_sector`, and a
-   results row for each setting. Measure the sector mix of the portfolio
-   before and after, because the cap also does the sector balance.
-2. **Measure a liquidity floor for the Nasdaq universe.** D14 left this
-   option open. The screen already has a volume gate of 100,000 shares,
-   so the effect can be small. Measure it before you decide.
-3. **Find a second price source** for a delisted company. This is the only
+1. **Ask the user for the default portfolio size.** This is the open
+   decision of D20, and it is the only thing that gives the user the
+   exposure that the user asked for. Three answers are open:
+   - Keep 12 stocks. The $10,000 plan is exact, and the method loses to
+     SPY on the median window.
+   - Move to 24 stocks and at most 6 of a sector. The median window goes
+     to +2.46%, and the $10,000 plan drops 3 of the 24 stocks (6.6% of the
+     target weight).
+   - Move to 40 stocks and at most 10 of a sector. The median window goes
+     to +3.68%, and the $10,000 plan drops 11 of the 40 stocks (9.5%).
+   A change of the default is a change of `PortfolioParams` in
+   `quant/pipeline.py`, a decision entry, and a results row.
+2. **Give the backtest the same whole-share rounding as the plan.** This
+   is the honest repair of the problem in step 1. The backtest holds exact
+   weights, so it measures a portfolio that the money cannot buy, and the
+   error grows with the portfolio size. After this change, the measure and
+   the plan agree, and the best portfolio size can be measured for the
+   amount that the user really invests.
+3. **Add an equal-weight benchmark of the eligible pool.** A 40-stock
+   portfolio sits near equal weight, so the gain of D20 can be the
+   equal-weight premium and not the work of the screen. SPY alone cannot
+   separate the two. This is the one test that says whether the screen
+   adds value.
+4. **Measure a liquidity floor for the Nasdaq universe.** D14 left this
+   option open. The screen already has a volume gate of 100,000 shares, so
+   the effect can be small. Measure it before you decide. Note that D20
+   makes this less urgent: `sp500` measures better than `both` at every
+   portfolio size, so the Nasdaq universe is not the road to more
+   exposure.
+5. **Find a second price source** for a delisted company. This is the only
    repair of the survivorship bias. The nasdaq API cannot do it.
-4. **The web app.** The user asked for an interactive web app of this
+6. **The web app.** The user asked for an interactive web app of this
    pipeline. Three plans are open, and the user has not selected one: a
    read-only batch site, a live parameter workbench, and a browser-only
    teaching tool with toggles that turn each removed bias back on. Note
    that `webapp/` in this repository is an early FastAPI scaffold that
-   reads CSV exports from the R modules, not from `quant_pipeline`.
+   reads CSV exports from the R modules, not from `quant_pipeline`. The
+   three caps of D20 are now command line flags, which is the shape that a
+   parameter workbench needs.

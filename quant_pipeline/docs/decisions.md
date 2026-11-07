@@ -22,6 +22,149 @@ Use this template for a new entry:
 
 ---
 
+## D20. The portfolio size holds the exposure, not the screen cap
+
+- **Date:** 2026-11-06
+- **Role:** Measurement of the core loop. It changes no default, so no
+  earlier row of the results log changes. It names the cap that holds the
+  exposure down, and it shows what a larger portfolio does.
+- **Question:** The user wants as much market exposure as possible. The
+  handoff named two caps. `top_n_per_sector` (10) keeps the top 10 names of
+  each sector in `mart_screen_candidates`, so that mart holds 110 rows at
+  most. `greedy_low_correlation(target_size=12, max_per_sector=3)` then
+  keeps 12 of the 110. With the `both` universe, 755 stocks pass the four
+  gates and 645 of them never reach the selection. Which cap holds the
+  exposure, and what happens to the results when it goes up?
+- **Options:**
+  1. Raise `top_n_per_sector` only. This gives the selection a deeper pool
+     of each sector.
+  2. Raise `target_size` and `max_per_sector` only. This gives a larger
+     portfolio from the same pool.
+  3. Raise the three together.
+  4. Change no default, and measure each setting first.
+- **Decision:** Option 4 for now. The measurement below shows that
+  option 1 does nothing at all, and that option 2 moves the method from
+  a loss against SPY to a gain. The defaults stay at 10/12/3 until the
+  user accepts the cost that the share rounding adds (see "The price of
+  the exposure"). The three caps now come from the command line, so each
+  results row states the setting that made it.
+- **The reason that the screen cap does nothing:** The selection reads the
+  candidates in Sharpe order and it takes at most `max_per_sector` names
+  from one sector. It can therefore never look deeper than the top
+  `max_per_sector` names of a sector. While
+  `top_n_per_sector >= max_per_sector`, the screen cap is slack. With the
+  defaults, the selection needs the top 3 names of a sector and the screen
+  offers the top 10. The 645 stocks of the handoff were never reachable:
+  they rank below the third name of their sector, and the portfolio holds
+  only three names of a sector. The cap binds a little at
+  `max_per_sector: 10`, where the correlation gate can empty a sector of
+  10 names, and the effect on the measure is inside the noise of the date
+  grid.
+- **Evidence 1, the screen cap:** `sp500`, 85 windows, step 5 days.
+
+  | Caps | Candidates | Beat SPY on return | On Sharpe | Median excess |
+  |---|---|---|---|---|
+  | 10/12/3 | 110 | 48.2% | 45.9% | -0.27% |
+  | 25/12/3 | 243 | 48.2% | 45.9% | -0.27% |
+  | 100000/12/3 | 359 | 48.2% | 45.9% | -0.27% |
+  | 10/24/6 | 110 | 62.4% | 56.5% | +2.46% |
+  | 25/24/6 | 243 | 62.4% | 56.5% | +2.46% |
+  | 100000/24/6 | 359 | 62.4% | 56.5% | +2.46% |
+
+  A 3.3 times larger candidate pool gives the same portfolio, the same
+  sector mix, the same three windows, and the same measure to every
+  decimal. The `both` universe agrees: 110 candidates and 755 candidates
+  both give the same 40 stocks and the same median of +3.52%.
+- **Evidence 2, the portfolio size:** `sp500`, 85 windows, step 5 days.
+  The screen cap is removed, so only the portfolio caps change.
+
+  | Caps | Stocks | Beat SPY on return | On Sharpe | Median excess | Mean Sharpe |
+  |---|---|---|---|---|---|
+  | 100000/12/3 | 12 | 48.2% | 45.9% | -0.27% | 0.68 |
+  | 100000/24/6 | 24 | 62.4% | 56.5% | +2.46% | 0.82 |
+  | 100000/40/10 | 40 | **64.7%** | **61.2%** | **+3.68%** | 0.82 |
+  | 100000/60/15 | 60 | 61.2% | 56.5% | +3.43% | 0.76 |
+
+  SPY has a mean Sharpe ratio of 0.80 over the same windows. This is the
+  first setting of the project that beats SPY on the median window, on
+  the share of the windows, and on the mean Sharpe ratio at the same time.
+  The measure rises to 40 stocks and then falls, so the gain is not
+  "more is always better".
+- **Evidence 3, the `both` universe:** 85 windows, step 5 days.
+
+  | Caps | Candidates | Beat SPY on return | On Sharpe | Median excess |
+  |---|---|---|---|---|
+  | 10/12/3 | 110 | 45.9% | 37.6% | -0.72% |
+  | 10/24/6 | 110 | 57.6% | 49.4% | +2.61% |
+  | 10/40/10 | 110 | 61.2% | 54.1% | +3.52% |
+  | 100000/40/10 | 755 | 61.2% | 55.3% | +3.52% |
+  | 100000/60/15 | 755 | 63.5% | 56.5% | +3.65% |
+
+  The portfolio size gives the same gain in the larger universe, and
+  `sp500` at 40 stocks still measures better than `both` at 40 stocks
+  (+3.68% against +3.52%). `both` also carries 2 to 3 times more
+  survivorship bias (D19). The larger universe is therefore not the way
+  to more exposure. D13 stands.
+- **Evidence 4, the Monte Carlo search is not the cause:** A larger
+  portfolio has more assets, and a random weight vector of 40 assets sits
+  near equal weight, so a weak search could explain the gain. A run of
+  `100000/40/10` with 100,000 random portfolios instead of 10,000 raises
+  the in-sample Sharpe ratio from 4.64 to 4.99 and leaves the measure
+  almost unmoved: 62.4% on return, 61.2% on Sharpe, median +3.57% against
+  +3.68%. The gain comes from the count of the stocks, not from the
+  weights of the optimizer.
+- **The price of the exposure:** A plan of whole shares cannot hold 40
+  target weights with $10,000. D18 reports this, and the report grows with
+  the portfolio size. `sp500`, $10,000:
+
+  | Caps | Stocks dropped by the rounding | Their target weight | Smallest amount that holds every weight |
+  |---|---|---|---|
+  | 100000/12/3 | 0 | 0.0% | $10,000 is enough |
+  | 100000/24/6 | 3 of 24 | 6.6% | $39,675 |
+  | 100000/40/10 | 11 of 40 | 9.5% | $916,335 |
+  | 100000/60/15 | 19 of 60 | 16.6% | $1,638,602 |
+
+  The backtest holds the exact weights. It therefore measures a portfolio
+  that $10,000 cannot buy. The 40-stock measure of evidence 2 is the
+  measure of the method, not of the plan that the user can place today.
+  This is the reason that the default does not change in this decision.
+- **The sector mix:** The screen cap balances the sectors, so a larger
+  portfolio spreads over more of them. `sp500`, live run:
+
+  | Caps | Sectors | The mix |
+  |---|---|---|
+  | 10/12/3 | 7 | Energy 3, Health Care 3, Industrials 2, Financials 1, Information Technology 1, Materials 1, Real Estate 1 |
+  | 100000/24/6 | 9 | Energy 6, Health Care 6, Industrials 3, Information Technology 3, Consumer Staples 2, Consumer Discretionary 1, Financials 1, Materials 1, Real Estate 1 |
+  | 100000/40/10 | 9 | Energy 10, Health Care 10, Industrials 6, Financials 4, Information Technology 4, Consumer Discretionary 2, Consumer Staples 2, Materials 1, Real Estate 1 |
+
+  The count of sectors rises from 7 to 9. The largest sector stays at 25%
+  of the names (3 of 12, and 10 of 40), because each setting raises
+  `max_per_sector` and `target_size` by the same factor. A larger
+  portfolio therefore adds sectors, and it does not concentrate the
+  portfolio more. `max_per_sector` holds the largest sector, not
+  `top_n_per_sector`. No setting reaches Communication Services or
+  Utilities in `sp500`, because no name of those two sectors passes the
+  four gates on the last day.
+- **The change:** `run_pipeline.py` gets `--top-n-per-sector`,
+  `--target-size` and `--max-per-sector`. The results log gets a Caps
+  column with the three values, so two settings of one commit are two
+  rows. A run prints the sector mix, and `output/optimal_weights.csv` holds
+  the sector of each stock. A build with `--top-n-per-sector` excludes
+  `assert_screen_history_matches_candidates`, because that unit test
+  compares the two screens and the screens use the cap of the project file.
+- **What this does not measure:**
+  1. A portfolio of 40 stocks of the screen may beat SPY because it is
+     near an equal-weight portfolio of the eligible pool, and an
+     equal-weight portfolio of large companies beat the capitalisation
+     weight of SPY over these windows. The test is an equal-weight
+     benchmark of the eligible pool. It is not in this decision.
+  2. The windows overlap. The valid dates cover approximately two
+     independent holding periods, and the date grid moves the share by
+     approximately 5 points (D16). A rise from 48.2% to 64.7% is larger
+     than that noise. A rise from 61.2% to 64.7% is not.
+  3. The survivorship bias of D19 is in every row above.
+- **Commits:** `9ad5e17`
+
 ## D19. Make the survivorship gap visible at the download
 
 - **Date:** 2026-11-06

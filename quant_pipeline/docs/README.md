@@ -47,6 +47,7 @@ proof that the results are correct.
 | D15 | A third warning test, `assert_a_price_history_is_one_security`, finds a ticker whose close spans a factor of 1000. Such a file mixes the prices before and after a split. |
 | D19 | The download separates an error of the price source from a quiet symbol. `data/missing_symbols.csv` holds each symbol that the source does not have, and the run reports the share. `assert_current_members_have_prices` finds a current member with no prices, which is the repairable case. |
 | D18 | The pipeline prints a warning for each target weight that whole shares cannot hold, and it gives the smallest investment amount that has no such problem. |
+| D20 | A run states the three caps of the exposure in the results log, so two settings of one commit are two rows. It also prints the sector mix of the portfolio, because the caps balance the sectors. |
 | D1 | The 48 data tests and the 15 unit tests in the dbt project check each model on every build. |
 
 ### Correctness fixes, in the core loop
