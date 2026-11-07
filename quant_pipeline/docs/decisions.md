@@ -22,6 +22,81 @@ Use this template for a new entry:
 
 ---
 
+## D21. Hold 10 stocks by default
+
+- **Date:** 2026-11-06
+- **Role:** Method choice, in the core loop. It changes the portfolio of
+  every new run, so each row before this decision used 12 stocks.
+- **Question:** D20 measured the portfolio size and changed no default. It
+  left the choice to the user: 12 stocks, 24 stocks, or 40 stocks. The user
+  selected **10 stocks**, which is below every setting of D20. What does a
+  10-stock portfolio measure, and what does the change cost?
+- **Options:** 10, 12, 24 or 40 stocks, with `max_per_sector` at a quarter
+  to a third of that count.
+- **Decision:** 10 stocks, with `max_per_sector` at 3.
+  `PortfolioParams.target_size` goes from 12 to 10. The user named the
+  count of stocks only, so `max_per_sector` does not change.
+- **Evidence, the small sizes:** `sp500`, 85 windows, step 5 days. The
+  screen cap is at its default of 10 in each row.
+
+  | Caps | Stocks | Beat SPY on return | On Sharpe | Median excess | Mean Sharpe |
+  |---|---|---|---|---|---|
+  | 10/10/2 | 10 | 50.6% | 45.9% | +0.07% | 0.62 |
+  | **10/10/3** | **10** | **47.1%** | **42.4%** | **-1.40%** | **0.66** |
+  | 10/10/4 | 10 | 49.4% | 44.7% | -0.87% | 0.68 |
+  | 10/10/5 | 10 | 49.4% | 44.7% | -0.87% | 0.69 |
+  | 10/12/2 | 12 | 47.1% | 38.8% | -1.07% | 0.63 |
+  | 10/12/3 | 12 | 48.2% | 45.9% | -0.27% | 0.68 |
+
+  SPY has a mean Sharpe ratio of 0.80 over the same windows.
+- **The honest reading of that table:** **No difference in it is real.**
+  Every row sits between 47.1% and 50.6% on the return, and the date grid
+  alone moves that share by approximately 5 points (D16). The medians sit
+  between -1.40% and +0.07%, and they are all near zero. At 10 to 12
+  stocks the method does not beat SPY and it does not clearly lose to it
+  either. The choice between 10/2, 10/3 and 12/3 therefore cannot come
+  from this data. It comes from the user.
+
+  The comparison that **is** larger than the noise stays the comparison of
+  D20: 10 stocks (47.1%, median -1.40%) against 40 stocks (64.7%, median
+  +3.68%). The new default gives up that measured gain.
+- **What the change buys:** The plan of whole shares gets much easier.
+  The live `sp500` portfolio of commit `845ce69`, for $10,000:
+
+  | Stocks | Warnings | Cash | Largest weight difference | Smallest amount that holds every weight |
+  |---|---|---|---|---|
+  | 10 | none | $74.31 | 1.80 points | **$4,285.96** |
+  | 12 | none | $63.06 | 1.70 points | $8,552.56 |
+  | 40 | 11 dropped, 7 above target | $301.74 | 1.14 points | $916,334.83 |
+
+  A 10-stock plan works down to $4,286, which is half of the 12-stock
+  figure and 1/214 of the 40-stock figure. The user can therefore place
+  the plan that the backtest measures, which is not true of 40 stocks (see
+  D20, "The price of the exposure"). This is the one measured gain of the
+  change.
+- **The sector mix:** 10 stocks with at most 3 of a sector reach 6
+  sectors: Energy 3, Health Care 3, Financials 1, Industrials 1, Materials
+  1, Real Estate 1. The 12-stock default reached 7. 6 of the 10 names sit
+  in two sectors. `max_per_sector: 2` would reach 7 sectors with 10 names
+  (Energy 2, Health Care 2, Industrials 2, Financials 1, Information
+  Technology 1, Materials 1, Real Estate 1), and it measures the same
+  inside the noise. That option stays open for the user.
+- **One place holds the caps:** The two caps lived in
+  `PortfolioParams` and in the signature of
+  `select_portfolio.greedy_low_correlation`. Two defaults can drift, and
+  then the live run and a direct caller select different portfolios.
+  `greedy_low_correlation` now requires `target_size` and
+  `max_per_sector`, so `PortfolioParams` is the one place. Every caller
+  already passed the two values, so no behaviour changed. A test holds this
+  property.
+- **Results:** The live portfolio drops CSX and ADI from the 12-stock
+  portfolio and keeps the other 10. The in-sample Sharpe ratio falls from
+  4.66 to 4.47, which is the expected direction: a smaller search finds a
+  worse fit. The walk-forward measure goes from 48.2% to 47.1% on the
+  return and the median from -0.27% to -1.40%, both inside the noise of
+  the date grid.
+- **Commits:** `845ce69`
+
 ## D20. The portfolio size holds the exposure, not the screen cap
 
 - **Date:** 2026-11-06

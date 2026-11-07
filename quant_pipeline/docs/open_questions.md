@@ -8,14 +8,16 @@ one, move it to the "Solved" section with the commit hash.
 ### Results
 
 - **The default settings do not beat SPY, and a larger portfolio does.**
-  With the default caps (10/12/3) the `sp500` portfolio beats SPY on the
-  return in 48.2% of 85 windows, and the median window is 0.27% below SPY.
+  With the default caps (10/10/3) the `sp500` portfolio beats SPY on the
+  return in 47.1% of 85 windows, and the median window is 1.40% below SPY.
   D20 found that 40 stocks with at most 10 of a sector beats SPY on the
   median window (+3.68%), on the share of the windows (64.7%) and on the
-  mean Sharpe ratio (0.82 against 0.80). The default is still 12 stocks,
-  because the share rounding cannot hold 40 weights with $10,000. The open
-  part is the choice of the default. See "The money cannot hold a large
-  portfolio" below.
+  mean Sharpe ratio (0.82 against 0.80). The user selected 10 stocks (D21),
+  so the pipeline gives up that measured gain. The reason to accept it is
+  the plan: a 10-stock plan of whole shares works from $4,286, and a
+  40-stock plan needs $916,335 to hold every weight. The open part is
+  whether a backtest with whole-share rounding still favours 40 stocks for
+  the amount that the user really invests. See the next item.
 
 - **Is the gain of a large portfolio only the equal-weight premium?** A
   random weight vector of 40 assets sits near equal weight, so a 40-stock
@@ -85,8 +87,9 @@ one, move it to the "Solved" section with the commit hash.
 
 - **The money cannot hold a large portfolio.** This is the same problem
   from the other side, and D20 made it the limit of the exposure. With
-  $10,000, a 24-stock plan drops 3 stocks (6.6% of the target weight), a
-  40-stock plan drops 11 (9.5%), and a 60-stock plan drops 19 (16.6%).
+  $10,000, a 10-stock plan drops nothing, a 24-stock plan drops 3 stocks
+  (6.6% of the target weight), a 40-stock plan drops 11 (9.5%), and a
+  60-stock plan drops 19 (16.6%).
   The smallest amount that holds every weight is $39,675 for 24 stocks and
   $916,335 for 40. The backtest holds the exact weights, so it measures a
   portfolio that $10,000 cannot buy. Three options are open: raise the
@@ -108,6 +111,14 @@ one, move it to the "Solved" section with the commit hash.
 - **Merge to `main`?** Not decided. See decision D3.
 
 ## Solved
+
+- **Which default portfolio size?** Solved by D21 (`845ce69`): 10 stocks,
+  which the user selected. `max_per_sector` stays 3. Note that D21 could
+  not separate 10/2, 10/3 and 12/3 by measurement: every small setting
+  sits between 47.1% and 50.6% of the windows, and the date grid moves
+  that share by approximately 5 points. **The open part is
+  `max_per_sector`:** 2 reaches 7 sectors with 10 names instead of 6, and
+  it measures the same inside the noise. The user has not chosen it.
 
 - **Which cap holds the market exposure down?** Solved by D20 (`9ad5e17`).
   `top_n_per_sector` holds nothing: while it is at or above
