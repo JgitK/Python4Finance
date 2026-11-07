@@ -3,7 +3,7 @@
 Give this file to a new chat. It holds the state of the project and the
 rules of work. Update it at the end of each session.
 
-Last update: 2026-11-06 (fourth session of that day). HEAD is `3509364`.
+Last update: 2026-11-06 (fourth session of that day). HEAD is `edb563b`.
 
 ## Paste this into the new chat
 
@@ -19,31 +19,51 @@ dbt and DuckDB do the data work (prices, indicators, screens). Python does
 the statistics (low-correlation selection, Max Sharpe weights, a
 walk-forward backtest). The universe is point-in-time: the S&P 500 on each
 date, a Nasdaq universe, or both (`run_pipeline.py --universe`). The
-honest result so far: the method beats SPY, but only with a much larger
-portfolio than the default. The default holds **10 stocks** (D21, the
-choice of the user). At that size the `sp500` portfolio beats SPY on the
-return in 47.1% of 85 walk-forward windows and on the Sharpe ratio in
-42.4%, and the median window is 1.40% below SPY. With 40 stocks and at
-most 10 of a sector, the same universe beats SPY on the return in 64.7% of
-the windows, on the Sharpe ratio in 61.2%, and the median window is 3.68%
-above SPY (D20). The user accepted the smaller portfolio, because a
-10-stock plan of whole shares works from $4,286 and a 40-stock plan needs
-$916,335 to hold every weight.
+honest result so far, in one line: **the method beats SPY on the return
+and it does not beat SPY on a risk-adjusted measure.**
+
+The default holds **10 stocks** (D21, the choice of the user) and ranks
+the candidates on the cumulative return of the lookback window (D22, also
+the choice of the user). At that setting the `sp500` portfolio beats SPY
+on the return in 57.6% of 85 walk-forward windows, and the median window
+is 4.84% above SPY. The median is positive on every date grid that D16
+tried, which no earlier setting managed. But the mean Sharpe ratio is
+0.68 against 0.80 for SPY, and the share of the windows that beat SPY on
+the Sharpe ratio is 50.6%, a coin flip. The ranking buys return with
+volatility: the live portfolio moved from 13.3% to 16.1%.
+
+**The goal of the project is the Max Sharpe portfolio, so read the Sharpe
+numbers as the headline, not the return numbers.** By that measure the
+method still loses to SPY. Two separate findings are open against it: a
+larger portfolio closed the Sharpe gap under the old ranking (40 stocks
+gave 0.82 against 0.80, D20), and nobody has measured a larger portfolio
+with the new ranking.
 
 ## What the user wants now
 
 The user wants **as much market exposure as possible**, and the user wants
 the survivorship bias under control. D20 answered where the exposure is,
-and D21 set the default. Read "The limit of the exposure" below before you
-change anything. **Neither the universe nor the screen cap is the limit.
-The portfolio size is**, and the user selected 10 stocks for it.
+D21 set the default size, and D22 set the ranking. Read "The limit of the
+exposure" below before you change anything. **Neither the universe nor the
+screen cap is the limit. The portfolio size is**, and the user selected 10
+stocks for it.
 
-That choice gives up the measured gain of 40 stocks, and the user knows
-it. Do not raise the default again without the user. Two things are still
-open: `max_per_sector`, where 2 reaches 7 sectors with 10 names instead of
-6 and measures the same inside the noise; and a backtest with the same
-whole-share rounding as the plan, which is the only way to say whether 40
-stocks still wins at the amount that the user really invests.
+The user is now asking the right questions about the method itself, not
+about the settings. In this session the user asked why the SPY comparison
+matters when the goal is the Max Sharpe portfolio, and then asked for a
+benchmark that is "a different portfolio, put together the same way".
+That is the null benchmark of D23. Expect more questions of this kind, and
+answer them with measurements, not with opinions. The user also said
+plainly: **do not agree with a wrong statement.** Say which part is wrong
+and show the evidence.
+
+Open items that the user has not decided:
+- `max_per_sector`, where 2 reaches 7 sectors with 10 names instead of 6
+  and measures the same inside the noise (D21).
+- A backtest with the same whole-share rounding as the plan. The choice of
+  10 stocks rests on a measure that does not model the plan at all.
+- Whether to keep a ranking that raises the return and not the Sharpe
+  ratio, now that D22 has measured the trade.
 
 ## How to start
 
@@ -59,8 +79,12 @@ python run_pipeline.py --universe sp500 --investment 10000
 
 The three caps of the exposure come from the command line:
 `--top-n-per-sector`, `--target-size` and `--max-per-sector`. A run states
-them in the Caps column of the results log, in that order. The default is 10/10/3
-(D21). The setting that measures best is
+them in the Caps column of the results log, in that order. The default is 10/10/3 with
+`--rank-metric cum_return` (D21, D22). Two more flags matter:
+`--rank-metric {cum_return,sharpe}` changes the measure that ranks the
+candidates, in dbt and in Python together; `--null-draws N` runs the
+random-order null benchmark of D23, which needs `--many-windows`. The
+setting that measures best on the return is
 `python run_pipeline.py --universe sp500 --target-size 40 --max-per-sector 10 --many-windows`,
 and $10,000 of whole shares cannot hold it.
 
@@ -72,13 +96,15 @@ hour; it continues after a stop because of the cache in `data/cache/`).
 
 | What | Where |
 |---|---|
-| Why each decision was made | `docs/decisions.md` (D1 to D21; D22 is next) |
+| Why each decision was made | `docs/decisions.md` (D1 to D23; D24 is next) |
 | How the results changed | `docs/results_log.md` (one row for each run) |
 | Problems that are not solved | `docs/open_questions.md` |
 | The groups of the decisions | the Safeguards section of `docs/README.md` |
 | Universe rules and sources | `quant/reference.py` |
 | Screen rules | `dbt/macros/screen.sql`, `dbt/macros/membership.sql` |
 | The portfolio selection | `quant/select_portfolio.py`, `quant/optimize.py` |
+| The rank metric, in dbt and in Python | `dbt/macros/screen.sql` (`rank_column`), `quant/pipeline.py` (`rank_candidates`) |
+| The random-order null benchmark | `quant/null_benchmark.py` |
 | The share plan | `quant/allocate.py` |
 | The rule for a large price move | `quant/large_moves.py`, `classify_large_moves.py` |
 | Manual data fixes, with reasons | `dbt/seeds/corporate_actions.csv`, `dbt/seeds/price_data_exclusions.csv` |
@@ -112,6 +138,12 @@ The user set these rules. Keep them.
 
 D20 measured the three caps. The result is short: only the portfolio size
 matters.
+
+**Read every number of this section with one caveat: D20 ran before D22,
+so the whole sweep used the Sharpe ranking.** The current default ranks on
+the cumulative return. The conclusion about which cap binds does not
+depend on the ranking, because it follows from the sector cap arithmetic.
+The measured sizes do. Step 2 of "Next steps" repeats the sweep.
 
 | Cap | Where | Does it hold the exposure? |
 |---|---|---|
@@ -228,8 +260,11 @@ The nasdaq API cannot do it. See `docs/open_questions.md`.
 
 `python verify_indicators.py` passes every check. The script takes several
 minutes, so give it time. `dbt build` gives **2 warnings for `sp500`**
-(PASS=88) and **3 for `nasdaq` and `both`** (PASS=87). No warning is a
-data quality failure:
+(PASS=89, measured after D22). The `nasdaq` and `both` universes add a
+third warning for the sector coverage. **Those two universes were last
+built before D22**, when `sp500` gave PASS=88 and they gave PASS=87, so
+expect PASS=88 for them now. Confirm that before you rely on it. No
+warning is a data quality failure:
 
 - `relationships_..._stg_sectors_` (11,899 rows): a ticker in the prices
   with no sector.
@@ -252,8 +287,8 @@ The state of the data fixes:
   approximately 5 points with the grid of the dates, so read the median
   excess return, not the mean. See D16.
 - A run with `--top-n-per-sector` excludes
-  `assert_screen_history_matches_candidates`, so its build reports PASS=87
-  for `sp500`, not PASS=88. That unit test compares the two screens, and
+  `assert_screen_history_matches_candidates`, so its build reports PASS=88
+  for `sp500`, not PASS=89. That unit test compares the two screens, and
   the screens read the cap of the project file. See D20.
 - `allocate.py` runs a second pass that spends the cash of the share
   rounding. For $10,000 the cash is $63.06, and it was $1,680.44. See D17.
@@ -271,6 +306,20 @@ The state of the data fixes:
 - `Nasdaq.csv` in the repository root is from early 2015. Do not use it.
 - The network allows `api.nasdaq.com` and `github.com` (git clone).
   `archive.org` and `nasdaqtrader.com` are blocked.
+- The rank metric lives in **two** layers that must agree: the dbt
+  variable `rank_metric` for the screen, and `PortfolioParams.rank_metric`
+  for the selection. `--rank-metric` sets both. A change in one layer only
+  gives a screen that keeps one set of stocks and a selection that
+  prefers another. Neither layer has a silent default: an unknown value
+  stops the dbt build and raises `ValueError` in Python.
+- The two screen unit tests of `mart_screen_history` each override
+  `rank_metric`. Keep those overrides. Without them a build with
+  `--rank-metric sharpe` fails a test that states the `cum_return`
+  ranking, and the test then measures the build and not the model.
+- `--skip-dbt` reuses the warehouse of the last build, and `caps_label`
+  then reads `top_n_per_sector` from `dbt_project.yml`. If the last build
+  used a different `--top-n-per-sector`, the Caps cell of the new row is
+  wrong. Build when you change a cap.
 - A ticker can name a different security after a company leaves (PARA).
   A warning test finds such a ticker by its low volume.
 - The API answers HTTP 200 for an error, and it puts the error in the
@@ -315,48 +364,112 @@ It added two decisions.
     for 40.
   - `greedy_low_correlation` now requires the two caps, so
     `PortfolioParams` is the one place that holds them.
+- **D22 (`4837eeb`, `d65aef4`, `edb563b`):** the user asked that the
+  stocks which reach the Ichimoku gate be the top cumulative return
+  securities. The rank metric is now a setting in two layers that must
+  agree: the dbt variable `rank_metric` drives the `rank_column` macro for
+  both screen marts, and `PortfolioParams.rank_metric` drives
+  `rank_candidates` for the selection. `--rank-metric` reaches both. The
+  default is `cum_return`.
+  - **This is the strongest result of the project.** The share of the 85
+    windows that beat SPY on the return rises from 47.1% to 57.6%, and the
+    median excess return from -1.40% to +4.84%. The median is positive on
+    the date steps 3, 5, 10 and 21, where the Sharpe ranking is negative
+    on all four. D16 asked for exactly that stable sign.
+  - **And it does not move the Sharpe ratio.** The mean goes from 0.66 to
+    0.68 against 0.80 for SPY, the win share on the Sharpe ratio is 50.6%,
+    and the live volatility rises from 13.3% to 16.1%. The ranking buys
+    return with volatility.
+  - `int_risk_metrics_daily` gained a point-in-time `cum_return_window`,
+    and `assert_risk_metrics_daily_matches_latest` compares it with the
+    latest version on the last day of each stock. The ranking uses no
+    future data.
+  - The screen history unit test is a matched pair, one for each branch of
+    the macro, each with its own `rank_metric` override. `dbt build` gives
+    PASS=89 for both settings.
+- **D23 (`612afe2`):** a random-selection null benchmark. SPY says whether
+  the method beats the market; it does not say whether the rank order adds
+  anything. The null keeps the same screen of the same date, the same
+  sector cap, the same correlation gate and the same Max Sharpe weight
+  search, and it replaces the rank order with a random permutation of the
+  same candidates. `--null-draws N` and `--null-seed` run it, and it needs
+  `--many-windows`. Each draw is a whole walk-forward run, at
+  approximately 8.5 seconds for 85 windows.
+  - **The measurement is not finished.** A smoke test of 5 draws put the
+    real method above every draw on the return measures, and 5 draws
+    cannot give a percentile. A run of 200 draws was in flight at the end
+    of the session. Run it again and write the result into D23 and here:
+    `python run_pipeline.py --universe sp500 --skip-dbt --no-log --many-windows --null-draws 200`
+  - Read the percentile of `median_excess` and of `mean_sharpe`. A
+    percentile near 0.5 means that the rank order of D22 does nothing, and
+    that the gain comes from the screen or from the sector cap instead.
 
-161 tests pass, up from 143. `dbt build` for `sp500` gives PASS=88 and 2
-warnings, as before. `verify_indicators.py` passes every check. The live
-`sp500` run at the new default gives 110 candidates, an in-sample Sharpe
-ratio of 4.47, 10 stocks over 6 sectors, and a $10,000 plan that spends
-$9,925.69 with no warning.
+186 tests pass, up from 143 at the start of the day. `dbt build` for
+`sp500` gives PASS=89 and the same 2 warnings. `verify_indicators.py`
+passed every check at the end of D21, **and it has not run since D22.**
+Run it before you trust the D22 numbers further. The live `sp500` run at
+the new default gives 110 candidates, an in-sample Sharpe ratio of 4.51,
+10 stocks over 4 sectors (Energy 3, Health Care 3, Information Technology
+3, Materials 1), and a $10,000 plan that spends $9,952.53 with no
+warning.
 
 ## Next steps
 
-1. **Give the backtest the same whole-share rounding as the plan.** This
-   is now the most valuable step. The backtest holds exact weights, so it
-   measures a portfolio that the money cannot always buy, and the error
-   grows with the portfolio size. The user selected 10 stocks because a
-   40-stock plan needs $916,335, so the trade that the user made rests on
-   a measure that does not model the plan at all. After this change, the
-   measure and the plan agree, and the best portfolio size can be measured
-   for the amount that the user really invests. That answer can be 10
-   stocks, and then the choice of D21 has real evidence behind it.
-2. **Ask the user about `max_per_sector`.** D21 left it at 3, because the
-   user named the count of stocks only. With 10 stocks, a cap of 3 puts 6
-   of the 10 names in two sectors and reaches 6 sectors. A cap of 2
-   reaches 7 sectors, and it measures the same inside the noise. This is a
-   one-line change with a decision entry and a results row.
-3. **Add an equal-weight benchmark of the eligible pool.** A 40-stock
-   portfolio sits near equal weight, so the gain of D20 can be the
-   equal-weight premium and not the work of the screen. SPY alone cannot
-   separate the two. This is the one test that says whether the screen
-   adds value, and it matters more now: if the gain of 40 stocks is only
-   the equal-weight premium, the choice of 10 stocks costs nothing.
-4. **Measure a liquidity floor for the Nasdaq universe.** D14 left this
+1. **Finish the null benchmark of D23.** The code and the tests are in.
+   Only the 200-draw run is missing, and it takes approximately 30
+   minutes:
+   `python run_pipeline.py --universe sp500 --skip-dbt --no-log --many-windows --null-draws 200`.
+   Write the percentiles into D23 and into the session state above. This
+   is the measurement that the user asked for, and it answers the question
+   that SPY cannot: does the rank order of D22 do any work, or would any
+   10 stocks of the screened pool have done as well? A percentile near 0.5
+   is the honest answer that the method has no skill in the selection.
+2. **Measure the portfolio size again, under the new ranking.** D20
+   measured 10, 12, 24, 40 and 60 stocks with the Sharpe ranking, and 40
+   stocks reached a mean Sharpe ratio of 0.82 against 0.80 for SPY. D22
+   changed the ranking and nobody repeated that sweep. The Sharpe gap of
+   the current default may close at a larger size. The run is one loop
+   over `--target-size`, and the share-rounding limit of D21 still applies
+   to the plan.
+3. **Give the backtest the same whole-share rounding as the plan.** The
+   backtest holds exact weights, so it measures a portfolio that the money
+   cannot always buy, and the error grows with the portfolio size. The
+   user selected 10 stocks because a 40-stock plan needs $916,335, so that
+   trade rests on a measure that does not model the plan at all. After
+   this change, the measure and the plan agree.
+4. **Separate the momentum premium from the skill of the pipeline.** A
+   ranking on the trailing compound return is the classic momentum signal,
+   so the gain of D22 can be a known factor premium. The test is a factor
+   regression of the portfolio returns, or a comparison with a plain
+   momentum portfolio of the same universe. `07_factor_decomposition.R` in
+   the repository root does this kind of work for the R modules, and
+   `quant_pipeline` has no equivalent.
+5. **Add an equal-weight benchmark of the eligible pool.** This is the
+   third null, beside SPY and the random order of D23. It tests the four
+   gates themselves: a portfolio of 10 random stocks of the whole index,
+   with no screen. If the screen adds nothing over that, the gates are
+   decoration.
+6. **Fix the sector leak.** `read_sector_map` gives every stock its newest
+   GICS sector on every past date, so `max_per_sector` uses future
+   information. This is a real look-ahead leak, it is not covered by the
+   tamper test or by the truncation check, and nobody has measured it. The
+   repair needs a point-in-time sector table, which the current source
+   does not have.
+7. **Ask the user about `max_per_sector`.** D21 left it at 3. With 10
+   stocks and the new ranking the live portfolio reaches only 4 sectors,
+   so the question matters more than it did: a cap of 2 would force at
+   least 5.
+8. **Measure a liquidity floor for the Nasdaq universe.** D14 left this
    option open. The screen already has a volume gate of 100,000 shares, so
-   the effect can be small. Measure it before you decide. Note that D20
-   makes this less urgent: `sp500` measures better than `both` at every
-   portfolio size, so the Nasdaq universe is not the road to more
-   exposure.
-5. **Find a second price source** for a delisted company. This is the only
+   the effect can be small. D20 makes it less urgent: `sp500` measured
+   better than `both` at every portfolio size.
+9. **Find a second price source** for a delisted company. This is the only
    repair of the survivorship bias. The nasdaq API cannot do it.
-6. **The web app.** The user asked for an interactive web app of this
-   pipeline. Three plans are open, and the user has not selected one: a
-   read-only batch site, a live parameter workbench, and a browser-only
-   teaching tool with toggles that turn each removed bias back on. Note
-   that `webapp/` in this repository is an early FastAPI scaffold that
-   reads CSV exports from the R modules, not from `quant_pipeline`. The
-   three caps of D20 are now command line flags, which is the shape that a
-   parameter workbench needs.
+10. **The web app.** The user asked for an interactive web app of this
+    pipeline. Three plans are open, and the user has not selected one: a
+    read-only batch site, a live parameter workbench, and a browser-only
+    teaching tool with toggles that turn each removed bias back on. Note
+    that `webapp/` in this repository is an early FastAPI scaffold that
+    reads CSV exports from the R modules, not from `quant_pipeline`. The
+    caps of D20 and the rank metric of D22 are command line flags now,
+    which is the shape that a parameter workbench needs.
