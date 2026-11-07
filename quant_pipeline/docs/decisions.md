@@ -22,6 +22,95 @@ Use this template for a new entry:
 
 ---
 
+## D23. Measure the rank order against a random order
+
+- **Date:** 2026-11-06
+- **Role:** Protective measure, outside the core loop. It changes no
+  number of a run. It measures how much of the result comes from the rank
+  order, which no comparison with SPY can show.
+- **Question:** The user asked why the SPY comparison matters when the
+  goal is the Max Sharpe portfolio, and then asked for a benchmark that is
+  "a different portfolio, put together the same way". SPY answers one
+  question: does the pipeline beat the market? It cannot answer a second
+  one: does the **rank order** of the candidates do any work, or would any
+  10 stocks of the same screened pool have done as well?
+- **Options:**
+  1. Equal weight on the same 10 stocks that the method selected. This
+     tests the Max Sharpe weight search only.
+  2. 10 random stocks of the same screened pool, with the same sector cap.
+     This tests the rank order and the correlation gate.
+  3. 10 random stocks of the whole index, with no screen. This tests the
+     four gates themselves.
+- **Decision:** Option 2. The user selected it, and it is the sharpest of
+  the three: option 1 tests the last step only, and option 3 tests a step
+  that nobody has questioned yet. Options 1 and 3 stay open.
+- **The design, and why it is a fair null:** The null keeps **every** other
+  step of the method. It applies the screen of the same date, it uses the
+  same sector cap, the same correlation gate, and the same Monte Carlo Max
+  Sharpe weight search with the same seed. It removes one thing: the
+  order. `build_max_sharpe_portfolio` takes an `rng`, and with one the
+  candidate list becomes a random permutation of **the same list**. The
+  null therefore cannot reach a stock that the ranked build could not see,
+  and a test holds that property. Each draw is a whole walk-forward run of
+  85 windows, at approximately 8.5 seconds.
+- **Evidence:** `sp500`, 10 stocks, the `cum_return` ranking of D22, 85
+  windows with a step of 5 days, against **200 random-order draws** (seed
+  0), commit `612afe2`.
+
+  | Measure | The method | Null median | Null best | Percentile |
+  |---|---|---|---|---|
+  | Beat SPY on return | 57.6% | 50.6% | 61.2% | 0.92 |
+  | Beat SPY on Sharpe | 50.6% | 47.1% | 61.2% | 0.74 |
+  | Mean excess return | +6.65% | +0.90% | +4.71% | **1.00** |
+  | Median excess return | +4.84% | +0.22% | +4.15% | **1.00** |
+  | Mean Sharpe ratio | 0.68 | 0.62 | 0.91 | 0.72 |
+
+  SPY has a mean Sharpe ratio of 0.80 over the same windows.
+- **What this says, in two parts.**
+
+  1. **The rank order earns the return.** On the mean and the median
+     excess return the method beats **all 200** draws. The best draw
+     reached a median of +4.15% against +4.84% for the method, and 0 of
+     200 draws reached the method's figure. A random order of the same
+     candidates gives a median excess return of +0.22%, which is SPY. So
+     the compound-return ranking of D22 is doing real work, and the gain
+     is not a property of the screened pool alone.
+  2. **The rank order does not earn a risk-adjusted result.** On the mean
+     Sharpe ratio the method sits at the 72nd percentile: **56 of the 200
+     random orders gave a better Sharpe ratio**, and 9 of them beat SPY at
+     0.80, which the method does not. On the share of the windows that
+     beat SPY on the Sharpe ratio the method sits at the 74th percentile.
+     Above the middle, and inside the crowd.
+
+  The two benchmarks now agree. D22 compared the method with SPY and found
+  a return gain and no Sharpe gain. D23 compares it with its own random
+  order and finds the same split. **The project optimizes for the Max
+  Sharpe portfolio and the evidence says that its selection rule adds
+  return, not risk-adjusted return.**
+- **A note on the strongest-looking number:** A percentile of 1.00 on 200
+  draws is not a p-value of 0.005. The 85 windows overlap, and the valid
+  dates cover approximately two independent holding periods (D16). The
+  200 draws are independent of each other, so the percentile is a fair
+  statement about **this sample of windows**. It is not a test of
+  significance over time.
+- **The use of the best draw:** The null best column is the honest answer
+  to "could I have done better by luck?". For the Sharpe ratio the answer
+  is yes, and by a wide margin: 0.91 against 0.68. A reader who wants the
+  Sharpe ratio should take that as a warning about the selection rule, not
+  as a target.
+- **Commits:** `612afe2`
+- **A failure that this decision found:** `verify_indicators.py` ranked
+  the pandas screen on the Sharpe ratio with a fixed rule, and it read
+  every other gate from `dbt_project.yml`. After D22 the script therefore
+  compared dbt against a rule that nobody uses, and the check failed with
+  16 to 26 stocks different on each selection date. The pipeline was
+  correct and the independent check was stale. `screen_rank_column` now
+  reads `rank_metric` from the same place as the other gates, and it
+  raises ValueError for an unknown value. Two new tests hold the script to
+  the setting, and one of them compares the dbt variable with
+  `PortfolioParams.rank_metric`, so a change to one layer alone now fails
+  a test.
+
 ## D22. Rank the candidates on the cumulative return
 
 - **Date:** 2026-11-06

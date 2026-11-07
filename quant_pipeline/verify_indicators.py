@@ -40,6 +40,22 @@ PRICES_FILE = warehouse.DEFAULT_WAREHOUSE.parents[1] / "data" / "raw_prices.parq
 SEEDS_DIR = warehouse.DEFAULT_WAREHOUSE.parent / "seeds"
 
 
+def screen_rank_column(metric: str) -> str:
+    """Return the column that ranks the stocks inside each sector.
+
+    The dbt variable `rank_metric` selects it, and the rank_column macro
+    makes the same choice in SQL. Raise ValueError for an unknown value. A
+    silent default would make this script compare dbt against a rule that
+    nobody asked for, and the check would still report PASS.
+    """
+    if metric == "cum_return":
+        return "cum_return"
+    if metric == "sharpe":
+        return "sharpe"
+    raise ValueError(
+        f"rank_metric must be 'cum_return' or 'sharpe', not {metric!r}")
+
+
 def read_seed(name: str) -> pd.DataFrame:
     """Read a dbt seed file directly, not through dbt."""
     return pd.read_csv(SEEDS_DIR / f"{name}.csv")
@@ -290,6 +306,9 @@ def pandas_screen_as_of(prices: pd.DataFrame, sector_of: dict[str, str],
 
     First remove every price after the date. Then calculate each gate from
     the data that is left. Because of this, the screen cannot use future data.
+
+    The rank inside each sector follows the dbt variable `rank_metric`, so
+    this check follows the setting instead of a fixed rule. See D22.
     """
     v = DBT_VARS
     past = prices[prices["price_date"] <= date]
@@ -312,13 +331,18 @@ def pandas_screen_as_of(prices: pd.DataFrame, sector_of: dict[str, str],
                  + int(last["conv"] > last["base"])
                  + int(last["span_a"] > last["span_b"])
                  + int(last["close"] > last["base"]))
+        # The compound return of the same window. dbt computes
+        # cum_return_window with exp(sum(ln(1 + r))) - 1 over this window.
+        cum_return = float((1.0 + r).prod() - 1.0)
         rows.append({"ticker": tk, "sector": sector_of[tk], "sharpe": sharpe,
+                     "cum_return": cum_return,
                      "passed": len(p) >= v["min_trading_days"]
                      and recent["volume"].mean() >= v["min_avg_volume"]
                      and r.std(ddof=1) <= v["max_daily_volatility"]
                      and score >= v["min_ichimoku_score"]})
     frame = pd.DataFrame(rows)
-    frame = frame[frame["passed"]].sort_values("sharpe", ascending=False)
+    rank_on = screen_rank_column(v["rank_metric"])
+    frame = frame[frame["passed"]].sort_values(rank_on, ascending=False)
     top = frame.groupby("sector").head(v["top_n_per_sector"])
     return set(top["ticker"])
 

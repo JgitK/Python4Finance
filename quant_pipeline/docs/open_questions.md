@@ -35,6 +35,20 @@ one, move it to the "Solved" section with the commit hash.
   whether a backtest with whole-share rounding still favours 40 stocks for
   the amount that the user really invests. See the next item.
 
+- **The selection rule adds return and not a risk-adjusted result.**
+  D23 ran 200 random-order draws of the same method: the same screen, the
+  same sector cap, the same correlation gate, the same weight search, and
+  only the rank order replaced by a random permutation of the same
+  candidates. The method beats **all 200** draws on the mean and the
+  median excess return. It sits at the 72nd percentile on the mean Sharpe
+  ratio, where **56 of the 200 random orders did better** and 9 of them
+  beat SPY at 0.80, which the method does not. Two independent benchmarks
+  now say the same thing, so this is the central open question of the
+  project: the goal is the Max Sharpe portfolio and the selection rule
+  does not deliver one. A ranking that is risk-adjusted but not the Sharpe
+  ratio (the Sortino ratio, the return over the maximum drawdown) is the
+  obvious next thing to measure.
+
 - **Is the momentum ranking of D22 only a factor tilt?** A ranking on the
   trailing compound return is the classic momentum signal. A gain from it
   is a known factor premium, not proof that this pipeline has skill. The
@@ -136,6 +150,12 @@ one, move it to the "Solved" section with the commit hash.
 - **Merge to `main`?** Not decided. See decision D3.
 
 ## Solved
+
+- **Does the rank order of the candidates do any work?** Solved by D23
+  (`612afe2`). Yes for the return, no for the Sharpe ratio. See the open
+  item above for the part that is not solved. The two nulls that stay open
+  are an equal weight of the same 10 picks, which tests the weight search,
+  and 10 random stocks of the whole index, which tests the four gates.
 
 - **Which default portfolio size?** Solved by D21 (`845ce69`): 10 stocks,
   which the user selected. `max_per_sector` stays 3. Note that D21 could

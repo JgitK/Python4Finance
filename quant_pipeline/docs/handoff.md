@@ -395,19 +395,28 @@ It added two decisions.
   same candidates. `--null-draws N` and `--null-seed` run it, and it needs
   `--many-windows`. Each draw is a whole walk-forward run, at
   approximately 8.5 seconds for 85 windows.
-  - **The measurement is not finished.** A smoke test of 5 draws put the
-    real method above every draw on the return measures, and 5 draws
-    cannot give a percentile. A run of 200 draws was in flight at the end
-    of the session. Run it again and write the result into D23 and here:
-    `python run_pipeline.py --universe sp500 --skip-dbt --no-log --many-windows --null-draws 200`
-  - Read the percentile of `median_excess` and of `mean_sharpe`. A
-    percentile near 0.5 means that the rank order of D22 does nothing, and
-    that the gain comes from the screen or from the sector cap instead.
+  - **200 draws, and the answer splits the same way as D22.** The method
+    beats **all 200** draws on the mean and the median excess return (the
+    best draw reached a median of +4.15% against +4.84%). It sits at the
+    **72nd percentile** on the mean Sharpe ratio, where 56 of the 200
+    random orders did better and 9 of them beat SPY at 0.80, which the
+    method does not. A random order of the same candidates gives a median
+    excess return of +0.22%, which is SPY.
+  - So the rank order earns the return and it does not earn a
+    risk-adjusted result. Two independent benchmarks now agree on that
+    split. Do not read the 1.00 percentile as a p-value: the 85 windows
+    overlap and cover approximately two independent holding periods (D16).
+  - **This decision also found a real failure.** `verify_indicators.py`
+    ranked its pandas screen on the Sharpe ratio with a fixed rule while
+    it read every other gate from `dbt_project.yml`. After D22 the script
+    compared dbt against a rule that nobody uses, and the check failed
+    with 16 to 26 stocks different on each date. The pipeline was correct
+    and the independent check was stale. `screen_rank_column` now reads
+    the setting, and two tests hold the script to it, one of which
+    compares the dbt variable with `PortfolioParams.rank_metric`.
 
-186 tests pass, up from 143 at the start of the day. `dbt build` for
-`sp500` gives PASS=89 and the same 2 warnings. `verify_indicators.py`
-passed every check at the end of D21, **and it has not run since D22.**
-Run it before you trust the D22 numbers further. The live `sp500` run at
+190 tests pass, up from 143 at the start of the day. `dbt build` for
+`sp500` gives PASS=89 and the same 2 warnings. The live `sp500` run at
 the new default gives 110 candidates, an in-sample Sharpe ratio of 4.51,
 10 stocks over 4 sectors (Energy 3, Health Care 3, Information Technology
 3, Materials 1), and a $10,000 plan that spends $9,952.53 with no
@@ -415,15 +424,20 @@ warning.
 
 ## Next steps
 
-1. **Finish the null benchmark of D23.** The code and the tests are in.
-   Only the 200-draw run is missing, and it takes approximately 30
-   minutes:
-   `python run_pipeline.py --universe sp500 --skip-dbt --no-log --many-windows --null-draws 200`.
-   Write the percentiles into D23 and into the session state above. This
-   is the measurement that the user asked for, and it answers the question
-   that SPY cannot: does the rank order of D22 do any work, or would any
-   10 stocks of the screened pool have done as well? A percentile near 0.5
-   is the honest answer that the method has no skill in the selection.
+1. **Find a ranking that raises the Sharpe ratio.** This is now the
+   central question of the project, and two independent benchmarks point
+   at it. The goal is the Max Sharpe portfolio. The `cum_return` ranking
+   of D22 raises the return and leaves the Sharpe ratio at 0.68 against
+   0.80 for SPY, and D23 showed that 56 of 200 random orders of the same
+   candidates gave a better Sharpe ratio. So the selection rule is not
+   earning a risk-adjusted result, by either measure. Candidates to
+   measure, each with a results row: the Sortino ratio, the return over
+   the maximum drawdown, and the Sharpe ratio of a shorter window than
+   252 days. `--rank-metric` already holds the shape for this: add a
+   branch to `rank_column` in `dbt/macros/screen.sql` and to
+   `rank_candidates` in `quant/pipeline.py`, with a point-in-time column
+   in `int_risk_metrics_daily` and a matched pair of unit tests. **Keep
+   `verify_indicators.py` in step**, which D23 learned the hard way.
 2. **Measure the portfolio size again, under the new ranking.** D20
    measured 10, 12, 24, 40 and 60 stocks with the Sharpe ranking, and 40
    stocks reached a mean Sharpe ratio of 0.82 against 0.80 for SPY. D22

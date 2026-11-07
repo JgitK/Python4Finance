@@ -49,6 +49,7 @@ proof that the results are correct.
 | D18 | The pipeline prints a warning for each target weight that whole shares cannot hold, and it gives the smallest investment amount that has no such problem. |
 | D20 | A run states the three caps of the exposure in the results log, so two settings of one commit are two rows. It also prints the sector mix of the portfolio, because the caps balance the sectors. |
 | D21 | `PortfolioParams` is the one place that holds the two portfolio caps. `greedy_low_correlation` requires them, so a second default cannot drift away from the first. |
+| D23 | `quant/null_benchmark.py` repeats the whole walk-forward test with the candidates in a random order, many times. The percentile of the real result says how much the rank order is worth. It found that `verify_indicators.py` had a stale ranking rule, and two tests now hold that script to the dbt setting. |
 | D22 | The `rank_column` macro holds the rank metric for both screen marts, and `rank_candidates` holds it for the selection. An unknown value stops the build and raises an error, so a wrong setting cannot pass in silence. A point-in-time `cum_return_window` is compared with the latest version on the last day of each stock. |
 | D1 | The 48 data tests and the 15 unit tests in the dbt project check each model on every build. |
 
