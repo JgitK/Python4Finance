@@ -352,3 +352,51 @@ def test_the_build_selects_on_the_rank_metric():
         returns, sector_of, by_return)["selected"] == ["JUMPY"]
     assert pipeline.build_max_sharpe_portfolio(
         returns, sector_of, by_sharpe)["selected"] == ["STEADY"]
+
+
+# --- live_capm (D25) ------------------------------------------------------
+
+def _capm_returns(days: int = 300) -> pd.DataFrame:
+    rng = np.random.default_rng(5)
+    dates = pd.bdate_range("2024-01-01", periods=days)
+    spy = pd.Series(rng.normal(0.0005, 0.01, days), index=dates)
+    rf_daily = 0.045 / 252
+    return pd.DataFrame({
+        "AAA": rf_daily + 1.5 * (spy - rf_daily) + rng.normal(0, 0.01, days),
+        "BBB": rf_daily + 0.5 * (spy - rf_daily) + rng.normal(0, 0.01, days),
+        "SPY": spy,
+    }, index=dates)
+
+
+def test_live_capm_uses_only_the_lookback_window():
+    returns = _capm_returns()
+    params = pipeline.PortfolioParams(lookback_days=100)
+    weights = {"AAA": 0.5, "BBB": 0.5}
+    result = pipeline.live_capm(returns, weights, "SPY", params,
+                                tangency_return=0.20,
+                                tangency_volatility=0.16)
+    assert set(result["table"]["n_days"]) == {100}
+    assert result["portfolio"]["n_days"] == 100
+    # A change to a day before the window must not change the result.
+    changed = returns.copy()
+    changed.iloc[:200] = changed.iloc[:200] * 5.0
+    again = pipeline.live_capm(changed, weights, "SPY", params,
+                               tangency_return=0.20,
+                               tangency_volatility=0.16)
+    assert again["portfolio"]["beta"] == pytest.approx(
+        result["portfolio"]["beta"])
+
+
+def test_live_capm_gives_the_mix_that_matches_the_benchmark_risk():
+    returns = _capm_returns()
+    params = pipeline.PortfolioParams()
+    result = pipeline.live_capm(returns, {"AAA": 1.0}, "SPY", params,
+                                tangency_return=0.20,
+                                tangency_volatility=0.32)
+    spy_vol = returns["SPY"].tail(252).std(ddof=1) * np.sqrt(252)
+    assert result["benchmark_volatility"] == pytest.approx(spy_vol)
+    assert result["fraction_at_benchmark_risk"] == pytest.approx(
+        spy_vol / 0.32)
+    line = result["line"]
+    assert line["fraction"].iloc[0] == 0.0
+    assert line["fraction"].iloc[-1] == 1.0

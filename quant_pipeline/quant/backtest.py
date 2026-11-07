@@ -16,6 +16,8 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
+from quant import capm
+
 # A build_portfolio function uses a train frame as input.
 # It returns weights by ticker.
 BuildPortfolio = Callable[[pd.DataFrame], dict[str, float]]
@@ -98,9 +100,19 @@ def backtest_window(returns: pd.DataFrame, selection_date: Any,
     )
 
     sharpe_diff = portfolio["sharpe"] - benchmark_perf["sharpe"]
+    # The realized beta and alpha over the holding window (D25). They say
+    # how much of the excess return the market risk explains.
+    if weights:
+        realized = capm.regress_on_market(portfolio_daily, window[benchmark],
+                                          risk_free, trading_days)
+    else:
+        realized = capm.regress_on_market(pd.Series(dtype=float),
+                                          window[benchmark],
+                                          risk_free, trading_days)
     return {"selection_date": pd.Timestamp(selection_date),
             "weights": weights, "portfolio": portfolio,
-            "benchmark": benchmark_perf, "sharpe_diff": sharpe_diff}
+            "benchmark": benchmark_perf, "sharpe_diff": sharpe_diff,
+            "capm": realized}
 
 
 def run_walk_forward(returns: pd.DataFrame, selection_dates: list[Any],
@@ -150,6 +162,8 @@ def summarize_windows(windows: list[dict[str, Any]]) -> dict[str, Any]:
         "win_return": nothing, "win_sharpe": nothing,
         "mean_excess": nothing, "median_excess": nothing,
         "mean_sharpe": nothing, "mean_benchmark_sharpe": nothing,
+        "mean_beta": nothing, "mean_alpha": nothing,
+        "median_alpha": nothing, "win_alpha": nothing,
     }
     scored = [w for w in windows if window_is_scored(w)]
     summary["n_scored"] = len(scored)
@@ -173,4 +187,17 @@ def summarize_windows(windows: list[dict[str, Any]]) -> dict[str, Any]:
         summary["mean_sharpe"] = float(np.nanmean(sharpe))
     if np.isfinite(benchmark).any():
         summary["mean_benchmark_sharpe"] = float(np.nanmean(benchmark))
+
+    # The realized CAPM measures (D25). A window without them is not an
+    # error: an older caller does not supply them.
+    nan = float("nan")
+    beta = np.array([w.get("capm", {}).get("beta", nan) for w in scored])
+    alpha = np.array([w.get("capm", {}).get("alpha", nan) for w in scored])
+    if np.isfinite(beta).any():
+        summary["mean_beta"] = float(np.nanmean(beta))
+    finite_alpha = alpha[np.isfinite(alpha)]
+    if finite_alpha.size:
+        summary["mean_alpha"] = float(finite_alpha.mean())
+        summary["median_alpha"] = float(np.median(finite_alpha))
+        summary["win_alpha"] = float((finite_alpha > 0).mean())
     return summary

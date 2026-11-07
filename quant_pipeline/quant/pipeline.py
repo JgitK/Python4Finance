@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 import pandas as pd
 
-from quant import optimize, select_portfolio
+from quant import capm, optimize, select_portfolio
 
 
 @dataclass
@@ -38,6 +38,41 @@ class PortfolioParams:
     # variable rank_metric holds the same choice for the screen, so a
     # change here needs the same change there. See decision D22.
     rank_metric: str = "cum_return"
+
+
+# The points of the capital allocation line in the live output (D25).
+ALLOCATION_FRACTIONS = [0.0, 0.25, 0.5, 0.75, 1.0]
+
+
+def live_capm(returns: pd.DataFrame, weights: dict[str, float],
+              benchmark: str, params: "PortfolioParams",
+              tangency_return: float,
+              tangency_volatility: float) -> dict[str, Any]:
+    """Give the CAPM view of the live portfolio over the lookback window.
+
+    Return a table of beta and alpha for each stock, the same measures for
+    the portfolio, the capital allocation line, the volatility of the
+    benchmark, and the share of the money in the portfolio that gives the
+    volatility of the benchmark. The rest of the money is cash.
+
+    The measures are in-sample. The weights come from the same window.
+    """
+    tickers = list(weights)
+    window = returns[tickers + [benchmark]].tail(params.lookback_days)
+    table = capm.capm_table(window, tickers, benchmark, params.risk_free,
+                            params.trading_days)
+    table.insert(1, "weight", [weights[t] for t in tickers])
+    portfolio = capm.portfolio_capm(window, weights, benchmark,
+                                    params.risk_free, params.trading_days)
+    benchmark_vol = float(window[benchmark].std(ddof=1)
+                          * math.sqrt(params.trading_days))
+    line = capm.capital_allocation_line(tangency_return, tangency_volatility,
+                                        params.risk_free,
+                                        ALLOCATION_FRACTIONS)
+    return {"table": table, "portfolio": portfolio, "line": line,
+            "benchmark_volatility": benchmark_vol,
+            "fraction_at_benchmark_risk": capm.fraction_for_volatility(
+                tangency_volatility, benchmark_vol)}
 
 
 def lookback_window(returns: pd.DataFrame,

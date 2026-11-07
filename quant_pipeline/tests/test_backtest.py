@@ -180,3 +180,55 @@ def test_summarize_windows_with_no_windows_is_empty():
     assert summary["n_windows"] == 0
     assert summary["n_scored"] == 0
     assert math.isnan(summary["win_return"])
+
+
+# ---------------------------------------------------------------------------
+# The realized CAPM measures of each window (D25).
+
+
+def test_backtest_window_reports_the_realized_beta_and_alpha():
+    # AAA is exactly 2 times the benchmark in excess return, so the
+    # realized beta over the holding window is 2 and the alpha is 0.
+    dates = pd.bdate_range("2023-01-02", periods=30)
+    rng = np.random.default_rng(4)
+    bench = pd.Series(rng.normal(0.0005, 0.01, 30), index=dates)
+    rf_daily = 0.045 / 252
+    returns = pd.DataFrame({"AAA": rf_daily + 2.0 * (bench - rf_daily),
+                            "BBB": bench})
+    result = backtest.backtest_window(
+        returns, selection_date=dates[9], holding_period=15,
+        build_portfolio=lambda train: {"AAA": 1.0}, benchmark="BBB")
+    assert result["capm"]["beta"] == pytest.approx(2.0, abs=1e-10)
+    assert result["capm"]["alpha"] == pytest.approx(0.0, abs=1e-10)
+    assert result["capm"]["n_days"] == 15
+
+
+def test_backtest_window_with_no_stocks_has_no_beta():
+    returns = _returns(12)
+    result = backtest.backtest_window(
+        returns, selection_date=returns.index[4], holding_period=5,
+        build_portfolio=lambda train: {}, benchmark="BBB")
+    assert math.isnan(result["capm"]["beta"])
+
+
+def test_summarize_windows_reports_the_mean_beta_and_alpha():
+    windows = [
+        _window("2025-01-02", 0.20, 1.50, 0.10, 1.00),
+        _window("2025-01-09", 0.05, 0.40, 0.10, 1.00),
+        _window("2025-01-16", 0.15, 0.80, 0.10, 1.00),
+    ]
+    for w, beta, alpha in zip(windows, [1.2, 1.4, 0.7], [0.10, -0.02, 0.04]):
+        w["capm"] = {"beta": beta, "alpha": alpha}
+    summary = backtest.summarize_windows(windows)
+    assert summary["mean_beta"] == pytest.approx(1.1)
+    assert summary["mean_alpha"] == pytest.approx(0.04)
+    assert summary["median_alpha"] == pytest.approx(0.04)
+    # Two of the three windows have a positive alpha.
+    assert summary["win_alpha"] == pytest.approx(2 / 3)
+
+
+def test_summarize_windows_without_capm_gives_nan_for_beta():
+    summary = backtest.summarize_windows(
+        [_window("2025-01-02", 0.20, 1.50, 0.10, 1.00)])
+    assert math.isnan(summary["mean_beta"])
+    assert math.isnan(summary["mean_alpha"])

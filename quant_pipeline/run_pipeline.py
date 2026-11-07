@@ -272,6 +272,22 @@ def main() -> None:
     print("        sector mix: "
           + ", ".join(f"{sector} {count}" for sector, count in mix.items()))
 
+    # Step 3b: the CAPM view of the live portfolio (D25). Beta is the part
+    # of the risk that follows the market. Diversification cannot remove
+    # it. The rest is idiosyncratic, and more stocks remove more of it.
+    live = pipeline.live_capm(backtest_returns, weights, universe.BENCHMARK,
+                              params, result["annual_return"],
+                              result["annual_volatility"])
+    port = live["portfolio"]
+    print(f"Step 3b: beta {port['beta']:.2f} and alpha {port['alpha']:+.1%} "
+          f"against {universe.BENCHMARK} (in-sample). "
+          f"The market explains {port['systematic_share']:.0%} of the "
+          f"variance, and {1 - port['systematic_share']:.0%} is "
+          "idiosyncratic.")
+    print(f"         {live['fraction_at_benchmark_risk']:.0%} in the "
+          "portfolio and the rest in cash gives the volatility of "
+          f"{universe.BENCHMARK} ({live['benchmark_volatility']:.1%}).")
+
     # Step 4: change the weights to whole shares. The top-up pass spends
     # the cash that the rounding leaves.
     selected_prices = {ticker: prices[ticker] for ticker in selected}
@@ -306,6 +322,8 @@ def main() -> None:
             "benchmark_return": w["benchmark"]["total_return"],
             "benchmark_sharpe": w["benchmark"]["sharpe"],
             "sharpe_diff": w["sharpe_diff"],
+            "realized_beta": w["capm"]["beta"],
+            "realized_alpha": w["capm"]["alpha"],
         }
         for w in windows
     ]
@@ -333,6 +351,10 @@ def main() -> None:
               f"median {summary['median_excess']:+.2%}. "
               f"Mean Sharpe {summary['mean_sharpe']:.2f} against "
               f"{summary['mean_benchmark_sharpe']:.2f}.")
+        print(f"         realized beta {summary['mean_beta']:.2f} on "
+              f"average. Alpha: mean {summary['mean_alpha']:+.2%}, median "
+              f"{summary['median_alpha']:+.2%}, positive in "
+              f"{summary['win_alpha']:.1%} of the windows.")
 
     # Step 5c: the null benchmark. SPY says whether the method beats the
     # market. It does not say whether the rank order adds anything. The
@@ -369,6 +391,8 @@ def main() -> None:
     backtest_df.to_csv(OUTPUT_DIR / "backtest_results.csv", index=False)
     candidates.to_csv(OUTPUT_DIR / "screen_candidates.csv", index=False)
     coverage.to_csv(OUTPUT_DIR / "universe_coverage.csv", index=False)
+    live["table"].to_csv(OUTPUT_DIR / "capm.csv", index=False)
+    live["line"].to_csv(OUTPUT_DIR / "capital_allocation.csv", index=False)
     if null_draws is not None:
         null_draws.to_csv(OUTPUT_DIR / "null_benchmark.csv", index=False)
         comparison.to_csv(OUTPUT_DIR / "null_comparison.csv", index=False)
