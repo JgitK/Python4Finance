@@ -139,6 +139,11 @@ unit_tests:
     overrides:
       vars:
         top_n_per_sector: 1
+        # This test states the cum_return branch of the rank_column macro.
+        # Without the override, a build with --rank-metric sharpe fails
+        # this test, and the test would measure the build and not the
+        # model.
+        rank_metric: cum_return
     given:
       - input: ref('int_risk_metrics_daily')
         rows:
@@ -191,6 +196,75 @@ unit_tests:
         - {as_of_date: "2024-01-02", ticker: BBB, sector_rank: 1}
         - {as_of_date: "2024-01-02", ticker: CCC, sector_rank: 1}
         - {as_of_date: "2025-01-02", ticker: BBB, sector_rank: 1}
+
+  - name: test_screen_history_ranks_on_the_sharpe_ratio_when_asked
+    description: >
+      The same fixture as the cum_return test, with rank_metric set to
+      sharpe. On the second date AAA has the better Sharpe ratio and BBB
+      the better cumulative return, so the two tests expect different
+      stocks. The pair proves that the rank_column macro selects the
+      column.
+    model: mart_screen_history
+    overrides:
+      vars:
+        top_n_per_sector: 1
+        # This test states the cum_return branch of the rank_column macro.
+        # Without the override, a build with --rank-metric sharpe fails
+        # this test, and the test would measure the build and not the
+        # model.
+        rank_metric: sharpe
+    given:
+      - input: ref('int_risk_metrics_daily')
+        rows:
+          # D1: AAA is too new. BBB passes. CCC passes in its own sector.
+          - {ticker: AAA, as_of_date: "2024-01-02", total_trading_days: 100,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 3.0,
+             cum_return_window: 0.90}
+          - {ticker: BBB, as_of_date: "2024-01-02", total_trading_days: 500,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0,
+             cum_return_window: 0.40}
+          - {ticker: CCC, as_of_date: "2024-01-02", total_trading_days: 500,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 0.5,
+             cum_return_window: 0.20}
+          # D2: AAA has enough history and the best Sharpe ratio, and BBB
+          # has the best cumulative return. The screen ranks on the
+          # cumulative return, so BBB wins the one Tech place, not AAA.
+          # This pair is the discriminating case: under a Sharpe ranking
+          # the expected rows below are wrong.
+          - {ticker: AAA, as_of_date: "2025-01-02", total_trading_days: 450,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 3.0,
+             cum_return_window: 0.10}
+          - {ticker: BBB, as_of_date: "2025-01-02", total_trading_days: 750,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 1.0,
+             cum_return_window: 0.40}
+          - {ticker: CCC, as_of_date: "2025-01-02", total_trading_days: 750,
+             avg_volume: 1000000, daily_volatility: 0.02, sharpe_ratio: 0.5,
+             cum_return_window: 0.20}
+      - input: ref('int_ichimoku_score_daily')
+        rows:
+          - {ticker: AAA, as_of_date: "2024-01-02", ichimoku_score: 5}
+          - {ticker: BBB, as_of_date: "2024-01-02", ichimoku_score: 5}
+          - {ticker: CCC, as_of_date: "2024-01-02", ichimoku_score: 5}
+          - {ticker: AAA, as_of_date: "2025-01-02", ichimoku_score: 5}
+          - {ticker: BBB, as_of_date: "2025-01-02", ichimoku_score: 5}
+          # On D2, CCC is not bullish.
+          - {ticker: CCC, as_of_date: "2025-01-02", ichimoku_score: 1}
+      - input: ref('dim_ticker')
+        rows:
+          - {ticker: AAA, sector: Tech}
+          - {ticker: BBB, sector: Tech}
+          - {ticker: CCC, sector: Energy}
+      # In this test, every stock is in the index on every date.
+      - input: ref('stg_membership')
+        rows:
+          - {ticker: AAA, start_date: "2000-01-03", end_date: null}
+          - {ticker: BBB, start_date: "2000-01-03", end_date: null}
+          - {ticker: CCC, start_date: "2000-01-03", end_date: null}
+    expect:
+      rows:
+        - {as_of_date: "2024-01-02", ticker: BBB, sector_rank: 1}
+        - {as_of_date: "2024-01-02", ticker: CCC, sector_rank: 1}
+        - {as_of_date: "2025-01-02", ticker: AAA, sector_rank: 1}
 
   - name: test_screen_history_uses_index_membership_on_each_date
     description: >
