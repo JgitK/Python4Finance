@@ -49,6 +49,10 @@ class PortfolioParams:
     max_weight: float = 0.25
     size_mode: str = "fixed"
     pool_size: int = 25
+    # The weights of the stocks that the pool mode keeps (D33). objective
+    # keeps the weights of the solver. equal gives 1/k to each of the k
+    # stocks. This is a control that tests the weights of the optimizer.
+    kept_weighting: str = "objective"
 
 
 # The points of the capital allocation line in the live output (D25).

@@ -22,6 +22,124 @@ Use this template for a new entry:
 
 ---
 
+## D33. Equal-weight controls for option B: the pool does the work, not the weights
+
+- **Date:** 2026-11-08
+- **Role:** Protective measure, outside the core loop. It adds two
+  controls behind switches. It changes no default and no number of a
+  default run.
+- **Question:** Option B of D29 (`--optimizer exact --size-mode pool
+  --pool-size 33`) beats SPY on the mean Sharpe ratio (0.88 against 0.80).
+  The result rises with the pool. Does the optimizer add skill, or does
+  the wide pool give the gain? Two parts:
+  (a) Is the gain only the wide pool? Give 1/n to each stock of the pool.
+  (b) Do the weights of the optimizer add anything after its choice of
+  names? Keep the names that the pruning kept, and give 1/k to each.
+- **Options:**
+  1. A new optimizer value, for example `--optimizer equal`. This does
+     not fit: the pool mode needs `exact`, and part (b) needs the
+     `max_sharpe` pruning and a different final weighting.
+  2. A new objective `equal_weight` for part (a), and a new setting
+     `kept_weighting` for part (b).
+  3. A separate script outside the pipeline.
+- **Decision:** Option 2. The live run, the backtest and the results log
+  then use the controls through the same code path as option B.
+- **The design:**
+  - `exact.OBJECTIVES` holds `equal_weight`. `exact.solve` gives 1/n to
+    each stock and the same measures as the other objectives. In the pool
+    mode, `prune_pool` keeps every stock, because 1/n is at or above
+    `min_weight` (1/33 = 3.0% against 2%). So `--size-mode pool
+    --objective equal_weight` holds the whole pool. In the fixed mode it
+    holds the `target_size` stocks of the selection.
+  - `PortfolioParams.kept_weighting` is `objective` (the default) or
+    `equal`. With `equal`, `exact.optimize_weights` runs `prune_pool` with
+    the objective as before. It then calls `exact.equal_weights` on the
+    kept names. The names, the pool and the rounds stay the same. Only the
+    weights change.
+  - `kept_weighting equal` needs `--optimizer exact` and `--size-mode
+    pool`. Another combination raises ValueError.
+  - The flags are `--objective equal_weight` and `--kept-weighting
+    equal`. The log label adds `kept-equal`, for example `exact
+    max_sharpe 2-25% pool33 kept-equal`.
+- **Tests and mutation checks:** 9 new tests in
+  `tests/test_equal_weight.py`, and the parametrized bounds test of
+  `test_exact_pipeline.py` now also runs `equal_weight` (347 tests). The
+  tests came first and failed for the missing code. Mutations, and each
+  one failed a test:
+  1. `kept-equal` weights the whole pool, not the kept names.
+  2. `kept-equal` keeps the weights of the solver.
+  3. `equal_weight` gives unequal weights.
+  4. The guard accepts `kept-equal` in the fixed mode.
+  5. The log label drops `kept-equal`.
+- **Evidence:** `sp500`, 10/10/3, `cum_return`, commit `0899ed3`, run with `--skip-dbt` on a warehouse that this clone built
+  (PASS=89, WARN=2). The four arms use the same dates and the same
+  screen. The kept names of EW-kept are the names of B in 100% of the
+  windows. "Vol" is the mean realized annual volatility of the windows.
+  SPY has a mean Sharpe ratio of 0.80 and a volatility of 16.7%.
+
+  | Arm | Step | Pool | Return share | Sharpe share | Mean excess | Median excess | Mean Sharpe | Beta | Vol |
+  |---|---|---|---|---|---|---|---|---|---|
+  | B (max_sharpe) | 5 | 20 | 60.0% | 52.9% | +2.44% | +4.10% | 0.75 | 0.93 | 21.8% |
+  | EW-pool | 5 | 20 | 64.7% | 57.6% | +5.44% | +6.52% | 0.78 | 1.28 | 25.1% |
+  | EW-kept | 5 | 20 | 65.9% | 61.2% | +6.39% | +6.59% | **0.84** | 1.12 | 24.2% |
+  | B (max_sharpe) | 5 | 33 | 64.7% | 61.2% | +3.15% | +3.67% | 0.88 | 0.75 | 18.6% |
+  | EW-pool | 5 | 33 | 67.1% | 63.5% | +3.30% | +5.01% | 0.88 | 1.00 | 19.6% |
+  | EW-kept | 5 | 33 | 67.1% | 62.4% | +5.82% | +5.76% | **0.96** | 0.92 | 20.6% |
+  | B (max_sharpe) | 3 | 20 | 59.6% | 52.5% | +2.59% | +4.06% | 0.75 | 0.92 | 21.8% |
+  | EW-pool | 3 | 20 | 66.0% | 60.3% | +6.00% | +6.99% | **0.82** | 1.28 | 25.2% |
+  | EW-kept | 3 | 20 | 64.5% | 59.6% | +5.76% | +6.58% | 0.80 | 1.11 | 24.3% |
+  | B (max_sharpe) | 3 | 33 | 61.7% | 58.2% | +2.90% | +3.60% | 0.87 | 0.74 | 18.6% |
+  | EW-pool | 3 | 33 | 68.8% | 62.4% | +3.52% | +4.46% | 0.90 | 1.00 | 19.6% |
+  | EW-kept | 3 | 33 | 64.5% | 64.5% | +5.20% | +6.81% | **0.92** | 0.92 | 20.5% |
+
+  Step 5 has 85 windows and step 3 has 141. SPY on step 3: mean Sharpe
+  0.81.
+
+  Head to head on the same windows, B beats EW-kept on the Sharpe ratio
+  in 41% to 48% of the windows and on the return in 37% to 42%. B beats
+  EW-pool on the Sharpe ratio in 50% to 53% of the windows.
+
+  The momentum lines of D30 (step 5, French UMD, median):
+
+  | Arm | Pool | UMD loading | Significant | Alpha, market only | Alpha, market and UMD |
+  |---|---|---|---|---|---|
+  | B | 20 | +0.20 | 74.1% | +8.45% | +6.16% |
+  | EW-pool | 20 | +0.21 | 87.1% | +6.81% | +4.86% |
+  | EW-kept | 20 | +0.26 | 85.9% | +9.33% | +5.14% |
+  | B | 33 | +0.18 | 70.6% | +8.39% | +7.48% |
+  | EW-pool | 33 | +0.15 | 67.1% | +6.27% | +4.68% |
+  | EW-kept | 33 | +0.21 | 82.4% | +8.69% | +6.74% |
+
+- **What this says:**
+  1. **The wide pool gives the Sharpe result, not the optimizer.** Equal
+     weight on all 33 names gives a mean Sharpe ratio of 0.88 (step 5)
+     and 0.90 (step 3). Option B gives 0.88 and 0.87. EW-pool also beats
+     SPY on the return and on the Sharpe ratio in more windows, and its
+     median excess return is higher (+5.01% against +3.67%). With a pool
+     of 20, EW-pool beats B on both grids.
+  2. **The weights of the optimizer remove value.** On the same names,
+     1/k beats the `max_sharpe` weights on the mean Sharpe ratio in all
+     four cells (+0.04 to +0.09) and on the median excess return in all
+     four (+2 to +3 points). B beats EW-kept on the Sharpe ratio in fewer
+     than half of the windows. This is the same lesson as D29 point 1: a
+     better in-sample optimum gives a worse out-of-sample result.
+  3. **The name choice of the pruning helps a little, at most.** With a
+     pool of 33, EW-kept beats EW-pool (0.96 against 0.88, and 0.92
+     against 0.90). With a pool of 20 on step 3, EW-pool beats EW-kept
+     (0.82 against 0.80). The sign is not stable, so this is not shown.
+  4. **The low beta of B comes from its weights.** The same names at 1/k
+     have a beta of 0.92. The `max_sharpe` weights put more money in the
+     calm names, so the beta falls to 0.75 and the volatility falls by
+     approximately 2 points. The return falls more than the risk.
+  5. **The noise.** The windows overlap (D16, D31). The differences of
+     0.02 to 0.09 in the mean Sharpe ratio are of the same size as the
+     effect of the date grid. The measurement does not show that equal
+     weight is better. It shows that the optimizer is not better.
+- **Results:** No default changed. Eight rows in the results log (the
+  four controls on step 5 and on step 3).
+- **Commits:** `0899ed3` (the code and the tests), and the next commit
+  (the documents).
+
 ## D32. Measure the rank order of option B against a random order
 
 - **Date:** 2026-11-08

@@ -335,7 +335,7 @@ question that is wrong when a part is wrong.
 
 | What | Where |
 |---|---|
-| Why each decision was made | `docs/decisions.md` (D1 to D32) |
+| Why each decision was made | `docs/decisions.md` (D1 to D33) |
 | How the results changed | `docs/results_log.md` (one row for each run) |
 | Problems that are not solved | `docs/open_questions.md` |
 | The work that comes next | `docs/handoff.md` |
@@ -357,7 +357,7 @@ question that is wrong when a part is wrong.
 
 ## The state of the checks
 
-340 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
+350 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
 warnings, for `cum_return` and for `sharpe`. `verify_indicators.py`
 passes every check, with three momentum checks since D30. A fresh sparse clone of the branch reproduces the
 build, the tests and the live run exactly.
