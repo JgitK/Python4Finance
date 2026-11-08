@@ -316,6 +316,13 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pool-size", type=int, default=default.pool_size,
                         help="The count of stocks in the pool of the pool "
                              f"mode. The default is {default.pool_size}.")
+    # The equal-weight control of the pool mode. See decision D33.
+    parser.add_argument("--kept-weighting", default=default.kept_weighting,
+                        choices=list(exact.KEPT_WEIGHTINGS),
+                        help="objective keeps the weights of the exact "
+                             "optimizer in the pool mode. equal keeps the "
+                             "same stocks and gives each the same weight. "
+                             f"The default is {default.kept_weighting}.")
     return parser
 
 
@@ -330,7 +337,8 @@ def params_from_args(args: argparse.Namespace) -> pipeline.PortfolioParams:
                                     min_weight=args.min_weight,
                                     max_weight=args.max_weight,
                                     size_mode=args.size_mode,
-                                    pool_size=args.pool_size)
+                                    pool_size=args.pool_size,
+                                    kept_weighting=args.kept_weighting)
 
 
 def caps_label(args: argparse.Namespace) -> str:

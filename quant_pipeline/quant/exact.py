@@ -15,6 +15,12 @@ The four objectives are:
   several start points.
 - `min_cvar`: the lowest Conditional Value at Risk at 5%. A linear program
   of Rockafellar and Uryasev gives it.
+- `equal_weight`: 1/n for each stock. This is a control, not an optimizer
+  (D33). In the pool mode, no stock drops, so it holds the whole pool.
+
+The setting `kept_weighting` of the pool mode has two values. `objective`
+keeps the weights of the last solve. `equal` keeps the names that the
+pruning kept and it gives 1/k to each of them (D33).
 
 Each function uses plain data as input, so the tests can check it.
 """
@@ -28,7 +34,9 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import linprog, minimize
 
-OBJECTIVES = ("max_sharpe", "min_variance", "max_sortino", "min_cvar")
+OBJECTIVES = ("max_sharpe", "min_variance", "max_sortino", "min_cvar",
+              "equal_weight")
+KEPT_WEIGHTINGS = ("objective", "equal")
 
 # The tolerance of the bound check. A sum of exactly 1 is feasible.
 _BOUND_TOLERANCE = 1e-12
@@ -316,6 +324,23 @@ def min_cvar_weights(scenarios: np.ndarray, min_weight: float,
     return _clean(result.x[:n], min_weight, max_weight)
 
 
+def equal_weights(returns: pd.DataFrame, risk_free: float = 0.045,
+                  trading_days: int = 252) -> dict[str, Any]:
+    """Give 1/n to each stock of the frame, with the measures of `solve`.
+
+    The function does not check the bounds. The caller keeps the stocks
+    that an optimizer picked, and it changes only their weights (D33).
+    """
+    n = returns.shape[1]
+    weights = np.full(n, 1.0 / n)
+    result = _result(returns, weights, "equal_weight", risk_free,
+                     trading_days)
+    daily = returns.to_numpy() @ weights
+    result["sortino"] = sortino_ratio(daily, risk_free, trading_days)
+    result["cvar_5"] = cvar_5(daily)
+    return result
+
+
 def solve(returns: pd.DataFrame, objective: str, min_weight: float,
           max_weight: float, risk_free: float = 0.045,
           trading_days: int = 252) -> dict[str, Any]:
@@ -331,7 +356,10 @@ def solve(returns: pd.DataFrame, objective: str, min_weight: float,
             f"{objective!r}.")
     check_bounds(returns.shape[1], min_weight, max_weight)
     cov = returns.cov().to_numpy()
-    if objective == "min_variance":
+    if objective == "equal_weight":
+        n = returns.shape[1]
+        weights = np.full(n, 1.0 / n)
+    elif objective == "min_variance":
         weights = min_variance_weights(cov, min_weight, max_weight)
     elif objective == "max_sharpe":
         excess, annual_cov = _annual_inputs(returns, risk_free, trading_days)
@@ -445,6 +473,14 @@ def check_settings(params: Any) -> None:
             raise ValueError("The monte_carlo optimizer has no weight "
                              "bounds, so it cannot use the pool mode. Use "
                              "--optimizer exact.")
+    kept = getattr(params, "kept_weighting", "objective")
+    if kept not in KEPT_WEIGHTINGS:
+        raise ValueError(f"kept_weighting must be one of "
+                         f"{', '.join(KEPT_WEIGHTINGS)}, not {kept!r}.")
+    if kept != "objective" and (params.optimizer != "exact"
+                                or params.size_mode != "pool"):
+        raise ValueError("kept_weighting equal needs --optimizer exact and "
+                         "--size-mode pool.")
 
 
 def selection_size(params: Any) -> int:
@@ -479,6 +515,14 @@ def optimize_weights(returns: pd.DataFrame, params: Any) -> dict[str, Any]:
     if params.size_mode == "pool":
         result = prune_pool(returns, solver, params.min_weight,
                             params.max_weight)
+        if params.kept_weighting == "equal":
+            # Keep the names of the pruning. Give 1/k to each (D33).
+            kept = list(result["weights"])
+            pool, rounds = result["pool"], result["rounds"]
+            result = equal_weights(returns[kept], params.risk_free,
+                                   params.trading_days)
+            result["pool"] = pool
+            result["rounds"] = rounds
     else:
         result = solver(returns, params.min_weight, params.max_weight)
     result["frontier"] = pd.DataFrame([{
@@ -500,7 +544,10 @@ def optimizer_label(params: Any) -> str:
             else "fixed")
     low = round(params.min_weight * 100, 6)
     high = round(params.max_weight * 100, 6)
-    return f"exact {params.objective} {low:g}-{high:g}% {size}"
+    label = f"exact {params.objective} {low:g}-{high:g}% {size}"
+    if params.kept_weighting == "equal":
+        label += " kept-equal"
+    return label
 
 
 def count_distribution(windows: list[dict[str, Any]]) -> dict[int, int]:
