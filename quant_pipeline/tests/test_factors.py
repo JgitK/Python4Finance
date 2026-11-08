@@ -11,6 +11,7 @@ short leg by hand.
 
 from __future__ import annotations
 
+import itertools
 import numpy as np
 import pandas as pd
 import pytest
@@ -257,6 +258,27 @@ def test_build_umd_uses_no_future_prices():
                                 QUANTILE)
     assert changed[changed.index <= cut].equals(base[base.index <= cut])
     assert not changed.equals(base)
+
+
+def test_umd_legs_use_no_return_after_the_formation_date():
+    # For each cut day, give a crash to one pair of stocks and a jump to
+    # the other pair on every day after the cut. Do it in both directions.
+    # A leg that a formation date on or before the cut gives must not
+    # change. A rule that reads one day too far fails.
+    panel = _panel()
+    for cut, (up, down) in itertools.product(
+            panel.index, [(["A", "B"], ["E", "F"]), (["E", "F"], ["A", "B"])]):
+        tampered = panel.copy()
+        after = tampered.index > cut
+        tampered.loc[after, up] = 5.0
+        tampered.loc[after, down] = -0.9
+        base = factors.umd_legs(panel, _members(TICKERS), LOOKBACK, SKIP,
+                                QUANTILE)
+        changed = factors.umd_legs(tampered, _members(TICKERS), LOOKBACK,
+                                   SKIP, QUANTILE)
+        known = [leg for leg in base if leg["formation_date"] <= cut]
+        assert [leg for leg in changed
+                if leg["formation_date"] <= cut] == known, cut
 
 
 def test_build_umd_does_not_use_the_formation_day_return():
