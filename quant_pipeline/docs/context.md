@@ -4,7 +4,7 @@ This file holds the context of the project and nothing else. It has no
 next steps and no plan. Read `handoff.md` beside it for the work that
 comes next.
 
-Last update: 2026-11-07. HEAD is `e1e1ea5` on the branch
+Last update: 2026-11-07. The docs describe commit `6acf4fa` on the branch
 `dbt-duckdb-markowitz-pipeline`.
 
 ## Paste this into the new chat
@@ -38,15 +38,17 @@ trading days and a hold of 180 trading days:
 
 | Measure | The method | SPY |
 |---|---|---|
-| Share of windows that beat SPY on the return | 57.6% | - |
+| Share of windows that beat SPY on the return | 63.5% | - |
 | Share of windows that beat SPY on the Sharpe ratio | 50.6% | - |
-| Median excess return | +4.84% | - |
-| Mean Sharpe ratio | 0.68 | 0.80 |
+| Median excess return | +7.05% | - |
+| Mean Sharpe ratio | 0.78 | 0.80 |
 
-The live run gives 110 candidates, 10 stocks over 4 sectors (Energy 3,
-Health Care 3, Information Technology 3, Materials 1), an in-sample
-Sharpe ratio of 4.51, and a $10,000 plan that spends $9,952.53 with no
-warning.
+The screen has no Ichimoku gate since D27. The live run gives 110
+candidates, 10 stocks over 4 sectors (Energy 3, Health Care 3,
+Information Technology 3, Materials 1) and an in-sample Sharpe ratio of
+4.26. A $10,000 plan of whole shares drops DELL and VLO, because one share
+costs more than the target weight. `--fractional-shares` holds every
+weight.
 
 **The in-sample Sharpe ratio is not a result.** The optimizer tries
 10,000 random weightings and it keeps the best, so a high number on the
@@ -140,7 +142,15 @@ two values and it has no default of its own.
   of the windows that beat SPY on the return rose from 57.6% to 63.5%,
   the median excess return from +4.84% to +7.05%, and the mean Sharpe
   ratio from 0.68 to 0.78 against 0.80 for SPY. A stricter gate gives a
-  lower result. The default is still 2.
+  lower result. D27 removed the gate from the code. The Ichimoku lines
+  and the score stay as information for a chart: the user decides on the
+  timing.
+- **The three universes after D27.** `both` beats SPY on the return in
+  68.2% of the windows with a median of +8.74%, `nasdaq` in 63.5% with
+  +6.15%, and `sp500` in 63.5% with +7.05%. The mean Sharpe ratio is 0.68
+  for `both`, 0.61 for `nasdaq` and 0.78 for `sp500`, against 0.80 for
+  SPY. The mean realized beta is 1.64, 1.60 and 1.49. `both` and `nasdaq`
+  carry 5 to 6 times more members with no prices than `sp500`.
 - **A large part of the excess return is beta (D25).** The realized
   beta of the portfolio is 1.41 on average over the 85 windows, so the
   portfolio takes more market risk than SPY. After the beta, the median
@@ -168,7 +178,7 @@ two values and it has no default of its own.
   or no sector, so the survivorship bias that remains stays visible.
 - `run_pipeline.py` adds one row to `docs/results_log.md` with the commit
   hash, the caps and the rank metric.
-- The results log holds 47 rows. The Caps column and the Rank column say
+- The results log holds 50 rows. The Caps column and the Rank column say
   which settings made each row.
 
 ## What is not solved
@@ -291,7 +301,7 @@ question that is wrong when a part is wrong.
 
 | What | Where |
 |---|---|
-| Why each decision was made | `docs/decisions.md` (D1 to D26) |
+| Why each decision was made | `docs/decisions.md` (D1 to D27) |
 | How the results changed | `docs/results_log.md` (one row for each run) |
 | Problems that are not solved | `docs/open_questions.md` |
 | The work that comes next | `docs/handoff.md` |
@@ -314,6 +324,5 @@ warnings, for `cum_return` and for `sharpe`. `verify_indicators.py`
 passes every check. A fresh sparse clone of the branch reproduces the
 build, the tests and the live run exactly.
 
-The `nasdaq` and `both` universes add a third warning for the sector
-coverage. **Those two universes were last built before D22.** Confirm
-their count before you rely on it.
+The `nasdaq` and `both` universes add a third warning, for a member with
+an implausible volume. They were built and measured again at `6acf4fa`.

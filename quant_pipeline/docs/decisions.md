@@ -22,6 +22,58 @@ Use this template for a new entry:
 
 ---
 
+## D27. Remove the Ichimoku gate from the screen
+
+- **Date:** 2026-11-07
+- **Role:** Core loop. It changes which stocks pass the screen, so it
+  changes the candidates, the portfolio and every backtest number.
+- **Question:** D24 measured the Ichimoku gate. The gate at 0 gave the
+  highest result on every date grid. Should the screen keep the gate?
+- **Options:**
+  1. Keep the gate at a score of 2 (the state before this decision).
+  2. Set `min_ichimoku_score` to 0, and keep the setting.
+  3. Remove the gate from the code. Keep the Ichimoku lines and the score
+     as information for a chart.
+- **Decision:** Option 3. The user selected it. The user wants to read the
+  Ichimoku chart and decide on the timing. The return screen selects
+  what to buy. The Ichimoku chart helps to select when to buy. A setting
+  at 0 keeps a rule that nobody uses and three tests that state it.
+- **The change:**
+  - `passes_screen` in `dbt/macros/screen.sql` has no Ichimoku condition.
+    The variable `min_ichimoku_score` is removed from `dbt_project.yml`.
+  - `int_ichimoku`, `int_ichimoku_score` and `int_ichimoku_score_daily`
+    stay. The marts keep the column `ichimoku_score`, and its
+    `accepted_values` test now accepts 0 to 5.
+  - Three unit tests now give a stock with a score of 0 that passes the
+    screen. They failed before the change, for this reason only.
+  - A mutation check put back a gate at a score of 1. The three tests
+    failed. The first fixtures used a score of 1, and that gate passed
+    them, so the fixtures now use 0.
+  - `verify_indicators.py` has no Ichimoku condition in its pandas screen.
+- **Evidence:** Commit `6acf4fa`. The `sp500` row at this commit is
+  identical to the D24 row with the gate at 0: 63.5% of the 85 windows
+  beat SPY on the return, the median excess return is +7.05%, and the mean
+  Sharpe ratio is 0.78 against 0.80 for SPY. `dbt build` gives PASS=89
+  and 2 warnings, 218 Python tests pass, and `verify_indicators.py`
+  passes every check.
+- **The other universes, measured again:** The user wants the `nasdaq`
+  stocks for diversity. These are the first rows after D22 and D27:
+
+  | Universe | Return share | Sharpe share | Median excess | Mean Sharpe | Mean beta | Median alpha | Live volatility |
+  |---|---|---|---|---|---|---|---|
+  | sp500 | 63.5% | 50.6% | +7.05% | 0.78 | 1.49 | +8.60% | 18.4% |
+  | nasdaq | 63.5% | 49.4% | +6.15% | 0.61 | 1.60 | +8.54% | 25.8% |
+  | both | 68.2% | 51.8% | +8.74% | 0.68 | 1.64 | +10.21% | 30.0% |
+
+  The `both` universe gives the highest return and the most windows that
+  beat SPY. It does not give a better risk-adjusted result: its mean
+  Sharpe ratio is lower than for `sp500`, its beta is higher, and its live
+  volatility is 1.6 times larger. The source lacks 63 to 121 of its
+  members on the three selection dates, against 10 to 20 for `sp500`
+  (D19). The missing companies are mostly exits, so the `both` result is
+  flattered more than the `sp500` result. The default universe stays
+  `sp500` until the user decides.
+
 ## D26. Let the share plan buy a part of a share
 
 - **Date:** 2026-11-07

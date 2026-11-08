@@ -13,13 +13,17 @@ one, move it to the "Solved" section with the commit hash.
   has only the market factor. A regression with a momentum factor can
   separate a factor premium from skill. The project has no factor data.
 
-- **The Ichimoku gate makes the result worse (D24).** A stricter gate
-  gives a lower result, and the gate off gives the highest result on
-  every date grid: a mean Sharpe ratio of 0.78 against 0.80 for SPY, and
-  0.68 at the default gate of 2. Three questions follow: should the
-  default change to 0; does the Ichimoku chart help as a rank or as an
-  entry signal and not as a gate; and does the result hold on the `nasdaq`
-  and `both` universes?
+- **The Ichimoku chart as a timing aid (D27).** D27 removed the gate.
+  The user reads the chart and decides on the timing. Two questions
+  remain: does an Ichimoku entry signal improve the entry date inside the
+  holding period, and does the chart improve the result of a person who
+  reads it? Neither is measured.
+
+- **The universe for the default (D27).** `both` gives the highest
+  return share (68.2%) and median (+8.74%), and `sp500` gives the highest
+  mean Sharpe ratio (0.78). `both` carries more survivorship bias, more
+  beta and more volatility. The user wants the `nasdaq` stocks for
+  diversity. The default is still `sp500`.
 
 - **The method beats SPY on the return and not on the Sharpe ratio.**
   D22 changed the ranking to the cumulative return, and the `sp500`
