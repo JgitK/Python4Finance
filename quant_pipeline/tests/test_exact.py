@@ -200,3 +200,116 @@ def test_the_convex_reformulation_gives_none_when_every_asset_loses():
     returns = _returns(seed=13, n=3) - 0.003
     excess, cov = exact._annual_inputs(returns, 0.045, 252)
     assert exact._tangency_by_reformulation(excess, cov, 0.0, 1.0) is None
+
+
+# --- max_sortino -----------------------------------------------------------
+
+def test_sortino_ratio_matches_a_hand_calculation():
+    # Four days. The daily target is 0.0252 / 252 = 0.0001.
+    daily = np.array([0.0101, -0.0099, 0.0001, -0.0199])
+    target = 0.0001
+    shortfall = np.array([0.0, -0.01, 0.0, -0.02])
+    downside = math.sqrt((shortfall ** 2).mean()) * math.sqrt(252)
+    expected = (daily.mean() * 252 - 0.0252) / downside
+    assert exact.sortino_ratio(daily, 0.0252, 252) == pytest.approx(expected)
+    assert target == pytest.approx(0.0252 / 252)
+
+
+def test_max_sortino_beats_a_fine_grid():
+    returns = _returns(seed=3, n=3)
+    risk_free = 0.045
+
+    def sortino(w):
+        return exact.sortino_ratio(returns.to_numpy() @ w, risk_free, 252)
+
+    best = max(sortino(w) for w in _grid(3, 0.01, 0.05, 0.6))
+    result = exact.solve(returns, "max_sortino", 0.05, 0.6)
+    w = np.array([result["weights"][t] for t in returns.columns])
+    assert w.min() >= 0.05 - 1e-12 and w.max() <= 0.6 + 1e-12
+    assert sortino(w) >= best - 1e-9
+    assert sortino(w) - best < 0.02
+    assert result["sortino"] == pytest.approx(sortino(w))
+
+
+def test_max_sortino_is_not_max_sharpe():
+    # A skewed asset has a small downside and a large upside. The Sortino
+    # ratio likes it more than the Sharpe ratio does.
+    rng = np.random.default_rng(0)
+    days = 400
+    calm = rng.normal(0.0006, 0.01, days)
+    skewed = np.where(rng.random(days) < 0.1, 0.06, -0.002)
+    third = rng.normal(0.0004, 0.012, days)
+    returns = pd.DataFrame({"CALM": calm, "SKEW": skewed, "THIRD": third})
+    sharpe = exact.solve(returns, "max_sharpe", 0.0, 1.0)
+    sortino = exact.solve(returns, "max_sortino", 0.0, 1.0)
+    assert sortino["weights"]["SKEW"] > sharpe["weights"]["SKEW"] + 0.01
+
+
+# --- min_cvar --------------------------------------------------------------
+
+def test_cvar_5_follows_the_dbt_convention():
+    # int_risk_metrics takes the linear 5% quantile of the daily returns,
+    # then the mean of the returns at or below it. With 40 days the
+    # quantile sits between the 2nd and 3rd worst day, so the two worst
+    # days count.
+    daily = np.linspace(-0.05, 0.05, 40)
+    expected = daily[:2].mean()
+    assert exact.cvar_5(daily) == pytest.approx(expected)
+
+
+def _worst_mean(scenarios, w, k):
+    """Give the mean return of the k worst days of a portfolio."""
+    return np.sort(scenarios @ w)[:k].mean()
+
+
+def test_min_cvar_matches_a_brute_force_search():
+    # 40 scenarios at 5% means the two worst days.
+    returns = _returns(seed=21, days=40, n=3)
+    scenarios = returns.to_numpy()
+    best = max(_worst_mean(scenarios, w, 2)
+               for w in _grid(3, 0.01, 0.0, 1.0))
+    result = exact.solve(returns, "min_cvar", 0.0, 1.0)
+    w = np.array([result["weights"][t] for t in returns.columns])
+    assert _worst_mean(scenarios, w, 2) >= best - 1e-9
+    assert result["cvar_5"] == pytest.approx(exact.cvar_5(scenarios @ w))
+
+
+def test_min_cvar_holds_a_binding_maximum():
+    returns = _returns(seed=21, days=40, n=3)
+    free = exact.solve(returns, "min_cvar", 0.0, 1.0)
+    cap = max(free["weights"].values()) - 0.1
+    capped = exact.solve(returns, "min_cvar", 0.0, cap)
+    assert max(capped["weights"].values()) == pytest.approx(cap, abs=1e-9)
+    scenarios = returns.to_numpy()
+    best = max(_worst_mean(scenarios, w, 2)
+               for w in _grid(3, 0.01, 0.0, cap))
+    w = np.array([capped["weights"][t] for t in returns.columns])
+    assert _worst_mean(scenarios, w, 2) >= best - 1e-9
+
+
+def test_the_tail_count_follows_the_linear_quantile():
+    # The linear quantile at 5% sits at position 0.05 * (T - 1). Every day
+    # up to and on that position counts.
+    assert exact.tail_count(252) == 13
+    assert exact.tail_count(40) == 2
+    assert exact.tail_count(30) == 2
+    assert exact.tail_count(21) == 2
+    assert exact.tail_count(20) == 1
+
+
+def test_min_cvar_weights_minimize_the_mean_of_the_worst_days():
+    # 30 scenarios: dbt averages the 2 worst days. The Rockafellar-Uryasev
+    # program with a tail of 2 / 30 minimizes that mean.
+    rng = np.random.default_rng(4)
+    scenarios = rng.normal(0.0, 0.02, size=(30, 3))
+
+    def worst_two(w):
+        return np.sort(scenarios @ w)[:2].mean()
+
+    best = max(worst_two(w) for w in _grid(3, 0.01, 0.0, 1.0))
+    weights = exact.min_cvar_weights(scenarios, 0.0, 1.0)
+    assert worst_two(weights) >= best - 1e-9
+    # The optimum often puts two days at the same loss on the VaR point.
+    # The dbt formula then counts every tied day, so its value can be
+    # above the mean of the 2 worst days. It is never below it.
+    assert exact.cvar_5(scenarios @ weights) >= worst_two(weights) - 1e-12

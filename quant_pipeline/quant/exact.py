@@ -26,7 +26,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from scipy.optimize import minimize
+from scipy.optimize import linprog, minimize
 
 OBJECTIVES = ("max_sharpe", "min_variance", "max_sortino", "min_cvar")
 
@@ -206,6 +206,116 @@ def max_sharpe_weights(excess: np.ndarray, cov: np.ndarray,
     return max(candidates, key=lambda w: _sharpe_of(w, excess, cov))
 
 
+def sortino_ratio(daily: np.ndarray, risk_free: float = 0.045,
+                  trading_days: int = 252) -> float:
+    """Give the Sortino ratio of a daily return series.
+
+    The numerator is the annual return minus the risk-free rate, as in the
+    Sharpe ratio. The downside deviation counts each daily shortfall below
+    the daily risk-free rate, and a day above that rate counts as zero. The
+    mean runs over all days, so a calm day lowers the deviation.
+
+    The dbt model int_risk_metrics measures the shortfall below 0, not
+    below the risk-free rate. D29 explains the difference.
+    """
+    daily = np.asarray(daily, dtype=float)
+    target = risk_free / trading_days
+    shortfall = np.minimum(daily - target, 0.0)
+    downside = math.sqrt(float((shortfall ** 2).mean()) * trading_days)
+    if downside == 0.0:
+        return math.inf
+    return (float(daily.mean()) * trading_days - risk_free) / downside
+
+
+def max_sortino_weights(scenarios: np.ndarray, min_weight: float,
+                        max_weight: float, risk_free: float = 0.045,
+                        trading_days: int = 252,
+                        starts: list[np.ndarray] | None = None
+                        ) -> np.ndarray:
+    """Find the weights with the highest Sortino ratio inside the bounds.
+
+    `scenarios` holds one row of daily returns for each day. The weights
+    sum to 1, so the shortfall of the portfolio below the daily target is
+    (scenarios - target) times the weights. The squared shortfall has a
+    smooth gradient, so SLSQP can use it. The function starts SLSQP from
+    equal weights and from each extra start, and it keeps the best result.
+    """
+    scenarios = np.asarray(scenarios, dtype=float)
+    n_days, n = scenarios.shape
+    check_bounds(n, min_weight, max_weight)
+    excess = scenarios - risk_free / trading_days
+    mean_excess = excess.mean(axis=0) * trading_days
+
+    def negative_sortino(w: np.ndarray) -> tuple[float, np.ndarray]:
+        shortfall = np.minimum(excess @ w, 0.0)
+        downside = math.sqrt(max(float(shortfall @ shortfall) / n_days
+                                 * trading_days, 1e-300))
+        numerator = float(mean_excess @ w)
+        d_downside = (excess.T @ shortfall) / n_days * trading_days / downside
+        gradient = (mean_excess * downside - numerator * d_downside) \
+            / downside ** 2
+        return -numerator / downside, -gradient
+
+    candidates = [np.full(n, 1.0 / n)] + list(starts or [])
+    results = [_slsqp(negative_sortino, start, min_weight, max_weight,
+                      jac=True) for start in candidates]
+    return max(results + candidates,
+               key=lambda w: sortino_ratio(scenarios @ w, risk_free,
+                                           trading_days))
+
+
+def tail_count(n_days: int, level: float = 0.05) -> int:
+    """Give the count of days that the 5% CVaR of dbt averages.
+
+    int_risk_metrics takes the linear quantile, which sits at position
+    level * (n_days - 1) in the sorted returns. It then averages every day
+    at or below that quantile. With no ties, that is the worst
+    floor(level * (n_days - 1)) + 1 days.
+    """
+    return int(math.floor(level * (n_days - 1) + 1e-9)) + 1
+
+
+def cvar_5(daily: np.ndarray) -> float:
+    """Give the 5% CVaR of a daily return series, as dbt calculates it.
+
+    The value is a return, so a loss is negative. It is the mean of the
+    returns at or below the linear 5% quantile.
+    """
+    daily = np.asarray(daily, dtype=float)
+    var_5 = float(np.quantile(daily, 0.05))
+    return float(daily[daily <= var_5].mean())
+
+
+def min_cvar_weights(scenarios: np.ndarray, min_weight: float,
+                     max_weight: float, level: float = 0.05) -> np.ndarray:
+    """Find the weights with the lowest 5% CVaR inside the bounds.
+
+    The linear program of Rockafellar and Uryasev has the variables w, a
+    and u. It minimizes a + sum(u) / k, subject to u_t >= loss_t - a and
+    u_t >= 0. The loss of day t is minus the return of the portfolio. At
+    the optimum, a is the Value at Risk and the objective is the mean loss
+    of the k worst days.
+
+    k comes from `tail_count`, so the program minimizes the cvar_5 of dbt
+    exactly. HiGHS solves the program.
+    """
+    scenarios = np.asarray(scenarios, dtype=float)
+    n_days, n = scenarios.shape
+    check_bounds(n, min_weight, max_weight)
+    k = tail_count(n_days, level)
+    cost = np.concatenate([np.zeros(n), [1.0], np.full(n_days, 1.0 / k)])
+    # -r_t . w - a - u_t <= 0 for each day t.
+    upper = np.hstack([-scenarios, -np.ones((n_days, 1)), -np.eye(n_days)])
+    equal = np.concatenate([np.ones(n), [0.0], np.zeros(n_days)])[None, :]
+    bounds = ([(min_weight, max_weight)] * n + [(None, None)]
+              + [(0.0, None)] * n_days)
+    result = linprog(cost, A_ub=upper, b_ub=np.zeros(n_days), A_eq=equal,
+                     b_eq=[1.0], bounds=bounds, method="highs")
+    if not result.success:
+        raise RuntimeError(f"The CVaR program failed: {result.message}")
+    return _clean(result.x[:n], min_weight, max_weight)
+
+
 def solve(returns: pd.DataFrame, objective: str, min_weight: float,
           max_weight: float, risk_free: float = 0.045,
           trading_days: int = 252) -> dict[str, Any]:
@@ -227,9 +337,22 @@ def solve(returns: pd.DataFrame, objective: str, min_weight: float,
         excess, annual_cov = _annual_inputs(returns, risk_free, trading_days)
         weights = max_sharpe_weights(excess, annual_cov, min_weight,
                                      max_weight)
+    elif objective == "max_sortino":
+        excess, annual_cov = _annual_inputs(returns, risk_free, trading_days)
+        starts = [max_sharpe_weights(excess, annual_cov, min_weight,
+                                     max_weight),
+                  min_variance_weights(cov, min_weight, max_weight)]
+        weights = max_sortino_weights(returns.to_numpy(), min_weight,
+                                      max_weight, risk_free, trading_days,
+                                      starts)
     else:
-        raise NotImplementedError(objective)
-    return _result(returns, weights, objective, risk_free, trading_days)
+        weights = min_cvar_weights(returns.to_numpy(), min_weight,
+                                   max_weight)
+    result = _result(returns, weights, objective, risk_free, trading_days)
+    daily = returns.to_numpy() @ weights
+    result["sortino"] = sortino_ratio(daily, risk_free, trading_days)
+    result["cvar_5"] = cvar_5(daily)
+    return result
 
 
 def _result(returns: pd.DataFrame, weights: np.ndarray, objective: str,
