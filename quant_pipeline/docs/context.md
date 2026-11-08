@@ -85,6 +85,7 @@ cache in `data/cache/`.
 | `rank_metric` | cum_return | `dbt_project.yml` and `PortfolioParams`, `--rank-metric` | The measure that ranks the candidates inside each sector. |
 | `--null-draws` | 0 | `run_pipeline.py` | The draws of the random-order null benchmark. It needs `--many-windows`. |
 | `--fractional-shares` | off | `run_pipeline.py` | Buy a part of a share where necessary. The plan then holds every weight and gives no warning (D26). |
+| `--hold-days` | 180 | `run_pipeline.py` | The holding checkpoints of a many-window run, for example `90,120,150,180`. Each window is measured at each checkpoint, in two views (D31). |
 
 Two settings live in two layers that must agree. `rank_metric` drives the
 `rank_column` macro for the screen in dbt, and it drives
@@ -157,6 +158,14 @@ two values and it has no default of its own.
   alpha is +6.17% a year and it is positive in 60.0% of the windows. The
   regression has only the market factor, so the alpha can still be a
   momentum premium.
+- **A shorter hold does not change the conclusion (D31).** On the 85
+  dates with a full 180-day window, the method beats SPY on the return
+  in 68.2% of the windows at 90 days and in 63.5% at 180 days. On the
+  Sharpe ratio it gives 58.8% at 90 days. But all 103 valid dates of a
+  90-day hold give 48.5% on the Sharpe ratio and a mean Sharpe ratio of
+  1.02 against 1.16 for SPY. The 18 extra recent windows give 0 Sharpe
+  wins. The median annual excess is +7.5% to +14.8% at every hold, so no
+  hold is clearly best. The mean beta stays 1.49 to 1.62.
 - **Two independent benchmarks agree.** SPY and the random order both say
   the same thing: the selection rule adds return, not risk-adjusted
   return.
@@ -178,7 +187,7 @@ two values and it has no default of its own.
   or no sector, so the survivorship bias that remains stays visible.
 - `run_pipeline.py` adds one row to `docs/results_log.md` with the commit
   hash, the caps and the rank metric.
-- The results log holds 50 rows. The Caps column and the Rank column say
+- The results log holds 52 rows. The Caps column and the Rank column say
   which settings made each row.
 
 ## What is not solved
@@ -216,7 +225,8 @@ These are facts about the state, not a plan.
 - **The overlapping windows.** The 85 windows share most of their days,
   and the valid dates cover approximately two independent holding
   periods. A percentile or a share is a measure, not a test of
-  significance.
+  significance. D31 counts the windows that share no day: 3 at 180
+  days, 5 or 6 at 90 days.
 - **`fct_prices`, `int_bollinger` and `mart_sector_leaders` have no
   reader.** Every build makes them and nothing selects from them.
 - **The whole-share rounding is not in the backtest.** The backtest holds
@@ -301,7 +311,7 @@ question that is wrong when a part is wrong.
 
 | What | Where |
 |---|---|
-| Why each decision was made | `docs/decisions.md` (D1 to D28) |
+| Why each decision was made | `docs/decisions.md` (D1 to D28, and D31) |
 | How the results changed | `docs/results_log.md` (one row for each run) |
 | Problems that are not solved | `docs/open_questions.md` |
 | The work that comes next | `docs/handoff.md` |
@@ -312,6 +322,7 @@ question that is wrong when a part is wrong.
 | Beta, alpha and the capital allocation line | `quant/capm.py`, `pipeline.live_capm` |
 | The share plan, whole or fractional | `quant/allocate.py`, `run_pipeline.share_plan` |
 | The random-order null benchmark | `quant/null_benchmark.py` |
+| The holding checkpoints (90 to 180 days) | `quant/holding.py`, `run_pipeline.run_checkpoints` |
 | The rule for a large price move | `quant/large_moves.py`, `classify_large_moves.py` |
 | Manual data fixes, with reasons | `dbt/seeds/corporate_actions.csv` (532 rows), `dbt/seeds/price_data_exclusions.csv` (11 tickers) |
 | The symbols that the source lacks | `data/missing_symbols.csv` |
@@ -319,7 +330,7 @@ question that is wrong when a part is wrong.
 
 ## The state of the checks
 
-218 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
+241 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
 warnings, for `cum_return` and for `sharpe`. `verify_indicators.py`
 passes every check. A fresh sparse clone of the branch reproduces the
 build, the tests and the live run exactly.

@@ -19,6 +19,16 @@ one, move it to the "Solved" section with the commit hash.
   holding period, and does the chart improve the result of a person who
   reads it? Neither is measured.
 
+- **Which holding period does the user select (D31)?** The backtest
+  measures each window at 90, 120, 150 and 180 days with
+  `--hold-days`. The return result holds at every hold: 61% to 74% of the
+  windows beat SPY on the return. The Sharpe result does not improve in a
+  reliable way: on the same dates the 90-day hold gives 58.8% on the
+  Sharpe ratio, and on all valid dates it gives 48.5%. 18 recent windows
+  make that difference, and they cover approximately one period. The
+  default stays 180 days. The user decides. A longer price history is the
+  only way to give each hold more periods that share no day.
+
 - **The method beats SPY on the return and not on the Sharpe ratio.**
   D22 changed the ranking to the cumulative return, and the `sp500`
   portfolio now beats SPY on the return in 57.6% of 85 windows with a

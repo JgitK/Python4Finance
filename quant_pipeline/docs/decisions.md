@@ -22,6 +22,157 @@ Use this template for a new entry:
 
 ---
 
+## D31. Measure each window at holding checkpoints of 90 to 180 days
+
+- **Date:** 2026-11-07
+- **Role:** Protective measure, outside the core loop. It changes no
+  weight, no selection and no number of a default run. It measures the
+  same portfolios after a shorter time.
+- **Question:** The user plans to hold a portfolio for 90 to 180 trading
+  days, not for exactly 180. Each window of the backtest holds the weights
+  for 180 days. Does the result change with a shorter hold? Does the
+  conclusion "the method beats SPY on the return and not on the Sharpe
+  ratio" stay true?
+- **Options:**
+  1. Keep one hold of 180 days.
+  2. Change the hold to a different single value, for example 120 days.
+  3. Select on each date once, and measure the same weights at several
+     checkpoints. Report two views of the dates.
+- **Decision:** Option 3, as a switch. `--hold-days 90,120,150,180`
+  measures each window at each checkpoint. The default stays `180`, so a
+  default run and its results row do not change. The default hold is the
+  user's choice, and this decision does not change it.
+- **The design:**
+  - `quant/holding.py` holds the new code. The shared files change only a
+    little: `run_pipeline.py` gets the flag, Step 5d and a
+    `holding_period` argument for `choose_many_selection_dates`, and
+    `results_log.format_row` gets a `checkpoints` argument.
+  - `holding.run_checkpoints` builds the portfolio once on each date,
+    from the past only. It then calls `backtest.backtest_window` for each
+    checkpoint with those weights. So each checkpoint has the same
+    measures as before: the return and the Sharpe ratio of the portfolio
+    and of SPY over the elapsed days, the excess return, and the realized
+    beta and alpha. A checkpoint keeps a date only when the data holds the
+    full period after that date. A short window with the label of a long
+    period gives a wrong result.
+  - **Two views.** *Same dates* uses only the dates that have a full
+    window for the longest hold (85 dates with a step of 5). Each
+    checkpoint then measures the same portfolios, so two checkpoints give
+    a paired comparison. *All valid dates* uses every date with a full
+    window for each hold. A 90-day hold ends 90 days earlier, so it has 18
+    more dates (103). The extra dates are the most recent ones, so two
+    checkpoints of this view do not compare the same portfolios.
+  - **The annual excess.** A raw 90-day excess and a raw 180-day excess
+    are not comparable. The table gives both. The annual excess of a
+    window is the annual return of the portfolio minus the annual return
+    of SPY. Each annual return compounds the total return to 252 days.
+    The Sharpe ratio was already annual. **The annual excess drives the
+    reading across horizons. The raw excess is what the money earns in one
+    hold.** A short hold compounds its return more times, so its annual
+    value is noisier.
+  - **The overlap.** The column `non_overlapping` counts the most windows
+    that share no day. It is 3 at 180 days and 5 or 6 at 90 days. The
+    short hold has more windows that share no day, but 6 is still a small
+    count. A share is a measure and not a test of significance (D16).
+  - The results log keeps one row for each run. The checkpoints go in the
+    many-window cell after a semicolon, in the same-dates view. One row
+    for each checkpoint would repeat the three 180-day window columns
+    under a label of 90 days, and the duplicate check of `append_row`
+    would see four rows of one run. The first part of the cell stays the
+    180-day measure, so every old row stays comparable. A run with one
+    checkpoint gives the old cell, and a test holds this.
+  - `output/holding_checkpoints_same_dates.csv` and
+    `output/holding_checkpoints_all_dates.csv` hold the full tables. The
+    null benchmark (D23) stays at 180 days.
+- **Tests and mutation checks:** 23 new tests. A synthetic panel of 9
+  days lets a person check each checkpoint return by hand. One test puts
+  absurd returns on every day after the end of a checkpoint and shows that
+  the checkpoint does not change. One test puts absurd returns after the
+  selection date and shows that the weights do not change. Mutations, and
+  each one failed a test:
+  1. The checkpoint holds one day too many (3 tests failed).
+  2. The annual excess is the raw excess (1 test).
+  3. The annual excess uses a fixed 180-day hold (1 test).
+  4. The view of all valid dates uses the dates of the longest hold, in
+     `holding.run_checkpoints` (2 tests) and in
+     `run_pipeline.run_checkpoints` (1 test).
+  5. The same-dates view uses the shortest hold (1 test).
+  6. The selection sees the first day after the selection date (2 tests).
+  7. The overlap count allows one shared day (1 test).
+  8. A short window stays in a long checkpoint (2 tests).
+  9. The date grid ignores the hold (2 tests), and it is one day off
+     (1 test).
+  10. The log cell changes for one checkpoint (1 test), and it shows the
+      raw median in place of the annual median (1 test).
+
+  The test of `run_pipeline.run_checkpoints` came after that function.
+  The other tests came first and failed for the missing code.
+- **Evidence:** `sp500`, 10/10/3, `cum_return`, commit `3d07acf`.
+
+  Step 5, same dates (paired, 85 windows each):
+
+  | Hold | Windows | Return share | Sharpe share | Median excess | Mean excess | Median, a year | Mean, a year | Mean Sharpe | SPY Sharpe | Mean beta | No shared day |
+  |---|---|---|---|---|---|---|---|---|---|---|---|
+  | 90 | 85 | 68.2% | 58.8% | +4.54% | +5.41% | +13.08% | +20.28% | 1.25 | 1.08 | 1.55 | 5 |
+  | 120 | 85 | 65.9% | 54.1% | +5.94% | +6.79% | +13.24% | +17.82% | 1.02 | 0.95 | 1.53 | 4 |
+  | 150 | 85 | 64.7% | 50.6% | +6.95% | +8.87% | +12.27% | +17.32% | 0.88 | 0.85 | 1.51 | 3 |
+  | 180 | 85 | 63.5% | 50.6% | +7.05% | +9.13% | +10.37% | +14.19% | 0.78 | 0.80 | 1.49 | 3 |
+
+  Step 5, all valid dates (not paired):
+
+  | Hold | Windows | Return share | Sharpe share | Median excess | Mean excess | Median, a year | Mean, a year | Mean Sharpe | SPY Sharpe | Mean beta | No shared day |
+  |---|---|---|---|---|---|---|---|---|---|---|---|
+  | 90 | 103 | 61.2% | 48.5% | +2.63% | +3.04% | +7.51% | +13.46% | 1.02 | 1.16 | 1.58 | 6 |
+  | 120 | 97 | 62.9% | 47.4% | +5.20% | +5.23% | +11.85% | +14.34% | 0.93 | 1.05 | 1.54 | 5 |
+  | 150 | 91 | 62.6% | 47.3% | +6.58% | +7.82% | +12.05% | +15.39% | 0.84 | 0.91 | 1.52 | 4 |
+  | 180 | 85 | 63.5% | 50.6% | +7.05% | +9.13% | +10.37% | +14.19% | 0.78 | 0.80 | 1.49 | 3 |
+
+  Step 10 (D16 check), same dates, 43 windows: 90 days 74.4% / 58.1% /
+  +4.68% / +14.79% a year, mean Sharpe 1.29 against 1.09; 120 days
+  69.8% / 55.8% / +6.82% / +14.11%; 150 days 62.8% / 51.2% / +7.08% /
+  +12.88%; 180 days 65.1% / 46.5% / +7.05% / +10.37%, mean Sharpe 0.83
+  against 0.79. All valid dates: 90 days 52 windows, 67.3% / 48.1% /
+  +3.25% / +10.83%, mean Sharpe 1.04 against 1.17; 120 days 49 windows,
+  65.3% / 49.0%; 150 days 46 windows, 60.9% / 47.8%; 180 days 43 windows,
+  65.1% / 46.5%. (The values are return share / Sharpe share / median
+  excess / median excess a year.)
+
+  The 180-day rows equal the 6acf4fa row exactly, so the new path gives
+  the old result.
+- **What this says:**
+  1. **The return result holds at every hold.** The method beats SPY on
+     the return in 61% to 74% of the windows at 90, 120, 150 and 180 days,
+     in both views and on both date steps. The median annual excess is
+     between +7.5% and +14.8% a year. No hold is clearly best on the
+     annual excess: the values move by 2 to 5 points, which is the size of
+     the grid noise of D16.
+  2. **The Sharpe result does not change with a shorter hold.** On the
+     same dates, a shorter hold looks better: 58.8% on the Sharpe ratio
+     at 90 days against 50.6% at 180 days. The view of all valid dates
+     removes that gain: 48.5% at 90 days, and a mean Sharpe ratio of 1.02
+     against 1.16 for SPY. The difference between the two views is 18
+     recent dates. Those 18 windows give 5 wins on the return and **0
+     wins on the Sharpe ratio**. They cover approximately one period of
+     90 days. So one recent period moves the 90-day Sharpe share by 10
+     points. The same pattern is on the step of 10 days. The paired gain
+     is a property of the dates, not of the hold.
+  3. **The beta does not fall with the hold.** The mean realized beta is
+     1.49 to 1.62 at every hold. The excess return is still mostly market
+     risk (D25).
+  4. **The raw excess grows with the hold** (+4.5% at 90 days to +7.0% at
+     180 days on the same dates), because the portfolio has a higher
+     beta in a rising market. The annual excess falls a little with the
+     hold. Both are expected for a high-beta portfolio, and neither picks
+     a hold.
+  5. **The sample is small.** The windows hold 3 to 6 periods that share
+     no day. One period changed the Sharpe reading in point 2. Do not
+     select a hold from these tables.
+- **Results:** Two rows of 2026-11-07 at `3d07acf`, with the note "D31":
+  one for a step of 5 days and one for a step of 10 days.
+- **Commits:** `3500d82` (the module and its tests), `3d07acf` (the flag,
+  Step 5d and the log cell). The documents and the two rows are in the
+  commit after `3d07acf`.
+
 ## D28. Keep the S&P 500 as the only universe for the product
 
 - **Date:** 2026-11-07
