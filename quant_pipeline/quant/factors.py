@@ -103,3 +103,115 @@ def regress_two_factor(asset: pd.Series, market: pd.Series, umd: pd.Series,
         "r_squared": r_squared,
         "n_days": n_days,
     }
+
+
+
+def formation_dates(index: pd.DatetimeIndex) -> list[pd.Timestamp]:
+    """Give the last trading day of each calendar month in the index.
+
+    The factor forms its legs at the close of these days. The last month of
+    the data can end before the calendar month ends. Its last day is then a
+    formation date with no hold after it.
+    """
+    index = pd.DatetimeIndex(index)
+    if index.empty:
+        return []
+    months = index.to_period("M")
+    last = pd.Series(index, index=index).groupby(months).max()
+    return [pd.Timestamp(day) for day in last.sort_values()]
+
+
+def _members_on(members: pd.DataFrame | None, date: pd.Timestamp,
+                columns: pd.Index) -> list[str]:
+    """Give the index members on a date that have a column of returns.
+
+    Use the latest membership on or before the date. A later membership is
+    future data. With no membership frame, every column is a member.
+    """
+    if members is None:
+        return list(columns)
+    dates = pd.to_datetime(members["as_of_date"])
+    past = dates[dates <= date]
+    if past.empty:
+        return []
+    on_day = set(members.loc[dates == past.max(), "ticker"])
+    return [ticker for ticker in columns if ticker in on_day]
+
+
+def umd_legs(returns: pd.DataFrame, members: pd.DataFrame | None,
+             lookback: int = 252, skip: int = 21,
+             quantile: float = 0.3) -> list[dict[str, Any]]:
+    """Give the long leg and the short leg on each formation date.
+
+    This is the rule of the in-house momentum factor:
+
+    1. The formation date is the last trading day of each month.
+    2. A stock is eligible when it is an index member on the formation date
+       and it has a return on each day of the formation window.
+    3. The signal is the compound return from the close `lookback` rows
+       before the formation date to the close `skip` rows before it. With
+       252 and 21, this is the 12-month return without the last month.
+    4. The long leg holds the top `quantile` of the eligible stocks by the
+       signal. The short leg holds the bottom `quantile`. Each leg holds
+       floor(count * quantile) stocks. A tie goes to the ticker order.
+
+    The rule reads only the returns up to the formation date, and the
+    membership on or before it. Return one entry for each formation date
+    with a full window and with at least one stock in each leg.
+    """
+    legs = []
+    for date in formation_dates(returns.index):
+        position = returns.index.get_loc(date)
+        start = position - lookback + 1
+        end = position - skip
+        if start < 0 or end < start:
+            continue
+        eligible = _members_on(members, date, returns.columns)
+        window = returns.iloc[start:end + 1][eligible].dropna(axis=1)
+        count = int(math.floor(window.shape[1] * quantile + 1e-9))
+        if count < 1:
+            continue
+        signal = (1.0 + window).prod() - 1.0
+        order = (pd.DataFrame({"ticker": signal.index,
+                               "signal": signal.to_numpy()})
+                 .sort_values(["signal", "ticker"],
+                              ascending=[False, True]))
+        ranked = order["ticker"].tolist()
+        legs.append({"formation_date": date,
+                     "long": sorted(ranked[:count]),
+                     "short": sorted(ranked[-count:])})
+    return legs
+
+
+def build_umd(returns: pd.DataFrame, members: pd.DataFrame | None,
+              lookback: int = 252, skip: int = 21,
+              quantile: float = 0.3) -> pd.Series:
+    """Build the in-house daily UMD factor: winners minus losers.
+
+    `umd_legs` forms the legs at the close of each formation date. The
+    factor holds the legs from the next trading day to the next formation
+    date, and the next formation date too. On each day, the factor return
+    is the equal-weight mean return of the long leg less the equal-weight
+    mean return of the short leg. A stock with no return on a day does not
+    count on that day.
+
+    The factor inherits the survivorship bias of the price data. A company
+    that left the market has no prices, so it is in no leg. Dead losers are
+    missing from the short leg, and the factor return is too high.
+    """
+    legs = umd_legs(returns, members, lookback, skip, quantile)
+    pieces = []
+    for number, leg in enumerate(legs):
+        first = returns.index.get_loc(leg["formation_date"]) + 1
+        if number + 1 < len(legs):
+            last = returns.index.get_loc(legs[number + 1]["formation_date"])
+        else:
+            last = len(returns.index) - 1
+        hold = returns.iloc[first:last + 1]
+        if hold.empty:
+            continue
+        pieces.append(hold[leg["long"]].mean(axis=1)
+                      - hold[leg["short"]].mean(axis=1))
+    if not pieces:
+        return pd.Series(dtype=float, name="umd")
+    return pd.concat(pieces).dropna().rename("umd")

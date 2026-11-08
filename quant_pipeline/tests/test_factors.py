@@ -137,3 +137,139 @@ def test_spy_on_itself_gives_beta_one_and_no_momentum_or_alpha():
     assert result["beta"] == pytest.approx(1.0, abs=1e-10)
     assert result["umd_loading"] == pytest.approx(0.0, abs=1e-10)
     assert result["alpha"] == pytest.approx(0.0, abs=1e-10)
+
+
+# --- the in-house UMD factor ----------------------------------------------
+#
+# The tiny panel has 12 trading days, from 2024-01-24 to 2024-02-08. The
+# last trading day of January is 2024-01-31 (row 5). That day is the
+# formation date. With a lookback of 4 days and a skip of 1 day, the signal
+# is the compound return of rows 2, 3 and 4. Row 5 is the skipped day. The
+# portfolio holds the legs from row 6 (2024-02-01) to the end.
+#
+# Six stocks and a quantile of 1/3 give 2 stocks in each leg.
+#   Signal rows 2-4:  A 5%, B 4%, C 3%, D 2%, E 1%, F 0% each day.
+#   So the long leg is A and B, and the short leg is E and F.
+#   The skipped row 5: A and B fall 50%, E and F rise 50%. A rule without
+#   the skip puts A and B in the short leg.
+#   Hold rows 6-11:   A 1.0%, B 2.0%, C 0, D 0, E 0.1%, F 0.3% each day.
+#   So UMD = (1.0% + 2.0%) / 2 - (0.1% + 0.3%) / 2 = 1.3% each day.
+
+LOOKBACK = 4
+SKIP = 1
+QUANTILE = 1 / 3
+TICKERS = ["A", "B", "C", "D", "E", "F"]
+
+
+def _panel() -> pd.DataFrame:
+    dates = pd.bdate_range("2024-01-24", periods=12)
+    signal = {"A": 0.05, "B": 0.04, "C": 0.03, "D": 0.02, "E": 0.01,
+              "F": 0.00}
+    skipped = {"A": -0.5, "B": -0.5, "C": 0.0, "D": 0.0, "E": 0.5, "F": 0.5}
+    hold = {"A": 0.010, "B": 0.020, "C": 0.0, "D": 0.0, "E": 0.001,
+            "F": 0.003}
+    rows = []
+    for position in range(12):
+        if position < 2:
+            rows.append({t: 0.0 for t in TICKERS})
+        elif position < 5:
+            rows.append(dict(signal))
+        elif position == 5:
+            rows.append(dict(skipped))
+        else:
+            rows.append(dict(hold))
+    return pd.DataFrame(rows, index=dates)
+
+
+def _members(tickers: list[str], date: str = "2024-01-01") -> pd.DataFrame:
+    return pd.DataFrame({"as_of_date": pd.Timestamp(date), "ticker": tickers})
+
+
+def test_formation_dates_are_the_last_trading_day_of_each_month():
+    index = pd.bdate_range("2024-01-24", periods=12)
+    assert factors.formation_dates(index) == [pd.Timestamp("2024-01-31"),
+                                              pd.Timestamp("2024-02-08")]
+
+
+def test_umd_legs_hold_the_winners_and_the_losers_by_hand():
+    legs = factors.umd_legs(_panel(), _members(TICKERS), LOOKBACK, SKIP,
+                            QUANTILE)
+    first = legs[0]
+    assert first["formation_date"] == pd.Timestamp("2024-01-31")
+    assert first["long"] == ["A", "B"]
+    assert first["short"] == ["E", "F"]
+
+
+def test_build_umd_gives_the_hand_value_on_each_hold_day():
+    umd = factors.build_umd(_panel(), _members(TICKERS), LOOKBACK, SKIP,
+                            QUANTILE)
+    # The factor starts on the day after the formation date.
+    assert umd.index[0] == pd.Timestamp("2024-02-01")
+    assert len(umd) == 6
+    assert np.allclose(umd.to_numpy(), 0.013, atol=1e-12)
+
+
+def test_build_umd_skips_the_most_recent_days():
+    # With the skip, A and B are winners. Without it, they are losers.
+    with_skip = factors.umd_legs(_panel(), _members(TICKERS), LOOKBACK, SKIP,
+                                 QUANTILE)
+    assert with_skip[0]["long"] == ["A", "B"]
+    no_skip = factors.umd_legs(_panel(), _members(TICKERS), LOOKBACK - 1, 0,
+                               QUANTILE)
+    assert no_skip[0]["short"] == ["A", "B"]
+
+
+def test_build_umd_uses_only_the_members_on_the_formation_date():
+    # G has the highest signal, but G joins the index after the formation
+    # date. The rule must not use G.
+    panel = _panel()
+    panel["G"] = panel["A"] * 2
+    members = pd.concat([_members(TICKERS),
+                         _members(TICKERS + ["G"], "2024-02-01")])
+    legs = factors.umd_legs(panel, members, LOOKBACK, SKIP, QUANTILE)
+    assert "G" not in legs[0]["long"] + legs[0]["short"]
+
+
+def test_build_umd_needs_a_full_history_in_the_formation_window():
+    # A stock with a gap in the formation window has no signal. A gap
+    # before the window does not matter.
+    panel = _panel()
+    panel.loc[panel.index[3], "A"] = np.nan
+    panel.loc[panel.index[0], "F"] = np.nan
+    legs = factors.umd_legs(panel, _members(TICKERS), LOOKBACK, SKIP,
+                            QUANTILE)
+    assert "A" not in legs[0]["long"] + legs[0]["short"]
+    assert "F" in legs[0]["short"]
+
+
+def test_build_umd_uses_no_future_prices():
+    # Change every return after a cut day. The factor up to the cut day
+    # and the legs of the formation date must not change.
+    panel = _panel()
+    base = factors.build_umd(panel, _members(TICKERS), LOOKBACK, SKIP,
+                             QUANTILE)
+    cut = panel.index[8]
+    tampered = panel.copy()
+    rng = np.random.default_rng(0)
+    after = tampered.index > cut
+    tampered.loc[after] = rng.normal(0.0, 0.3, (after.sum(), len(TICKERS)))
+    changed = factors.build_umd(tampered, _members(TICKERS), LOOKBACK, SKIP,
+                                QUANTILE)
+    assert changed[changed.index <= cut].equals(base[base.index <= cut])
+    assert not changed.equals(base)
+
+
+def test_build_umd_does_not_use_the_formation_day_return():
+    # The return of the formation date is in the skipped window and not in
+    # the hold. A factor that holds the legs on the formation date itself
+    # takes the -50% and +50% moves of row 5.
+    umd = factors.build_umd(_panel(), _members(TICKERS), LOOKBACK, SKIP,
+                            QUANTILE)
+    assert pd.Timestamp("2024-01-31") not in umd.index
+
+
+def test_build_umd_with_too_few_stocks_gives_no_factor():
+    # Two stocks and a quantile of 1/3 give no stock in a leg.
+    umd = factors.build_umd(_panel()[["A", "F"]], _members(["A", "F"]),
+                            LOOKBACK, SKIP, QUANTILE)
+    assert umd.empty
