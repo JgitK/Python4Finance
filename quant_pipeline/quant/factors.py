@@ -532,3 +532,18 @@ def summary_lines(label: str, summary: dict[str, Any]) -> list[str]:
         f"    UMD explains {summary['explained_median']:.0%} of the median "
         f"alpha and {summary['explained_mean']:.0%} of the mean alpha.",
     ]
+
+
+def live_two_factor(returns: pd.DataFrame, weights: dict[str, float],
+                    benchmark: str, umd: pd.Series, lookback_days: int,
+                    risk_free: float = 0.045,
+                    trading_days: int = 252) -> dict[str, Any]:
+    """Regress the live portfolio on the market and on UMD.
+
+    The function uses the last `lookback_days` rows, the same window as
+    `quant.pipeline.live_capm`. The measures are in-sample, because the
+    weights come from the same window.
+    """
+    window = returns[list(weights) + [benchmark]].tail(lookback_days)
+    return portfolio_two_factor(window, weights, benchmark, umd, risk_free,
+                                trading_days)

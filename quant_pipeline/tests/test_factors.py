@@ -604,3 +604,15 @@ def test_summary_lines_state_the_loading_and_the_explained_share():
     assert "positive in 66.7% of the windows" in text
     # Median: 1 - 0.01 / 0.05 = 80%. Mean: 1 - 0.02 / 0.07 = 71%.
     assert "UMD explains 80% of the median alpha and 71% of the mean" in text
+
+
+def test_live_two_factor_uses_the_last_lookback_days_only():
+    returns, umd = _stock_panel()
+    spoiled = returns.copy()
+    # Spoil every day before the lookback window. The live view must not
+    # read them.
+    spoiled.iloc[:-252] = 0.5
+    result = factors.live_two_factor(spoiled, {"X": 0.5, "Y": 0.5}, "SPY",
+                                     umd, 252, RF, DAYS)
+    assert result["n_days"] == 252
+    assert result["umd_loading"] == pytest.approx(0.8, abs=1e-10)
