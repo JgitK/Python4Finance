@@ -371,3 +371,42 @@ def _result(returns: pd.DataFrame, weights: np.ndarray, objective: str,
         "sharpe": sharpe,
         "objective": objective,
     }
+
+
+def prune_pool(returns: pd.DataFrame, solver, min_weight: float,
+               max_weight: float) -> dict[str, Any]:
+    """Let the optimizer pick the count of stocks from a larger pool.
+
+    This is option B of D29. `solver(frame, low, high)` gives a result with
+    weights by ticker. The steps are:
+
+    1. Solve on the pool with a floor of 0 and the cap `max_weight`.
+    2. Drop each stock with a weight below `min_weight`.
+    3. When too few stocks remain for the cap, add back the dropped stocks
+       with the largest weights. Four stocks at a cap of 25% must remain.
+    4. Solve again on the stocks that remain. Stop when no stock drops.
+    5. Solve one last time with the full bounds.
+
+    Return the result of the last solve, the pool and the count of rounds.
+    """
+    pool = list(returns.columns)
+    check_bounds(len(pool), 0.0, max_weight)
+    need = math.ceil(1.0 / max_weight - _BOUND_TOLERANCE)
+    kept = pool
+    rounds = 0
+    while True:
+        rounds += 1
+        weights = solver(returns[kept], 0.0, max_weight)["weights"]
+        survivors = [t for t in kept if weights[t] >= min_weight]
+        if len(survivors) < need:
+            dropped = sorted((t for t in kept if t not in survivors),
+                             key=lambda t: -weights[t])
+            back = set(dropped[:need - len(survivors)])
+            survivors = [t for t in kept if t in survivors or t in back]
+        if survivors == kept:
+            break
+        kept = survivors
+    result = solver(returns[kept], min_weight, max_weight)
+    result["pool"] = pool
+    result["rounds"] = rounds
+    return result

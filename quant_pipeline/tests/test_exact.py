@@ -313,3 +313,96 @@ def test_min_cvar_weights_minimize_the_mean_of_the_worst_days():
     # The dbt formula then counts every tied day, so its value can be
     # above the mean of the 2 worst days. It is never below it.
     assert exact.cvar_5(scenarios @ weights) >= worst_two(weights) - 1e-12
+
+
+# --- prune_pool (option B: the optimizer picks the count) -------------------
+
+class FakeSolver:
+    """Give fixed weights for each set of tickers, and record each call."""
+
+    def __init__(self, table):
+        self.table = table
+        self.calls = []
+
+    def __call__(self, returns, low, high):
+        key = frozenset(returns.columns)
+        self.calls.append((tuple(sorted(key)), low, high))
+        weights = self.table[(key, low)]
+        return {"weights": dict(weights), "sharpe": 1.0}
+
+
+def _frame(tickers):
+    return pd.DataFrame(np.zeros((3, len(tickers))), columns=list(tickers))
+
+
+def test_prune_pool_drops_the_small_weights_and_solves_again():
+    pool = "ABCDEF"
+    fake = FakeSolver({
+        # Round 1 on the pool with a floor of 0: E and F fall below 2%.
+        (frozenset(pool), 0.0): {"A": .3, "B": .3, "C": .2, "D": .19,
+                                 "E": .01, "F": 0.0},
+        # Round 2 on the survivors: every weight stays above 2%.
+        (frozenset("ABCD"), 0.0): {"A": .3, "B": .3, "C": .2, "D": .2},
+        # The final solve with the full bounds.
+        (frozenset("ABCD"), 0.02): {"A": .3, "B": .3, "C": .2, "D": .2},
+    })
+    result = exact.prune_pool(_frame(pool), fake, 0.02, 0.3)
+    assert sorted(result["weights"]) == list("ABCD")
+    assert result["pool"] == list(pool)
+    assert result["rounds"] == 2
+    assert fake.calls == [(tuple(pool), 0.0, 0.3), (tuple("ABCD"), 0.0, 0.3),
+                          (tuple("ABCD"), 0.02, 0.3)]
+
+
+def test_prune_pool_repeats_until_no_weight_falls_below_the_floor():
+    pool = "ABCDEF"
+    fake = FakeSolver({
+        (frozenset(pool), 0.0): {"A": .3, "B": .3, "C": .2, "D": .19,
+                                 "E": .01, "F": 0.0},
+        # Without E and F, D falls below the floor too.
+        (frozenset("ABCD"), 0.0): {"A": .4, "B": .3, "C": .29, "D": .01},
+        (frozenset("ABC"), 0.0): {"A": .4, "B": .3, "C": .3},
+        (frozenset("ABC"), 0.02): {"A": .4, "B": .3, "C": .3},
+    })
+    result = exact.prune_pool(_frame(pool), fake, 0.02, 0.4)
+    assert sorted(result["weights"]) == list("ABC")
+    assert result["rounds"] == 3
+
+
+def test_prune_pool_adds_back_names_when_too_few_survive():
+    # Three names at the cap of 25% hold only 75% of the money. The
+    # largest dropped name comes back, so four names can hold it all.
+    pool = "ABCDEF"
+    fake = FakeSolver({
+        (frozenset(pool), 0.0): {"A": .25, "B": .25, "C": .25, "D": .09,
+                                 "E": .08, "F": .08},
+        (frozenset("ABCD"), 0.0): {"A": .25, "B": .25, "C": .25, "D": .25},
+        (frozenset("ABCD"), 0.1): {"A": .25, "B": .25, "C": .25, "D": .25},
+    })
+    result = exact.prune_pool(_frame(pool), fake, 0.1, 0.25)
+    assert sorted(result["weights"]) == list("ABCD")
+
+
+def test_prune_pool_with_the_real_solver_holds_the_bounds():
+    # Two of the eight assets lose money, so the floor of 0 drops them.
+    returns = _returns(seed=8, n=8)
+    returns["S0"] -= 0.004
+    returns["S1"] -= 0.004
+
+    def solver(frame, low, high):
+        return exact.solve(frame, "max_sharpe", low, high)
+
+    result = exact.prune_pool(returns, solver, 0.02, 0.4)
+    weights = np.array(list(result["weights"].values()))
+    assert "S0" not in result["weights"] and "S1" not in result["weights"]
+    assert weights.min() >= 0.02 - 1e-12
+    assert weights.max() <= 0.4 + 1e-12
+    assert weights.sum() == pytest.approx(1.0, abs=1e-12)
+    # The kept set is stable: a floor of 0 drops no more names.
+    again = solver(returns[list(result["weights"])], 0.0, 0.4)
+    assert min(again["weights"].values()) >= 0.02 - 1e-9
+
+
+def test_prune_pool_refuses_a_pool_that_the_cap_cannot_fill():
+    with pytest.raises(ValueError, match="max_weight"):
+        exact.prune_pool(_frame("ABC"), FakeSolver({}), 0.02, 0.25)
