@@ -22,6 +22,104 @@ Use this template for a new entry:
 
 ---
 
+## D32. Measure the rank order of option B against a random order
+
+- **Date:** 2026-11-08
+- **Role:** Protective measure, outside the core loop. It changes no
+  default and no number of a run. It applies the null benchmark of D23
+  to the pool mode of D29.
+- **Question:** Option B (`--optimizer exact --size-mode pool
+  --pool-size 33`) gives a mean Sharpe ratio of 0.88 against 0.80 for
+  SPY. Does the rank order of the candidates earn this result? Or does
+  any random pool of 33 from the same screen do as well?
+- **Options:**
+  1. Run the null of D23 in the pool mode, with the same screen, the same
+     sector cap, the same correlation gate and the same exact optimizer.
+  2. Weight the same pool equally. This isolates the optimizer, not the
+     rank order. It stays open.
+- **Decision:** Option 1.
+- **The code:** `run_random_selection` already respects the pool mode.
+  `build_max_sharpe_portfolio` puts the candidates in a random order
+  before the selection, and the selection then takes
+  `exact.selection_size(params)` names, which is `pool_size` in the pool
+  mode. `run_pipeline.py` gives the same `params` to the null. So no
+  code fix was necessary. Three new tests hold the behavior:
+  `test_a_random_order_in_the_pool_mode_selects_a_different_pool`,
+  `test_a_random_pool_has_the_pool_size_and_not_the_target_size` and
+  `test_the_null_run_keeps_the_pool_mode`. They passed at the first run,
+  because the behavior was correct. The mutation checks show the
+  failures:
+  - The random order applied only in the fixed mode: the first test
+    fails.
+  - The random build with `target_size` in place of `pool_size`: the
+    second test fails.
+  - The null run with the pool settings replaced by the Monte Carlo
+    search and the fixed mode: the third test fails.
+- **A random pool is not the same set as the ranked pool.** On all 85
+  dates the screen holds 110 names, 10 in each of 11 sectors. The pool of
+  33 holds 3 names of each sector. So **0 of 85 dates** have fewer than 33
+  candidates, and no sector has 3 names or fewer. A random order takes 3
+  of 10 names in each sector, and the ranked order takes the top 3. The
+  null therefore keeps the sector spread of 11 sectors at 3 names, and it
+  changes only which names fill each place.
+- **Evidence:** `sp500`, 10/10/3, `cum_return`, `exact max_sharpe 2-25%`,
+  85 windows with a step of 5 days, against **200 random-order draws**
+  (seed 0). The code is `3a7ec4c` plus the tests of `0e3cfdb`. The real
+  result is the D29 row to every decimal. A draw takes approximately 12
+  seconds alone.
+
+  Pool of 33:
+
+  | Measure | Option B | Null median | Null best | Percentile |
+  |---|---|---|---|---|
+  | Beat SPY on return | 64.7% | 58.8% | 68.2% | 0.91 |
+  | Beat SPY on Sharpe | 61.2% | 56.5% | 67.1% | 0.79 |
+  | Mean excess return | +3.15% | +2.51% | +5.71% | 0.75 |
+  | Median excess return | +3.67% | +2.16% | +5.39% | 0.86 |
+  | Mean Sharpe ratio | 0.88 | 0.87 | 1.15 | **0.59** |
+
+  Pool of 20, for contrast:
+
+  | Measure | Option B | Null median | Null best | Percentile |
+  |---|---|---|---|---|
+  | Beat SPY on return | 60.0% | 56.5% | 68.2% | 0.77 |
+  | Beat SPY on Sharpe | 52.9% | 54.1% | 65.9% | 0.38 |
+  | Mean excess return | +2.44% | +2.23% | +5.70% | 0.55 |
+  | Median excess return | +4.10% | +1.71% | +5.45% | 0.94 |
+  | Mean Sharpe ratio | 0.75 | 0.81 | 1.06 | **0.25** |
+
+  SPY has a mean Sharpe ratio of 0.80 over the same windows.
+- **What this says:**
+  1. **The rank order does not earn the Sharpe result of option B.** With
+     a pool of 33, the method sits at the 59th percentile of the mean
+     Sharpe ratio. 82 of the 200 random pools give the same or a better
+     mean Sharpe ratio, and **172 of 200 beat SPY at 0.80**. The null
+     median is 0.87, which is almost the method's 0.88. So the gain over
+     SPY comes from the steps that the null keeps: the spread of 3 names
+     in each of 11 sectors, the correlation gate, and the exact optimizer
+     that drops names. It does not come from the cum_return rank.
+  2. **With a pool of 20, the rank order hurts the Sharpe ratio.** The
+     method sits at the 25th percentile, and the null median (0.81) beats
+     SPY while the method (0.75) does not.
+  3. **The rank order still adds a little return.** The median excess
+     return sits at the 86th percentile (pool 33) and the 94th (pool 20).
+     That is the same direction as D23, but much weaker: in D23 the
+     method beat all 200 draws. In the pool mode, 29 of the 200 draws
+     reach the median of the method with a pool of 33.
+  4. **The open question of D29 is partly answered.** The gain is not
+     the rank order. This null cannot separate the sector spread from the
+     optimizer, because both stay the same in each draw. An equal weight
+     of the same pool (option 2) can separate them.
+- **A note on the percentiles:** The 85 windows overlap, so a percentile
+  is a measure of this sample of windows, not a test of significance
+  (D23, D31).
+- **What this does not change:** The defaults stay Monte Carlo with 10
+  stocks. The user decides on option B.
+- **Results:** 2 rows in `results_log.md`.
+- **Commits:** `0e3cfdb`, and the commit of this entry.
+
+---
+
 ## D31. Measure each window at holding checkpoints of 90 to 180 days
 
 - **Date:** 2026-11-07

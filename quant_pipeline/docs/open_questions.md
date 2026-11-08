@@ -161,8 +161,13 @@ one, move it to the "Solved" section with the commit hash.
   date grids (0.88 and 0.87 against 0.80 and 0.81), with a beta of 0.75.
   The result rises with the pool (0.67, 0.75, 0.83, 0.88 for 15, 20, 25
   and 33). A larger pool reaches deeper into each sector and it lowers
-  the beta. The null benchmark of D23 can run in the pool mode, and an
-  equal weight of the same pool can isolate the optimizer. Neither is
+  the beta. **D32 answers one part: the gain is not the rank order.**
+  The null of D23 in the pool mode puts the method at the 59th
+  percentile of the mean Sharpe ratio (pool 33, 200 draws). The null
+  median is 0.87, and 172 of 200 random pools beat SPY. With a pool of
+  20 the method sits at the 25th percentile. The null keeps the sector
+  spread and the optimizer, so it cannot separate the two. An equal
+  weight of the same pool can isolate the optimizer. That is not
   measured.
 - **Which default for the optimizer and the size (D29)?** The user
   decides. The pool of 33 gives the best Sharpe result and gives up

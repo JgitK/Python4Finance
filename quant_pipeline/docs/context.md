@@ -206,7 +206,7 @@ two values and it has no default of its own.
   or no sector, so the survivorship bias that remains stays visible.
 - `run_pipeline.py` adds one row to `docs/results_log.md` with the commit
   hash, the caps and the rank metric.
-- The results log holds 66 rows. The Caps column and the Rank column say
+- The results log holds 68 rows. The Caps column and the Rank column say
   which settings made each row.
 
 ## What is not solved
@@ -335,7 +335,7 @@ question that is wrong when a part is wrong.
 
 | What | Where |
 |---|---|
-| Why each decision was made | `docs/decisions.md` (D1 to D31) |
+| Why each decision was made | `docs/decisions.md` (D1 to D32) |
 | How the results changed | `docs/results_log.md` (one row for each run) |
 | Problems that are not solved | `docs/open_questions.md` |
 | The work that comes next | `docs/handoff.md` |
@@ -357,7 +357,7 @@ question that is wrong when a part is wrong.
 
 ## The state of the checks
 
-337 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
+340 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
 warnings, for `cum_return` and for `sharpe`. `verify_indicators.py`
 passes every check, with three momentum checks since D30. A fresh sparse clone of the branch reproduces the
 build, the tests and the live run exactly.
