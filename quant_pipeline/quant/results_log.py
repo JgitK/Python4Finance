@@ -66,10 +66,28 @@ def format_summary(summary: dict | None) -> str:
             f"median {summary['median_excess']:+.1%}")
 
 
+def format_checkpoints(checkpoints: pd.DataFrame | None) -> str:
+    """Write the holding-period checkpoints in a short text (D31).
+
+    Each checkpoint gives four values: the share that beats the benchmark
+    on the return, the share on the Sharpe ratio, the median raw excess
+    return, and the median annual excess return. One checkpoint gives no
+    text, so the row of the default hold stays as before.
+    """
+    if checkpoints is None or len(checkpoints) < 2:
+        return ""
+    parts = [f"{int(r.hold_days)}d {r.win_return:.1%}/{r.win_sharpe:.1%}/"
+             f"{r.median_excess:+.1%}/{r.median_excess_annual:+.1%}"
+             for r in checkpoints.itertuples()]
+    return ("; holds on the same dates (return/Sharpe/median/median a "
+            "year): " + "; ".join(parts))
+
+
 def format_row(run_date: str, revision: str, universe: str,
                n_candidates: int, live_sharpe: float,
                backtest: pd.DataFrame, summary: dict | None = None,
-               caps: str = "", rank_metric: str = "") -> str:
+               caps: str = "", rank_metric: str = "",
+               checkpoints: pd.DataFrame | None = None) -> str:
     """Make one Markdown table row from the results of a run.
 
     `summary` holds the measure of a many-window run. See
@@ -84,6 +102,10 @@ def format_row(run_date: str, revision: str, universe: str,
     `rank_metric` holds the measure that ranks the candidates inside each
     sector. It changes which stocks the screen keeps, so it belongs beside
     the caps.
+
+    `checkpoints` holds the same-dates table of the holding-period
+    checkpoints (D31). It goes in the many-window cell, so the columns of
+    the log do not change.
     """
     windows = [
         f"{pd.Timestamp(r.selection_date).date()}: "
@@ -95,7 +117,8 @@ def format_row(run_date: str, revision: str, universe: str,
     cells = [run_date, revision, universe, caps, rank_metric,
              str(n_candidates),
              f"{live_sharpe:.2f}",
-             *windows, format_summary(summary), ""]
+             *windows,
+             format_summary(summary) + format_checkpoints(checkpoints), ""]
     return "| " + " | ".join(cells) + " |"
 
 

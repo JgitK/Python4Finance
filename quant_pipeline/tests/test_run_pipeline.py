@@ -300,3 +300,61 @@ def test_a_fractional_plan_holds_every_stock_and_gives_no_warning():
         weights, prices, 1000.0, fractional=True)
     assert part.set_index("ticker").loc["B", "shares"] == pytest.approx(0.125)
     assert part_warnings == []
+
+
+# ---------------------------------------------------------------------------
+# The holding-period checkpoints (D31).
+
+
+def test_choose_many_selection_dates_takes_a_shorter_hold():
+    # A shorter hold ends earlier, so a later date has a full window.
+    import pandas as pd
+
+    index = pd.DatetimeIndex(pd.bdate_range("2022-11-01", periods=1002))
+    long = run_pipeline.choose_many_selection_dates(index, step=5)
+    short = run_pipeline.choose_many_selection_dates(index, step=5,
+                                                     holding_period=90)
+    assert short[-1] <= index[1001 - 90]
+    assert short[-1] > index[1001 - 90 - 5]
+    assert len(short) == 131
+    # The grid is the same, so the long hold is the first part of it.
+    assert short[:len(long)] == long
+
+
+def test_the_default_hold_is_the_single_period_of_180_days():
+    args = run_pipeline.make_parser().parse_args([])
+    assert args.hold_days == [run_pipeline.HOLDING_PERIOD]
+
+
+def test_the_parser_reads_the_hold_days():
+    args = run_pipeline.make_parser().parse_args(
+        ["--hold-days", "180,90,120,150"])
+    assert args.hold_days == [90, 120, 150, 180]
+
+
+def test_run_checkpoints_gives_the_two_views(tmp_path, monkeypatch):
+    # A synthetic panel with 600 days. The view of all valid dates must
+    # give the short hold more windows than the same-dates view.
+    import argparse
+
+    import pandas as pd
+
+    monkeypatch.setattr(run_pipeline, "OUTPUT_DIR", tmp_path)
+    index = pd.bdate_range("2022-01-03", periods=600)
+    rng = np.random.default_rng(1)
+    returns = pd.DataFrame({"AAA": rng.normal(0.001, 0.01, 600),
+                            universe.BENCHMARK: rng.normal(0.0, 0.01, 600)},
+                           index=index)
+    history = pd.DataFrame({"as_of_date": [index[0]], "ticker": ["AAA"]})
+    args = argparse.Namespace(window_step=5, hold_days=[90, 180])
+    tables = run_pipeline.run_checkpoints(
+        returns, history, lambda train: {"AAA": 1.0},
+        pipeline.PortfolioParams(), args)
+    same = tables["same_dates"].set_index("hold_days")
+    every = tables["all_dates"].set_index("hold_days")
+    # Positions 261 to 599 - 180 = 419 with a step of 5: 32 dates.
+    assert same.loc[90, "windows"] == same.loc[180, "windows"] == 32
+    # Positions 261 to 599 - 90 = 509 with a step of 5: 50 dates.
+    assert every.loc[90, "windows"] == 50
+    assert every.loc[180, "windows"] == 32
+    assert (tmp_path / "holding_checkpoints_all_dates.csv").exists()

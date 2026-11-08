@@ -228,3 +228,46 @@ def test_append_row_separates_two_runs_that_differ_only_in_the_rank(tmp_path):
     assert results_log.append_row(path, row("cum_return")) is True
     assert results_log.append_row(path, row("sharpe")) is True
     assert path.read_text().count("abc1234") == 2
+
+
+# ---------------------------------------------------------------------------
+# The holding-period checkpoints (D31).
+#
+# One row holds one run. The checkpoints go in the many-window cell, so
+# the column layout of the log does not change.
+
+
+def _checkpoints() -> pd.DataFrame:
+    return pd.DataFrame({
+        "hold_days": [90, 180],
+        "windows": [85, 85],
+        "win_return": [0.6, 0.635],
+        "win_sharpe": [0.48, 0.506],
+        "median_excess": [0.031, 0.0705],
+        "median_excess_annual": [0.09, 0.105],
+    })
+
+
+def test_format_row_adds_the_checkpoints_to_the_many_window_cell():
+    row = results_log.format_row(
+        run_date="2026-11-07", revision="abc1234", universe="sp500",
+        n_candidates=110, live_sharpe=4.26, backtest=_backtest(),
+        summary=_summary(), checkpoints=_checkpoints())
+    header = results_log.TABLE_HEADER.splitlines()[0]
+    assert row.count("|") == header.count("|")
+    cell = row.split("|")[-3]
+    assert "84 windows" in cell
+    assert "90d 60.0%/48.0%/+3.1%/+9.0%" in cell
+    assert "180d 63.5%/50.6%/+7.0%/+10.5%" in cell
+    assert row.endswith("|  |")
+
+
+def test_a_single_checkpoint_leaves_the_cell_as_before():
+    # The default hold is one period of 180 days. Its row must equal a
+    # row of the code before D31.
+    single = _checkpoints().iloc[[1]]
+    kwargs = dict(run_date="2026-11-07", revision="abc1234",
+                  universe="sp500", n_candidates=110, live_sharpe=4.26,
+                  backtest=_backtest(), summary=_summary())
+    assert (results_log.format_row(**kwargs, checkpoints=single)
+            == results_log.format_row(**kwargs))

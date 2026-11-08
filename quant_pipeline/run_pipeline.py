@@ -26,7 +26,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from quant import (allocate, backtest, null_benchmark, pipeline,
+from quant import (allocate, backtest, holding, null_benchmark, pipeline,
                    results_log, universe, warehouse)
 
 HERE = Path(__file__).resolve().parent
@@ -101,7 +101,8 @@ def choose_selection_dates(index: pd.DatetimeIndex,
 
 def choose_many_selection_dates(index: pd.DatetimeIndex,
                                 step: int = DEFAULT_WINDOW_STEP,
-                                first_screen_date: pd.Timestamp | None = None
+                                first_screen_date: pd.Timestamp | None = None,
+                                holding_period: int = HOLDING_PERIOD
                                 ) -> list[pd.Timestamp]:
     """Select every past date that has a full holding window after it.
 
@@ -118,8 +119,10 @@ def choose_many_selection_dates(index: pd.DatetimeIndex,
     the current data cover approximately two independent holding periods.
     Read the share of the windows that beat the benchmark as a measure of
     the method, not as proof.
+
+    A shorter `holding_period` gives later dates on the same grid (D31).
     """
-    last_usable = len(index) - 1 - HOLDING_PERIOD
+    last_usable = len(index) - 1 - holding_period
     dates = [index[position]
              for position in range(WARM_UP, last_usable + 1, step)]
     if first_screen_date is not None:
@@ -233,6 +236,13 @@ def make_parser() -> argparse.ArgumentParser:
                              "a random order. 0 skips it.")
     parser.add_argument("--null-seed", type=int, default=0,
                         help="The seed of the null benchmark draws.")
+    # The holding-period checkpoints. See decision D31.
+    parser.add_argument("--hold-days", type=holding.parse_hold_days,
+                        default=[HOLDING_PERIOD],
+                        help="The holding periods of a many-window run, "
+                             "for example 90,120,150,180. Each window is "
+                             "measured at each period. The default is "
+                             f"{HOLDING_PERIOD} only.")
     return parser
 
 
@@ -252,6 +262,41 @@ def caps_label(args: argparse.Namespace) -> str:
     top_n = (args.top_n_per_sector if args.top_n_per_sector is not None
              else project_default_top_n())
     return f"{top_n}/{args.target_size}/{args.max_per_sector}"
+
+
+def run_checkpoints(returns: pd.DataFrame, screen_history: pd.DataFrame,
+                    build, params: pipeline.PortfolioParams,
+                    args: argparse.Namespace) -> dict[str, pd.DataFrame]:
+    """Measure each window at each holding period, in two views (D31).
+
+    "same_dates" uses only the dates with a full window for the longest
+    hold, so the checkpoints compare the same portfolios. "all_dates"
+    uses every date with a full window for each hold, so a short hold has
+    more windows. Print both tables and write them to the output folder.
+    """
+    dates = choose_many_selection_dates(
+        returns.index, args.window_step,
+        first_screen_date=pd.Timestamp(screen_history["as_of_date"].min()),
+        holding_period=min(args.hold_days))
+    by_hold = holding.run_checkpoints(
+        returns, dates, args.hold_days, build, universe.BENCHMARK,
+        params.risk_free, params.trading_days)
+    tables = {
+        "same_dates": holding.checkpoint_table(holding.same_dates(by_hold),
+                                               returns.index),
+        "all_dates": holding.checkpoint_table(by_hold, returns.index),
+    }
+    titles = {"same_dates": "the same dates for every hold (paired)",
+              "all_dates": "all valid dates for each hold (not paired)"}
+    for view, table in tables.items():
+        print(f"Step 5d: holding-period checkpoints, {titles[view]}:")
+        print(holding.format_table(table))
+        table.insert(0, "view", view)
+        table.to_csv(OUTPUT_DIR / f"holding_checkpoints_{view}.csv",
+                     index=False)
+    print("         The windows overlap. non_overlapping counts the windows "
+          "that share no day.")
+    return tables
 
 
 def main() -> None:
@@ -378,6 +423,13 @@ def main() -> None:
               f"{summary['median_alpha']:+.2%}, positive in "
               f"{summary['win_alpha']:.1%} of the windows.")
 
+    # Step 5d: the holding-period checkpoints (D31). The selection is the
+    # same. Only the time to the measurement changes.
+    checkpoints = None
+    if args.many_windows and args.hold_days != [HOLDING_PERIOD]:
+        checkpoints = run_checkpoints(
+            backtest_returns, screen_history, build, params, args)
+
     # Step 5c: the null benchmark. SPY says whether the method beats the
     # market. It does not say whether the rank order adds anything. The
     # null keeps every other step and randomizes only the order.
@@ -431,7 +483,9 @@ def main() -> None:
             revision=results_log.git_revision(HERE), universe=universe_name,
             caps=caps_label(args), rank_metric=args.rank_metric,
             n_candidates=len(candidates), live_sharpe=result["sharpe"],
-            backtest=backtest_df, summary=summary)
+            backtest=backtest_df, summary=summary,
+            checkpoints=None if checkpoints is None
+            else checkpoints["same_dates"])
         added = results_log.append_row(results_log.LOG_FILE, row)
         print("Step 7: " + ("added a row to" if added else
                             "no new results for") + " docs/results_log.md.")
