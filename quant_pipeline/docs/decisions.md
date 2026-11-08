@@ -22,6 +22,203 @@ Use this template for a new entry:
 
 ---
 
+## D29. Exact optimizers with weight bounds, and a portfolio size that the optimizer picks
+
+- **Date:** 2026-11-07
+- **Role:** Core loop. It adds a second way to weight the selection and a
+  second way to size the portfolio. The defaults do not change, so the
+  default numbers do not change.
+- **Question:** The Monte Carlo search tries 10,000 random weightings and
+  it keeps the best Sharpe ratio. It is not exact, and it has no bounds on
+  a weight. Does an exact optimizer with bounds on each weight change the
+  result? Does a portfolio size that the optimizer picks (option B, which
+  the user approved) change the result?
+- **Options:**
+  1. Keep the Monte Carlo search and 10 stocks (the state before this
+     decision).
+  2. An exact optimizer with bounds of 2% to 25% on each weight, and one
+     of four objectives: `max_sharpe`, `min_variance`, `max_sortino` or
+     `min_cvar`. The size stays at 10 (option A, `--size-mode fixed`).
+  3. Option 2 plus option B (`--size-mode pool`): the selection gives a
+     larger pool, and the optimizer drops the names that it does not
+     want.
+- **Decision:** The code holds options 2 and 3 behind switches. **The
+  defaults stay at option 1.** This entry records the measurements. The
+  user selects the default.
+- **The design:** `quant/exact.py` holds the solvers. It uses scipy only.
+  - `check_bounds` raises ValueError when n stocks cannot sum to 1 inside
+    the bounds: n times `min_weight` above 1, or n times `max_weight`
+    below 1.
+  - `max_sharpe`: the convex reformulation of Cornuejols and Tutuncu. Put
+    y = kappa times w. Minimize y' cov y, subject to excess' y = 1, y >= 0
+    and `min_weight` times kappa <= y <= `max_weight` times kappa, with
+    kappa = sum(y). SLSQP solves this quadratic program. A direct SLSQP
+    search on the ratio then starts from that answer, from equal weights
+    and from the minimum-variance weights, and the function keeps the
+    best. The reformulation needs a portfolio that beats cash. When every
+    portfolio loses to cash, only the direct search gives the answer.
+  - `min_variance`: a quadratic program, solved with SLSQP.
+  - `max_sortino`: SLSQP with an analytic gradient, from equal weights,
+    the Max Sharpe weights and the minimum-variance weights. The downside
+    deviation counts the shortfall below the daily risk-free rate (0.045 /
+    252). **The dbt model `int_risk_metrics` measures the shortfall below
+    0**, so its `sortino_ratio` is not the same number. The open question
+    "The Sortino ratio uses two targets" stays open.
+  - `min_cvar`: the linear program of Rockafellar and Uryasev, solved
+    with HiGHS through `linprog`. The tail holds k days, with k =
+    floor(0.05 x (T - 1)) + 1. That is the count of days that the
+    `cvar_5` of dbt averages (the linear 5% quantile, then the mean of
+    every day at or below it). For 252 days, k = 13. At the optimum, two
+    days often tie at the VaR point. The dbt formula then averages every
+    tied day, so the reported `cvar_5` can be a little above the mean of
+    the k worst days. It is never below it.
+  - `prune_pool` (option B): solve on the pool with a floor of 0 and the
+    cap `max_weight`. Drop each name below `min_weight`. When fewer names
+    remain than the cap needs (4 at 25%), add back the dropped names with
+    the largest weights. Solve again. Stop when no name drops. Then solve
+    once more with the full bounds. Each round keeps a subset of the last
+    round, so the loop stops.
+  - **The sector cap applies to the pool.** The final holdings are a
+    subset of the pool, so they also hold at most `max_per_sector` names
+    of a sector. A cap on the final holdings only needs an integer
+    program, and scipy has no solver for it. A consequence: with 3 names
+    in each of 11 sectors, the pool cannot be larger than 33.
+  - `exact.optimize_weights` is the one place that weights a selection.
+    `pipeline.build_max_sharpe_portfolio` calls it, and the live run, the
+    backtest builder and the null benchmark all call that function. So
+    the backtest always uses the optimizer and the objective of the live
+    run. A test holds this.
+  - The Monte Carlo search finds only `max_sharpe` and it has no bounds.
+    It raises ValueError for another objective or for the pool mode. The
+    bounds apply only to `exact`.
+  - `PortfolioParams` holds `optimizer`, `objective`, `min_weight`,
+    `max_weight`, `size_mode` and `pool_size`. The flags are
+    `--optimizer`, `--objective`, `--min-weight`, `--max-weight`,
+    `--size-mode` and `--pool-size`.
+  - The Rank cell of the results log adds a label such as
+    `exact max_sharpe 2-25% pool25`. The default gives no label, so the
+    old rows keep their meaning. Step 5b prints the count of stocks in
+    each window.
+  - `verify_indicators.py` checks, on the live selection, that the exact
+    Max Sharpe ratio with no bounds matches or beats the Monte Carlo
+    search, and that each objective holds the bounds and gives the same
+    Sharpe ratio and CVaR as pandas.
+- **The exact solver beats the Monte Carlo search in-sample.** On the
+  live selection with no bounds, the exact Max Sharpe ratio is 4.37 and
+  the best random portfolio is 4.26. A test also holds this on four
+  random frames.
+- **Evidence:** `sp500`, 10/10/3, `cum_return`, commit `7ec49b8`, run
+  with `--skip-dbt` on a warehouse that this clone built (PASS=89, WARN=2).
+  D29 changes no dbt file. SPY has a mean Sharpe ratio of 0.80 on the step
+  of 5 days and 0.81 on the step of 3 days.
+
+  | Run | Windows | Return share | Sharpe share | Median excess | Mean Sharpe | Mean beta | Live Sharpe (in-sample) | Live volatility |
+  |---|---|---|---|---|---|---|---|---|
+  | Monte Carlo, 10 (default) | 85 | 63.5% | 50.6% | +7.05% | 0.78 | 1.49 | 4.26 | 18.4% |
+  | exact max_sharpe, 2-25%, 10 | 85 | 62.4% | 51.8% | +5.58% | 0.76 | 1.45 | 4.36 | 18.3% |
+  | exact max_sharpe, 0-100%, 10 | 85 | 62.4% | 48.2% | +4.97% | 0.70 | 1.40 | 4.37 | 18.3% |
+  | exact min_variance, 2-25%, 10 | 85 | 58.8% | 45.9% | +3.88% | 0.73 | 1.27 | 4.25 | 17.9% |
+  | exact max_sortino, 2-25%, 10 | 85 | **71.8%** | 51.8% | +4.98% | 0.79 | 1.45 | 4.34 | 18.6% |
+  | exact min_cvar, 2-25%, 10 | 85 | 56.5% | 43.5% | +1.45% | 0.74 | 1.27 | 4.20 | 18.5% |
+  | B, pool 15 | 85 | 56.5% | 49.4% | +3.11% | 0.67 | 1.09 | 4.66 | 15.6% |
+  | B, pool 20 | 85 | 60.0% | 52.9% | +4.10% | 0.75 | 0.93 | 4.79 | 14.9% |
+  | B, pool 25 | 85 | 60.0% | 54.1% | +3.64% | 0.83 | 0.82 | 5.30 | 11.6% |
+  | B, pool 33 | 85 | 64.7% | **61.2%** | +3.67% | **0.88** | 0.75 | 5.32 | 11.3% |
+  | Monte Carlo, 10, step 3 | 141 | 63.1% | 54.6% | +8.00% | 0.81 | 1.46 | 4.26 | 18.4% |
+  | B, pool 25, step 3 | 141 | 60.3% | 53.9% | +3.54% | 0.80 | 0.83 | 5.30 | 11.6% |
+  | B, pool 33, step 3 | 141 | 61.7% | 58.2% | +3.60% | **0.87** | 0.74 | 5.32 | 11.3% |
+
+  Option B uses `max_sharpe` with bounds of 2% to 25%. The count of
+  stocks across the windows (step 5):
+
+  | Pool | Count of stocks: windows | Median | Mean |
+  |---|---|---|---|
+  | 15 | 5: 1, 6: 10, 7: 14, 8: 14, 9: 15, 10: 26, 11: 4, 12: 1 | 9 | 8.5 |
+  | 20 | 6: 1, 7: 6, 8: 16, 9: 16, 10: 14, 11: 13, 12: 8, 13: 11 | 10 | 9.9 |
+  | 25 | 7: 2, 8: 12, 9: 11, 10: 19, 11: 16, 12: 11, 13: 4, 14: 8, 15: 2 | 10 | 10.6 |
+  | 33 | 8: 6, 9: 14, 10: 14, 11: 19, 12: 9, 13: 10, 14: 4, 15: 5, 16: 3, 17: 1 | 11 | 11.5 |
+
+  The live run keeps 11 of 15, 10 of 20, 10 of 25 and 12 of 33.
+- **What this says:**
+  1. **The exact solver alone does not help.** With 10 stocks, the exact
+     Max Sharpe weights give a mean Sharpe ratio of 0.76 with bounds and
+     0.70 with no bounds, against 0.78 for the random search. A better
+     in-sample optimum gives a worse out-of-sample result. The random
+     search does not reach the corner solution, so it holds a more even
+     mix. That works like a shrinkage. The bounds of 2% to 25% recover a
+     part of that.
+  2. **No fixed-10 objective beats SPY on the Sharpe ratio.** `max_sortino`
+     gives the highest return share of the whole project (71.8%), but its
+     median falls to +4.98% and its mean Sharpe ratio is 0.79. The
+     defensive objectives (`min_variance`, `min_cvar`) lower the beta to
+     1.27 and they lower the return more than the risk. The candidates
+     are momentum stocks, so a defensive weighting of them is not a
+     defensive portfolio.
+  3. **Option B with a large pool changes the Sharpe result.** A pool of
+     33 gives a mean Sharpe ratio of 0.88 against 0.80 (step 5) and 0.87
+     against 0.81 (step 3), and it beats SPY on the Sharpe ratio in 61.2%
+     and 58.2% of the windows. The beta falls from 1.49 to 0.75. **It
+     pays for this with the return:** the median excess return falls from
+     +7.05% to +3.67%, and the live volatility falls from 18.4% to 11.3%.
+     The pool of 25 beats SPY on step 5 (0.83) and not on step 3 (0.80
+     against 0.81), so it sits inside the noise of the date grid. The
+     pools of 15 and 20 do not beat SPY.
+  4. **The result rises with the pool.** The mean Sharpe ratio goes 0.67,
+     0.75, 0.83, 0.88 for pools of 15, 20, 25 and 33. D20 found the same
+     direction for the portfolio size under the old ranking (40 stocks:
+     0.82). A larger pool reaches deeper into each sector, so the gain can
+     be the sector spread and the lower beta, not the optimizer. The
+     project has no null benchmark for the pool mode, so this is not
+     separated.
+  5. **The money.** With $10,000 of whole shares, a 2% floor drops DELL
+     (one share is 4.2% of the money) in the `min_variance`, `max_sortino`
+     and `min_cvar` plans. The backtest holds exact weights, so
+     `--fractional-shares` changes no window number, and no row used it.
+     Use it for a live plan with a 2% floor.
+- **What this does not change:** The default stays Monte Carlo with 10
+  stocks. The headline "beats SPY on the return, not on the Sharpe ratio"
+  stays true for the default. Option B with a pool of 33 is the first
+  setting since D20 that beats SPY on the mean Sharpe ratio on two date
+  grids, but it gives up about half of the median excess return.
+- **Mutation checks:** 33 mutants. 32 failed a test. Each mutant was
+  removed after the run.
+  - The bounds: the two feasibility tests made weak (2 killed). The
+    bounds removed from SLSQP (killed). The cleanup step that clips to
+    the bounds replaced by a shift (killed).
+  - Minimum variance: the gradient replaced by its diagonal (killed). The
+    gradient halved (**survived**). This mutant is equivalent: half of
+    the gradient points in the same direction, so SLSQP finds the same
+    optimum.
+  - Max Sharpe: the risk-free rate removed, the best start replaced by
+    the worst, the direct search removed, the guard for a portfolio that
+    loses to cash removed, the return constraint replaced by a sum, and
+    each of the two kappa bounds removed (8 killed). The upper kappa bound
+    first survived, because the direct search repaired the answer. The
+    test `test_the_convex_reformulation_alone_beats_a_fine_grid` was then
+    added, and it kills that mutant.
+  - Max Sortino: the target set to 0 in the ratio, the target removed
+    from the solver, the sign of the gradient changed (3 killed).
+  - Min CVaR: the tail count of the plain floor rule, the cost of 1 / T
+    for 1 / k, the sign of the loss constraint, a strict comparison in
+    `cvar_5`, and the weight bounds removed from the program (5 killed).
+  - The pool prune: the loop stopped after one round, the last solve with
+    a floor of 0, the add-back order inverted, the add-back removed, and
+    a drop at a weight of 0 for `min_weight` (5 killed).
+  - The build: the selection size of the pool mode, the `selected` list
+    of the pool mode, the prune skipped, the Monte Carlo check of the pool
+    mode removed, the objective of the command line lost, and the
+    objective of the solver fixed to `max_sharpe` (6 killed).
+  - `verify_indicators.py` on the real data: a strict comparison in
+    `cvar_5` fails the check of `min_cvar`. The direct search removed
+    passes the check, because the reformulation alone is exact when a
+    portfolio beats cash. The unit test of the negative case kills that
+    mutant.
+- **Results:** 13 new rows at `7ec49b8` in `results_log.md`.
+- **Commits:** `bfc0ff8`, `6e2e1db`, `6534200`, `d0badf6`, `3b46990`,
+  `7ec49b8`, and the commit of this entry.
+
+---
+
 ## D28. Keep the S&P 500 as the only universe for the product
 
 - **Date:** 2026-11-07

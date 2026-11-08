@@ -4,8 +4,9 @@ This file holds the context of the project and nothing else. It has no
 next steps and no plan. Read `handoff.md` beside it for the work that
 comes next.
 
-Last update: 2026-11-07. The docs describe commit `6acf4fa` on the branch
-`dbt-duckdb-markowitz-pipeline`.
+Last update: 2026-11-07. The docs describe commit `7ec49b8` on the branch
+`d29-exact-optimizers`, which branches from `dbt-duckdb-markowitz-pipeline`
+at `d4ed274`.
 
 ## Paste this into the new chat
 
@@ -85,6 +86,11 @@ cache in `data/cache/`.
 | `rank_metric` | cum_return | `dbt_project.yml` and `PortfolioParams`, `--rank-metric` | The measure that ranks the candidates inside each sector. |
 | `--null-draws` | 0 | `run_pipeline.py` | The draws of the random-order null benchmark. It needs `--many-windows`. |
 | `--fractional-shares` | off | `run_pipeline.py` | Buy a part of a share where necessary. The plan then holds every weight and gives no warning (D26). |
+| `optimizer` | monte_carlo | `PortfolioParams`, `--optimizer` | `monte_carlo` tries 10,000 random weightings. `exact` solves the objective with the weight bounds (D29). |
+| `objective` | max_sharpe | `PortfolioParams`, `--objective` | `max_sharpe`, `min_variance`, `max_sortino` or `min_cvar`. Only `exact` accepts an objective other than `max_sharpe` (D29). |
+| `min_weight`, `max_weight` | 0.02, 0.25 | `PortfolioParams`, `--min-weight`, `--max-weight` | The bounds on each weight. Only `exact` uses them. Bounds that cannot sum to 1 raise ValueError (D29). |
+| `size_mode` | fixed | `PortfolioParams`, `--size-mode` | `fixed` holds `target_size` stocks. `pool` lets `exact` pick the count from `pool_size` stocks (D29). |
+| `pool_size` | 25 | `PortfolioParams`, `--pool-size` | The count of stocks that the selection gives to the pool mode. The sector cap applies to the pool (D29). |
 
 Two settings live in two layers that must agree. `rank_metric` drives the
 `rank_column` macro for the screen in dbt, and it drives
@@ -157,6 +163,14 @@ two values and it has no default of its own.
   alpha is +6.17% a year and it is positive in 60.0% of the windows. The
   regression has only the market factor, so the alpha can still be a
   momentum premium.
+- **The exact optimizers and option B (D29).** With 10 stocks, no exact
+  objective beats SPY on the mean Sharpe ratio: `max_sharpe` 0.76,
+  `min_variance` 0.73, `max_sortino` 0.79, `min_cvar` 0.74, against
+  0.80. `max_sortino` beats SPY on the return in 71.8% of the windows.
+  Option B, where the optimizer keeps part of a pool, gives 0.88 against
+  0.80 with a pool of 33 (0.87 against 0.81 on the step of 3 days), 61.2%
+  of the windows on the Sharpe ratio, and a beta of 0.75. The median
+  excess return falls from +7.05% to +3.67%. The defaults did not change.
 - **Two independent benchmarks agree.** SPY and the random order both say
   the same thing: the selection rule adds return, not risk-adjusted
   return.
@@ -178,7 +192,7 @@ two values and it has no default of its own.
   or no sector, so the survivorship bias that remains stays visible.
 - `run_pipeline.py` adds one row to `docs/results_log.md` with the commit
   hash, the caps and the rank metric.
-- The results log holds 50 rows. The Caps column and the Rank column say
+- The results log holds 63 rows. The Caps column and the Rank column say
   which settings made each row.
 
 ## What is not solved
@@ -205,10 +219,10 @@ These are facts about the state, not a plan.
   spelling of the ticker, because the API does not use a full stop. KVUE,
   PSKY and WBD are in the middle of an acquisition, so the index seed
   still holds them and the quote API does not.
-- **The Monte Carlo search is not exact.** It finds a Sharpe ratio a
-  little below the true maximum. A 10 times larger search raised the
-  in-sample figure from 4.64 to 4.99 and it moved the realized measure by
-  almost nothing.
+- **The default weights are not exact.** The default stays the Monte
+  Carlo search. D29 added exact solvers (`--optimizer exact`). With 10
+  stocks they do worse out of sample than the random search, which
+  holds a more even mix.
 - **The momentum premium is not separated from the skill.** A ranking on
   the trailing compound return is the classic momentum signal, so the
   gain of D22 can be a known factor premium. `quant_pipeline` has no
@@ -301,7 +315,7 @@ question that is wrong when a part is wrong.
 
 | What | Where |
 |---|---|
-| Why each decision was made | `docs/decisions.md` (D1 to D28) |
+| Why each decision was made | `docs/decisions.md` (D1 to D29) |
 | How the results changed | `docs/results_log.md` (one row for each run) |
 | Problems that are not solved | `docs/open_questions.md` |
 | The work that comes next | `docs/handoff.md` |
@@ -309,6 +323,7 @@ question that is wrong when a part is wrong.
 | Screen rules | `dbt/macros/screen.sql`, `dbt/macros/membership.sql` |
 | The rank metric, in two layers | `dbt/macros/screen.sql` (`rank_column`), `quant/pipeline.py` (`rank_candidates`) |
 | The portfolio selection | `quant/select_portfolio.py`, `quant/optimize.py` |
+| The exact optimizers and the pool mode | `quant/exact.py` (D29) |
 | Beta, alpha and the capital allocation line | `quant/capm.py`, `pipeline.live_capm` |
 | The share plan, whole or fractional | `quant/allocate.py`, `run_pipeline.share_plan` |
 | The random-order null benchmark | `quant/null_benchmark.py` |
@@ -319,7 +334,7 @@ question that is wrong when a part is wrong.
 
 ## The state of the checks
 
-218 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
+271 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
 warnings, for `cum_return` and for `sharpe`. `verify_indicators.py`
 passes every check. A fresh sparse clone of the branch reproduces the
 build, the tests and the live run exactly.
