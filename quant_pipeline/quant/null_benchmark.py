@@ -54,6 +54,10 @@ def run_random_selection(returns: pd.DataFrame, selection_dates: list[Any],
 
     Return one row for each draw. Each row holds the measures of a whole
     walk-forward run. The seed makes the set of draws reproducible.
+
+    The draws use the optimizer and the size mode of `params`. In the
+    pool mode, each draw gives a random pool of `pool_size` names to the
+    exact optimizer (D32).
     """
     rows = []
     for draw in range(n_draws):

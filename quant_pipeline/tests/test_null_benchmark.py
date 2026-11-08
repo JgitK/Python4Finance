@@ -143,3 +143,57 @@ def test_a_different_seed_gives_different_draws():
     first = _draws(5, seed=3)["median_excess"].tolist()
     other = _draws(5, seed=99)["median_excess"].tolist()
     assert first != other
+
+
+# ---------------------------------------------------------------------------
+# The pool mode (D29, D32). The null must also work when the exact
+# optimizer picks the count of stocks from a pool.
+
+
+def _pool_params() -> pipeline.PortfolioParams:
+    # Four sectors at two names give a pool of 8 from 12 stocks. The pool
+    # is smaller than the screened set, so a random order can change it.
+    return pipeline.PortfolioParams(target_size=4, max_per_sector=2,
+                                    optimizer="exact", size_mode="pool",
+                                    pool_size=8)
+
+
+def test_a_random_order_in_the_pool_mode_selects_a_different_pool():
+    returns = _returns().drop(columns=[universe.BENCHMARK])
+    sector_of, params = _sector_of(), _pool_params()
+    ranked = pipeline.build_max_sharpe_portfolio(returns, sector_of, params)
+    pools = [pipeline.build_max_sharpe_portfolio(
+        returns, sector_of, params, rng=np.random.default_rng(seed))["pool"]
+        for seed in range(6)]
+    assert any(set(pool) != set(ranked["pool"]) for pool in pools)
+
+
+def test_a_random_pool_has_the_pool_size_and_not_the_target_size():
+    returns = _returns().drop(columns=[universe.BENCHMARK])
+    sector_of, params = _sector_of(), _pool_params()
+    for seed in range(4):
+        result = pipeline.build_max_sharpe_portfolio(
+            returns, sector_of, params, rng=np.random.default_rng(seed))
+        assert len(result["pool"]) == params.pool_size
+        assert set(result["selected"]) <= set(result["pool"])
+        counts = pipeline.sector_mix(result["pool"], sector_of)
+        assert max(counts.values()) <= params.max_per_sector
+
+
+def test_the_null_run_keeps_the_pool_mode():
+    # The draws of the pool mode must differ from the draws of the fixed
+    # mode with the same seed. If the run drops the pool settings, the two
+    # sets of draws are the same.
+    returns = _returns()
+    dates = [returns.index[150], returns.index[200]]
+    pool = null_benchmark.run_random_selection(
+        returns, dates, holding_period=60, sector_of=_sector_of(),
+        params=_pool_params(), benchmark=universe.BENCHMARK,
+        n_draws=4, seed=0)
+    fixed_params = pipeline.PortfolioParams(target_size=4, max_per_sector=2,
+                                            n_portfolios=40, seed=5)
+    fixed = null_benchmark.run_random_selection(
+        returns, dates, holding_period=60, sector_of=_sector_of(),
+        params=fixed_params, benchmark=universe.BENCHMARK,
+        n_draws=4, seed=0)
+    assert pool["mean_excess"].tolist() != fixed["mean_excess"].tolist()
