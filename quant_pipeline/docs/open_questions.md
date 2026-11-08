@@ -19,12 +19,6 @@ one, move it to the "Solved" section with the commit hash.
   holding period, and does the chart improve the result of a person who
   reads it? Neither is measured.
 
-- **The universe for the default (D27).** `both` gives the highest
-  return share (68.2%) and median (+8.74%), and `sp500` gives the highest
-  mean Sharpe ratio (0.78). `both` carries more survivorship bias, more
-  beta and more volatility. The user wants the `nasdaq` stocks for
-  diversity. The default is still `sp500`.
-
 - **The method beats SPY on the return and not on the Sharpe ratio.**
   D22 changed the ranking to the cumulative return, and the `sp500`
   portfolio now beats SPY on the return in 57.6% of 85 windows with a

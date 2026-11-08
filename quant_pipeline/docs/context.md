@@ -150,7 +150,7 @@ two values and it has no default of its own.
   +6.15%, and `sp500` in 63.5% with +7.05%. The mean Sharpe ratio is 0.68
   for `both`, 0.61 for `nasdaq` and 0.78 for `sp500`, against 0.80 for
   SPY. The mean realized beta is 1.64, 1.60 and 1.49. `both` and `nasdaq`
-  carry 5 to 6 times more members with no prices than `sp500`.
+  carry 5 to 6 times more members with no prices than `sp500`. D28: the product uses `sp500` only.
 - **A large part of the excess return is beta (D25).** The realized
   beta of the portfolio is 1.41 on average over the 85 windows, so the
   portfolio takes more market risk than SPY. After the beta, the median
@@ -301,7 +301,7 @@ question that is wrong when a part is wrong.
 
 | What | Where |
 |---|---|
-| Why each decision was made | `docs/decisions.md` (D1 to D27) |
+| Why each decision was made | `docs/decisions.md` (D1 to D28) |
 | How the results changed | `docs/results_log.md` (one row for each run) |
 | Problems that are not solved | `docs/open_questions.md` |
 | The work that comes next | `docs/handoff.md` |

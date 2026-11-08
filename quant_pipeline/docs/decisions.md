@@ -22,6 +22,25 @@ Use this template for a new entry:
 
 ---
 
+## D28. Keep the S&P 500 as the only universe for the product
+
+- **Date:** 2026-11-07
+- **Role:** Core loop. It sets the universe of the screen.
+- **Question:** D27 measured `sp500`, `nasdaq` and `both`. Which universe
+  does the product use?
+- **Options:**
+  1. `sp500` (the default before this decision).
+  2. `both`, for the highest return share and median.
+  3. `sp500` with a cap on the stocks that only the Nasdaq universe holds.
+- **Decision:** Option 1. The user selected it. `sp500` gives the highest
+  mean Sharpe ratio (0.78), the lowest beta (1.49) and the lowest
+  volatility (18.4%), and it carries 5 to 6 times less survivorship bias.
+  The `both` portfolio held only two S&P 500 members, so it was a
+  different portfolio and not a mix.
+- **The change:** No code changes. `sp500` stays the default. The
+  `--universe` switch stays, so a person can measure the other universes
+  again.
+
 ## D27. Remove the Ichimoku gate from the screen
 
 - **Date:** 2026-11-07
