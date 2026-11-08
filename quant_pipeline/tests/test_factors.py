@@ -616,3 +616,46 @@ def test_live_two_factor_uses_the_last_lookback_days_only():
                                      umd, 252, RF, DAYS)
     assert result["n_days"] == 252
     assert result["umd_loading"] == pytest.approx(0.8, abs=1e-10)
+
+
+# --- Step 3c of run_pipeline ----------------------------------------------
+
+def _sources(returns: pd.DataFrame, umd: pd.Series, french: bool) -> dict:
+    frame = pd.DataFrame({"umd": umd, "mkt_rf": returns["SPY"] - 0.0001,
+                          "rf": 0.0001})
+    return {"french": umd if french else None,
+            "french_frame": frame if french else None,
+            "in_house": umd * 0.9, "primary": "french" if french
+            else "in_house", "correlation": 0.91 if french else np.nan,
+            "correlation_days": len(umd) if french else 0}
+
+
+def test_momentum_lines_with_french_data_give_the_spy_check_and_two_views():
+    import run_pipeline
+    from quant import pipeline
+    returns, umd = _stock_panel()
+    lines = run_pipeline.momentum_lines(_sources(returns, umd, True), returns,
+                                        {"X": 0.5, "Y": 0.5},
+                                        pipeline.PortfolioParams())
+    text = "\n".join(lines)
+    assert "Primary source: French UMD" in text
+    assert "Correlation with the in-house UMD 0.91" in text
+    # The rounding can print -0.000 for the loading, so the test reads the
+    # beta and the verdict.
+    assert "SPY check: beta 1.000" in text
+    assert "(PASS)" in text
+    assert "live, French UMD (252 days, in-sample): UMD loading +0.80" in text
+    assert "live, In-house UMD" in text
+
+
+def test_momentum_lines_without_french_data_say_so():
+    import run_pipeline
+    from quant import pipeline
+    returns, umd = _stock_panel()
+    lines = run_pipeline.momentum_lines(_sources(returns, umd, False),
+                                        returns, {"X": 1.0},
+                                        pipeline.PortfolioParams())
+    text = "\n".join(lines)
+    assert "Primary source: In-house UMD" in text
+    assert "not in data/french" in text
+    assert "SPY check" not in text

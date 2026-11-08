@@ -26,7 +26,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from quant import (allocate, backtest, null_benchmark, pipeline,
+from quant import (allocate, backtest, factors, null_benchmark, pipeline,
                    results_log, universe, warehouse)
 
 HERE = Path(__file__).resolve().parent
@@ -180,6 +180,49 @@ def share_plan(weights: dict[str, float], prices: dict[str, float],
     return plan, warnings
 
 
+UMD_LABELS = {"french": "French UMD", "in_house": "In-house UMD"}
+
+
+def momentum_lines(momentum: dict, returns: pd.DataFrame,
+                   weights: dict[str, float],
+                   params: pipeline.PortfolioParams) -> list[str]:
+    """Write Step 3c: the momentum sources, the SPY check, the live view.
+
+    The live view regresses the live portfolio on the market and on each
+    UMD series over the lookback window. It is in-sample.
+    """
+    lines = [f"Step 3c: momentum factor (D30). Primary source: "
+             f"{UMD_LABELS[momentum['primary']]}."]
+    if momentum["french"] is None:
+        lines.append("         The French files are not in data/french. "
+                     "The in-house factor has the survivorship bias of "
+                     "the prices.")
+    else:
+        check = factors.spy_sanity_check(returns[universe.BENCHMARK],
+                                         momentum["french_frame"])
+        lines.append(
+            f"         French UMD ends {momentum['french'].index.max().date()}."
+            f" Correlation with the in-house UMD "
+            f"{momentum['correlation']:.2f} on "
+            f"{momentum['correlation_days']} days.")
+        lines.append(
+            f"         SPY check: beta {check['beta']:.3f}, UMD loading "
+            f"{check['umd_loading']:+.3f}, alpha {check['alpha']:+.2%} "
+            f"({'PASS' if check['passed'] else 'FAIL'}).")
+    for name in ("french", "in_house"):
+        if momentum[name] is None:
+            continue
+        live = factors.live_two_factor(returns, weights, universe.BENCHMARK,
+                                       momentum[name], params.lookback_days,
+                                       params.risk_free, params.trading_days)
+        lines.append(
+            f"         live, {UMD_LABELS[name]} ({live['n_days']} days, "
+            f"in-sample): UMD loading {live['umd_loading']:+.2f} "
+            f"(t {live['umd_t']:+.1f}), alpha {live['capm_alpha']:+.1%} "
+            f"with the market only and {live['alpha']:+.1%} with UMD.")
+    return lines
+
+
 def make_parser() -> argparse.ArgumentParser:
     """Return the command line parser of the pipeline."""
     default = pipeline.PortfolioParams()
@@ -283,6 +326,9 @@ def main() -> None:
         first_screen_date=pd.Timestamp(screen_history["as_of_date"].min()))
     coverage = coverage_report(
         con, selection_dates + [backtest_returns.index[-1]])
+    # The index members on each day. The in-house momentum factor uses
+    # them (D30).
+    members = warehouse.read_universe_coverage(con)
     con.close()
     weights = result["weights"]
     selected = result["selected"]
@@ -309,6 +355,14 @@ def main() -> None:
     print(f"         {live['fraction_at_benchmark_risk']:.0%} in the "
           "portfolio and the rest in cash gives the volatility of "
           f"{universe.BENCHMARK} ({live['benchmark_volatility']:.1%}).")
+
+    # Step 3c: the momentum factor (D30). The screen ranks on the trailing
+    # return, so a part of the alpha can be the momentum premium.
+    momentum = factors.momentum_sources(backtest_returns, members,
+                                        universe.BENCHMARK)
+    umd = momentum[momentum["primary"]]
+    for line in momentum_lines(momentum, backtest_returns, weights, params):
+        print(line)
 
     # Step 4: change the weights to shares. With whole shares, the top-up
     # pass spends the cash that the rounding leaves. With fractional
@@ -350,6 +404,10 @@ def main() -> None:
         for w in windows
     ]
     backtest_df = pd.DataFrame(backtest_rows)
+    # The momentum columns of D30, from the primary UMD factor.
+    backtest_df = pd.concat([backtest_df, factors.backtest_columns(
+        backtest_returns, windows, HOLDING_PERIOD, universe.BENCHMARK, umd,
+        params.risk_free, params.trading_days)], axis=1)
     print(f"Step 5: ran {len(backtest_df)} walk-forward windows against "
           f"{universe.BENCHMARK}.")
 
@@ -360,9 +418,10 @@ def main() -> None:
         many_dates = choose_many_selection_dates(
             backtest_returns.index, args.window_step,
             first_screen_date=pd.Timestamp(screen_history["as_of_date"].min()))
-        summary = backtest.summarize_windows(backtest.run_walk_forward(
+        many_windows = backtest.run_walk_forward(
             backtest_returns, many_dates, HOLDING_PERIOD, build,
-            universe.BENCHMARK, params.risk_free, params.trading_days))
+            universe.BENCHMARK, params.risk_free, params.trading_days)
+        summary = backtest.summarize_windows(many_windows)
         print(f"Step 5b: ran {summary['n_windows']} windows with a step of "
               f"{args.window_step} days. "
               f"{summary['n_scored']} hold a result.")
@@ -377,6 +436,19 @@ def main() -> None:
               f"average. Alpha: mean {summary['mean_alpha']:+.2%}, median "
               f"{summary['median_alpha']:+.2%}, positive in "
               f"{summary['win_alpha']:.1%} of the windows.")
+        # The two-factor regression of each window (D30).
+        for name in ("french", "in_house"):
+            if momentum[name] is None:
+                continue
+            table = factors.factor_table(
+                backtest_returns, many_windows, HOLDING_PERIOD,
+                universe.BENCHMARK, momentum[name], params.risk_free,
+                params.trading_days)
+            table.to_csv(OUTPUT_DIR / f"momentum_windows_{name}.csv",
+                         index=False)
+            for line in factors.summary_lines(
+                    UMD_LABELS[name], factors.summarize_factor_table(table)):
+                print("         " + line)
 
     # Step 5c: the null benchmark. SPY says whether the method beats the
     # market. It does not say whether the rank order adds anything. The
