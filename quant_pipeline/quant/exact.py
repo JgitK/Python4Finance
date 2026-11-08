@@ -410,3 +410,107 @@ def prune_pool(returns: pd.DataFrame, solver, min_weight: float,
     result["pool"] = pool
     result["rounds"] = rounds
     return result
+
+
+# ---------------------------------------------------------------------------
+# The link to the portfolio build. `pipeline.PortfolioParams` holds the
+# settings. This module does not import it, because the pipeline imports
+# this module.
+# ---------------------------------------------------------------------------
+
+OPTIMIZERS = ("monte_carlo", "exact")
+SIZE_MODES = ("fixed", "pool")
+
+
+def check_settings(params: Any) -> None:
+    """Raise ValueError for a combination of settings that does not work.
+
+    The Monte Carlo search finds only the Max Sharpe weights, and it has
+    no bounds. So it cannot serve another objective or the pool mode.
+    """
+    if params.optimizer not in OPTIMIZERS:
+        raise ValueError(f"optimizer must be one of {', '.join(OPTIMIZERS)}, "
+                         f"not {params.optimizer!r}.")
+    if params.size_mode not in SIZE_MODES:
+        raise ValueError(f"size_mode must be one of {', '.join(SIZE_MODES)}, "
+                         f"not {params.size_mode!r}.")
+    if params.objective not in OBJECTIVES:
+        raise ValueError(f"objective must be one of {', '.join(OBJECTIVES)}, "
+                         f"not {params.objective!r}.")
+    if params.optimizer == "monte_carlo":
+        if params.objective != "max_sharpe":
+            raise ValueError("The monte_carlo optimizer finds only "
+                             "max_sharpe. Use --optimizer exact.")
+        if params.size_mode != "fixed":
+            raise ValueError("The monte_carlo optimizer has no weight "
+                             "bounds, so it cannot use the pool mode. Use "
+                             "--optimizer exact.")
+
+
+def selection_size(params: Any) -> int:
+    """Give the count of stocks that the selection step must find."""
+    return params.pool_size if params.size_mode == "pool" else \
+        params.target_size
+
+
+def optimize_weights(returns: pd.DataFrame, params: Any) -> dict[str, Any]:
+    """Weight the selected stocks with the optimizer of the settings.
+
+    The live run and the backtest both call this function through
+    `pipeline.build_max_sharpe_portfolio`, so both use the same optimizer
+    and the same objective.
+
+    The result always holds a frontier. The Monte Carlo search gives one
+    row for each random portfolio. An exact solver gives one row, for the
+    solution.
+    """
+    from quant import optimize
+
+    check_settings(params)
+    if params.optimizer == "monte_carlo":
+        return optimize.optimize_max_sharpe(
+            returns, params.n_portfolios, params.risk_free,
+            params.trading_days, params.seed)
+
+    def solver(frame: pd.DataFrame, low: float, high: float):
+        return solve(frame, params.objective, low, high, params.risk_free,
+                     params.trading_days)
+
+    if params.size_mode == "pool":
+        result = prune_pool(returns, solver, params.min_weight,
+                            params.max_weight)
+    else:
+        result = solver(returns, params.min_weight, params.max_weight)
+    result["frontier"] = pd.DataFrame([{
+        "annual_return": result["annual_return"],
+        "annual_volatility": result["annual_volatility"],
+        "sharpe": result["sharpe"]}])
+    return result
+
+
+def optimizer_label(params: Any) -> str:
+    """Give a short label of the optimizer settings for the results log.
+
+    The default settings give an empty label, so the old rows keep their
+    meaning.
+    """
+    if params.optimizer == "monte_carlo":
+        return ""
+    size = (f"pool{params.pool_size}" if params.size_mode == "pool"
+            else "fixed")
+    low = round(params.min_weight * 100, 6)
+    high = round(params.max_weight * 100, 6)
+    return f"exact {params.objective} {low:g}-{high:g}% {size}"
+
+
+def count_distribution(windows: list[dict[str, Any]]) -> dict[int, int]:
+    """Count the backtest windows for each count of stocks.
+
+    A window with no stock is not a result, so it does not count.
+    """
+    counts: dict[int, int] = {}
+    for window in windows:
+        size = len(window["weights"])
+        if size:
+            counts[size] = counts.get(size, 0) + 1
+    return dict(sorted(counts.items()))
