@@ -659,3 +659,15 @@ def test_momentum_lines_without_french_data_say_so():
     assert "Primary source: In-house UMD" in text
     assert "not in data/french" in text
     assert "SPY check" not in text
+
+
+def test_momentum_lines_report_a_failed_spy_check():
+    import run_pipeline
+    from quant import pipeline
+    returns, umd = _stock_panel()
+    sources = _sources(returns, umd, True)
+    # A French market factor that is not SPY breaks the check.
+    sources["french_frame"]["mkt_rf"] = returns["X"]
+    text = "\n".join(run_pipeline.momentum_lines(
+        sources, returns, {"X": 1.0}, pipeline.PortfolioParams()))
+    assert "(FAIL)" in text
