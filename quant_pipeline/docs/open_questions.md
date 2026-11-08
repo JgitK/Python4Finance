@@ -157,15 +157,19 @@ one, move it to the "Solved" section with the commit hash.
   `max_sortino` objective of D29 uses the daily risk-free rate for the
   downside, so the two Sortino numbers of the project are not the same.
 - **Is the gain of option B the optimizer or the sector spread (D29)?**
-  The pool mode with 33 names beats SPY on the mean Sharpe ratio on two
-  date grids (0.88 and 0.87 against 0.80 and 0.81), with a beta of 0.75.
-  The result rises with the pool (0.67, 0.75, 0.83, 0.88 for 15, 20, 25
-  and 33). A larger pool reaches deeper into each sector and it lowers
-  the beta. The null benchmark of D23 can run in the pool mode, and an
-  equal weight of the same pool can isolate the optimizer. Neither is
-  measured.
+  Mostly answered by D33: the wide pool gives the gain, not the
+  optimizer. Equal weight on all 33 names gives a mean Sharpe ratio of
+  0.88 (step 5) and 0.90 (step 3), against 0.88 and 0.87 for option B.
+  Equal weight on the names that option B keeps gives 0.96 and 0.92, so
+  the `max_sharpe` weights lower the result on the same names. The low
+  beta of option B (0.75) comes from its weights: the same names at equal
+  weight have a beta of 0.92. Two parts stay open. The name choice of the
+  pruning helps with a pool of 33 and not with a pool of 20 on step 3, so
+  its sign is not stable. The null benchmark of D23 in the pool mode is
+  not measured.
 - **Which default for the optimizer and the size (D29)?** The user
-  decides. The pool of 33 gives the best Sharpe result and gives up
+  decides. D33 shows that an equal weight of the same pool matches or
+  beats the exact optimizer on every measure except the beta. The pool of 33 gives the best Sharpe result and gives up
   about half of the median excess return (+3.67% against +7.05%). The
   exact solver with 10 stocks does not beat the Monte Carlo search out of
   sample.
