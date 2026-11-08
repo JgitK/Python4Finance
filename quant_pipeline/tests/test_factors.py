@@ -591,12 +591,16 @@ def test_backtest_columns_give_nan_for_a_window_with_no_stock():
 
 
 def test_summary_lines_state_the_loading_and_the_explained_share():
-    table = pd.DataFrame({"umd_loading": [0.2, 0.4], "umd_t": [1.0, 2.5],
-                          "alpha": [0.01, 0.01],
-                          "capm_alpha": [0.05, 0.05]})
+    # The mean and the median differ here, so a line that prints one in
+    # place of the other fails.
+    table = pd.DataFrame({"umd_loading": [0.2, 0.4, 0.6],
+                          "umd_t": [1.0, 2.5, 3.0],
+                          "alpha": [0.01, 0.01, 0.04],
+                          "capm_alpha": [0.04, 0.05, 0.12]})
     text = "\n".join(factors.summary_lines(
         "French UMD", factors.summarize_factor_table(table)))
-    assert "French UMD: 2 windows" in text
-    assert "median +0.30" in text
-    assert "positive in 50.0% of the windows" in text
-    assert "UMD explains 80% of the median alpha" in text
+    assert "French UMD: 3 windows" in text
+    assert "median +0.40" in text
+    assert "positive in 66.7% of the windows" in text
+    # Median: 1 - 0.01 / 0.05 = 80%. Mean: 1 - 0.02 / 0.07 = 71%.
+    assert "UMD explains 80% of the median alpha and 71% of the mean" in text
