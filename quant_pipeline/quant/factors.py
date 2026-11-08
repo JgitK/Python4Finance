@@ -454,3 +454,81 @@ def spy_sanity_check(spy: pd.Series, french: pd.DataFrame,
         and abs(result["umd_loading"]) <= SPY_UMD_TOLERANCE
         and abs(result["alpha"]) <= SPY_ALPHA_TOLERANCE)
     return result
+
+
+
+def momentum_sources(returns: pd.DataFrame, members: pd.DataFrame | None,
+                     benchmark: str, french_dir: Path = FRENCH_DIR,
+                     lookback: int = 252, skip: int = 21,
+                     quantile: float = 0.3) -> dict[str, Any]:
+    """Give the two UMD series and the facts that compare them.
+
+    Return a dict with these keys:
+
+    - `french`: the French UMD series, or None without the cached files.
+    - `french_frame`: all the French factors, or None.
+    - `in_house`: the in-house UMD of `build_umd`. The benchmark is never
+      in a leg.
+    - `primary`: "french" when the French files exist, else "in_house".
+      The French factor is the primary source, because it has no
+      survivorship bias and it does not come from the universe of the
+      portfolio.
+    - `correlation` and `correlation_days`: the daily correlation of the
+      two series on their common days. NaN without the French files.
+    """
+    stocks = returns.drop(columns=[benchmark], errors="ignore")
+    in_house = build_umd(stocks, members, lookback, skip, quantile)
+    french_frame = load_french_factors(french_dir)
+    french = None if french_frame is None else french_frame["umd"]
+    correlation, days = float("nan"), 0
+    if french is not None:
+        both = pd.concat([in_house, french], axis=1, join="inner").dropna()
+        days = int(len(both))
+        if days > 2:
+            correlation = float(both.iloc[:, 0].corr(both.iloc[:, 1]))
+    return {"french": french, "french_frame": french_frame,
+            "in_house": in_house,
+            "primary": "french" if french is not None else "in_house",
+            "correlation": correlation, "correlation_days": days}
+
+
+def backtest_columns(returns: pd.DataFrame, windows: list[dict[str, Any]],
+                     holding_period: int, benchmark: str, umd: pd.Series,
+                     risk_free: float = 0.045,
+                     trading_days: int = 252) -> pd.DataFrame:
+    """Give the momentum columns of the backtest table, one row a window.
+
+    The columns are the UMD loading, its t statistic and the two-factor
+    annual alpha. A window with no result gets NaN.
+    """
+    rows = []
+    for window in windows:
+        if backtest.window_is_scored(window):
+            result = window_two_factor(returns, window, holding_period,
+                                       benchmark, umd, risk_free,
+                                       trading_days)
+        else:
+            result = _empty(0)
+        rows.append({"umd_loading": result["umd_loading"],
+                     "umd_t": result["umd_t"],
+                     "two_factor_alpha": result["alpha"]})
+    return pd.DataFrame(rows, columns=["umd_loading", "umd_t",
+                                       "two_factor_alpha"])
+
+
+def summary_lines(label: str, summary: dict[str, Any]) -> list[str]:
+    """Write the summary of `summarize_factor_table` as lines of text."""
+    return [
+        f"{label}: {summary['n_windows']} windows. UMD loading median "
+        f"{summary['median_umd_loading']:+.2f}, mean "
+        f"{summary['mean_umd_loading']:+.2f}. Significant and positive in "
+        f"{summary['share_umd_positive_significant']:.1%} of the windows "
+        f"(either sign {summary['share_umd_significant']:.1%}).",
+        f"    alpha with the market only: median "
+        f"{summary['median_capm_alpha']:+.2%}, mean "
+        f"{summary['mean_capm_alpha']:+.2%}. With the market and UMD: median "
+        f"{summary['median_alpha']:+.2%}, mean {summary['mean_alpha']:+.2%}, "
+        f"positive in {summary['share_alpha_positive']:.1%}.",
+        f"    UMD explains {summary['explained_median']:.0%} of the median "
+        f"alpha and {summary['explained_mean']:.0%} of the mean alpha.",
+    ]

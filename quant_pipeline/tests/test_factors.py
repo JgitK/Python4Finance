@@ -528,3 +528,75 @@ def test_spy_sanity_check_subtracts_the_french_risk_free_rate():
     assert check["alpha"] == pytest.approx(0.0, abs=1e-12)
     assert check["beta"] == pytest.approx(0.0, abs=1e-12)
     assert not check["passed"]
+
+
+# --- the helpers of run_pipeline ------------------------------------------
+
+def test_momentum_sources_without_french_files_uses_the_in_house_factor(
+        tmp_path):
+    panel = _panel()
+    panel["SPY"] = 0.001
+    sources = factors.momentum_sources(panel, _members(TICKERS), "SPY",
+                                       french_dir=tmp_path, lookback=LOOKBACK,
+                                       skip=SKIP, quantile=QUANTILE)
+    assert sources["french"] is None
+    expected = factors.build_umd(panel[TICKERS], _members(TICKERS), LOOKBACK,
+                                 SKIP, QUANTILE)
+    assert sources["in_house"].equals(expected)
+    # The primary factor is the French factor when it exists, and the
+    # in-house factor when it does not.
+    assert sources["primary"] == "in_house"
+    assert np.isnan(sources["correlation"])
+
+
+def test_momentum_sources_never_puts_the_benchmark_in_a_leg(tmp_path):
+    panel = _panel()
+    # SPY has the best signal of all. It must not enter the long leg.
+    panel["SPY"] = panel["A"] * 3
+    members = _members(TICKERS + ["SPY"])
+    sources = factors.momentum_sources(panel, members, "SPY",
+                                       french_dir=tmp_path, lookback=LOOKBACK,
+                                       skip=SKIP, quantile=QUANTILE)
+    expected = factors.build_umd(panel[TICKERS], members, LOOKBACK, SKIP,
+                                 QUANTILE)
+    assert sources["in_house"].equals(expected)
+
+
+def test_momentum_sources_reads_the_french_files(tmp_path):
+    _write_zip(tmp_path / factors.FRENCH_FILES["momentum"],
+               "F-F_Momentum_Factor_daily.csv", MOM_TEXT)
+    _write_zip(tmp_path / factors.FRENCH_FILES["three_factor"],
+               "F-F_Research_Data_Factors_daily.csv", FF3_TEXT)
+    panel = _panel()
+    panel["SPY"] = 0.001
+    sources = factors.momentum_sources(panel, _members(TICKERS), "SPY",
+                                       french_dir=tmp_path, lookback=LOOKBACK,
+                                       skip=SKIP, quantile=QUANTILE)
+    assert sources["primary"] == "french"
+    assert list(sources["french"]) == pytest.approx([0.0163, -0.0031])
+
+
+def test_backtest_columns_give_nan_for_a_window_with_no_stock():
+    returns, umd = _stock_panel()
+    windows = [_window(returns.index[50], {"X": 1.0}),
+               _window(returns.index[60], {})]
+    columns = factors.backtest_columns(returns, windows, 120, "SPY", umd,
+                                       RF, DAYS)
+    assert list(columns.columns) == ["umd_loading", "umd_t",
+                                     "two_factor_alpha"]
+    assert columns.loc[0, "umd_loading"] == pytest.approx(0.8, abs=1e-10)
+    assert columns.loc[0, "two_factor_alpha"] == pytest.approx(
+        0.0002 * DAYS, abs=1e-10)
+    assert columns.loc[1].isna().all()
+
+
+def test_summary_lines_state_the_loading_and_the_explained_share():
+    table = pd.DataFrame({"umd_loading": [0.2, 0.4], "umd_t": [1.0, 2.5],
+                          "alpha": [0.01, 0.01],
+                          "capm_alpha": [0.05, 0.05]})
+    text = "\n".join(factors.summary_lines(
+        "French UMD", factors.summarize_factor_table(table)))
+    assert "French UMD: 2 windows" in text
+    assert "median +0.30" in text
+    assert "positive in 50.0% of the windows" in text
+    assert "UMD explains 80% of the median alpha" in text
