@@ -23,11 +23,12 @@ def con():
     connection.close()
 
 
-def test_candidates_have_rows_and_pass_the_min_score(con):
+def test_candidates_have_rows_and_an_ichimoku_score(con):
     candidates = warehouse.read_candidates(con)
     assert len(candidates) > 0
-    # Every candidate must meet the minimum Ichimoku score of 2.
-    assert candidates["ichimoku_score"].min() >= 2
+    # The score is information for the chart, not a gate (D27). It is a
+    # count of five rules, so it is from 0 to 5.
+    assert candidates["ichimoku_score"].between(0, 5).all()
 
 
 def test_returns_matrix_includes_the_benchmark(con):

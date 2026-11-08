@@ -1,10 +1,10 @@
--- Screen the universe. Keep the stocks that are liquid, calm, and bullish.
+-- Screen the universe. Keep the stocks that are liquid and calm.
 -- Only the stocks in the S&P 500 on the last date can pass.
--- A stock must pass four gates:
+-- A stock must pass three gates:
 --   1. It has enough history.
 --   2. It trades enough volume.
 --   3. Its daily moves are not too wild.
---   4. Its Ichimoku score shows a bullish trend.
+-- The Ichimoku score is information for the chart. It is not a gate (D27).
 -- The model then ranks the stocks inside each sector by the rank_metric
 -- variable and keeps the top names. These are the candidates for the
 -- portfolio. See the rank_column macro and decision D22.

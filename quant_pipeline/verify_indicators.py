@@ -325,12 +325,6 @@ def pandas_screen_as_of(prices: pd.DataFrame, sector_of: dict[str, str],
         annual_vol = r.std(ddof=1) * math.sqrt(v["trading_days_per_year"])
         sharpe = ((r.mean() * v["trading_days_per_year"] - v["risk_free_rate"])
                   / annual_vol)
-        last = mine.iloc[-1]
-        score = (int(last["close"] > last["span_a"])
-                 + int(last["close"] > last["span_b"])
-                 + int(last["conv"] > last["base"])
-                 + int(last["span_a"] > last["span_b"])
-                 + int(last["close"] > last["base"]))
         # The compound return of the same window. dbt computes
         # cum_return_window with exp(sum(ln(1 + r))) - 1 over this window.
         cum_return = float((1.0 + r).prod() - 1.0)
@@ -338,8 +332,7 @@ def pandas_screen_as_of(prices: pd.DataFrame, sector_of: dict[str, str],
                      "cum_return": cum_return,
                      "passed": len(p) >= v["min_trading_days"]
                      and recent["volume"].mean() >= v["min_avg_volume"]
-                     and r.std(ddof=1) <= v["max_daily_volatility"]
-                     and score >= v["min_ichimoku_score"]})
+                     and r.std(ddof=1) <= v["max_daily_volatility"]})
     frame = pd.DataFrame(rows)
     rank_on = screen_rank_column(v["rank_metric"])
     frame = frame[frame["passed"]].sort_values(rank_on, ascending=False)

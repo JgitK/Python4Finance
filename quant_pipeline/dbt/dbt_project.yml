@@ -47,7 +47,6 @@ vars:
   # sharpe. The screen keeps the top names of each sector by this measure.
   # See decision D22.
   rank_metric: cum_return
-  min_ichimoku_score: 2
   # The number of top stocks to show per sector in the sector leaders mart.
   sector_leaders_n: 3
 

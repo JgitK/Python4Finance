@@ -11,12 +11,16 @@
     )
 {% endmacro %}
 
+{#
+    The screen has no Ichimoku gate. The user reads the Ichimoku chart and
+    decides on the timing. The score stays in the marts as information for
+    the chart. See decision D27.
+#}
 {% macro passes_screen() %}
     (
         total_trading_days >= {{ var('min_trading_days') }}
         and avg_volume >= {{ var('min_avg_volume') }}
         and daily_volatility <= {{ var('max_daily_volatility') }}
-        and ichimoku_score >= {{ var('min_ichimoku_score') }}
     )
 {% endmacro %}
 

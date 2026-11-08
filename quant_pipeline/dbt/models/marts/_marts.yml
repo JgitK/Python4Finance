@@ -35,11 +35,13 @@ models:
                 to: ref('dim_ticker')
                 field: ticker
       - name: ichimoku_score
-        description: Every candidate meets the minimum score, so this is at least 2.
+        description: >
+          The bullish Ichimoku score, from 0 to 5. It is information for the
+          chart. The screen does not use it (D27).
         data_tests:
           - accepted_values:
               arguments:
-                values: [2, 3, 4, 5]
+                values: [0, 1, 2, 3, 4, 5]
       - name: sector_rank
         data_tests: [not_null]
 
@@ -69,8 +71,9 @@ models:
 unit_tests:
   - name: test_screen_applies_all_gates
     description: >
-      A candidate must pass every gate. This test sends four stocks through
-      the screen. Only the stock that passes all gates stays.
+      A candidate must pass every gate. This test sends five stocks through
+      the screen. The two stocks that pass all gates stay. A low Ichimoku
+      score does not remove a stock (D27).
     model: mart_screen_candidates
     given:
       - input: ref('int_risk_metrics')
@@ -87,10 +90,12 @@ unit_tests:
           - {ticker: WILD, total_trading_days: 500, avg_volume: 1000000,
              daily_volatility: 0.09, annual_return: 0.30, annual_volatility: 0.25,
              sharpe_ratio: 3.0, sortino_ratio: 4.0, cvar_5: -0.04, cum_return_window: 0.28}
-          # DULL: the Ichimoku trend is not bullish enough.
+          # DULL: the Ichimoku score is 0, the lowest score. The screen has no Ichimoku
+          # gate (D27), so DULL passes. Its cumulative return is lower than
+          # the return of PASS, so it ranks second.
           - {ticker: DULL, total_trading_days: 500, avg_volume: 1000000,
              daily_volatility: 0.02, annual_return: 0.30, annual_volatility: 0.25,
-             sharpe_ratio: 4.0, sortino_ratio: 5.0, cvar_5: -0.04, cum_return_window: 0.28}
+             sharpe_ratio: 4.0, sortino_ratio: 5.0, cvar_5: -0.04, cum_return_window: 0.20}
           # GONE: passes every gate, but it left the index before the last date.
           - {ticker: GONE, total_trading_days: 500, avg_volume: 1000000,
              daily_volatility: 0.02, annual_return: 0.30, annual_volatility: 0.25,
@@ -107,7 +112,7 @@ unit_tests:
           - {ticker: PASS, ichimoku_score: 5}
           - {ticker: THIN, ichimoku_score: 5}
           - {ticker: WILD, ichimoku_score: 5}
-          - {ticker: DULL, ichimoku_score: 1}
+          - {ticker: DULL, ichimoku_score: 0}
           - {ticker: GONE, ichimoku_score: 5}
       - input: ref('stg_prices')
         rows:
@@ -129,6 +134,10 @@ unit_tests:
            daily_volatility: 0.02, annual_return: 0.30, annual_volatility: 0.25,
            sharpe_ratio: 1.0, sortino_ratio: 1.6, cvar_5: -0.04, cum_return_window: 0.28,
            ichimoku_score: 5, current_price: 120, sector_rank: 1}
+        - {ticker: DULL, sector: Tech, total_trading_days: 500, avg_volume: 1000000,
+           daily_volatility: 0.02, annual_return: 0.30, annual_volatility: 0.25,
+           sharpe_ratio: 4.0, sortino_ratio: 5.0, cvar_5: -0.04, cum_return_window: 0.20,
+           ichimoku_score: 0, current_price: 120, sector_rank: 2}
 
   - name: test_screen_history_applies_the_gates_on_each_date
     description: >
@@ -178,8 +187,9 @@ unit_tests:
           - {ticker: CCC, as_of_date: "2024-01-02", ichimoku_score: 5}
           - {ticker: AAA, as_of_date: "2025-01-02", ichimoku_score: 5}
           - {ticker: BBB, as_of_date: "2025-01-02", ichimoku_score: 5}
-          # On D2, CCC is not bullish.
-          - {ticker: CCC, as_of_date: "2025-01-02", ichimoku_score: 1}
+          # On D2, the Ichimoku score of CCC is 0, the lowest score. The screen has no
+          # Ichimoku gate (D27), so CCC passes on D2.
+          - {ticker: CCC, as_of_date: "2025-01-02", ichimoku_score: 0}
       - input: ref('dim_ticker')
         rows:
           - {ticker: AAA, sector: Tech}
@@ -196,6 +206,7 @@ unit_tests:
         - {as_of_date: "2024-01-02", ticker: BBB, sector_rank: 1}
         - {as_of_date: "2024-01-02", ticker: CCC, sector_rank: 1}
         - {as_of_date: "2025-01-02", ticker: BBB, sector_rank: 1}
+        - {as_of_date: "2025-01-02", ticker: CCC, sector_rank: 1}
 
   - name: test_screen_history_ranks_on_the_sharpe_ratio_when_asked
     description: >
@@ -247,8 +258,9 @@ unit_tests:
           - {ticker: CCC, as_of_date: "2024-01-02", ichimoku_score: 5}
           - {ticker: AAA, as_of_date: "2025-01-02", ichimoku_score: 5}
           - {ticker: BBB, as_of_date: "2025-01-02", ichimoku_score: 5}
-          # On D2, CCC is not bullish.
-          - {ticker: CCC, as_of_date: "2025-01-02", ichimoku_score: 1}
+          # On D2, the Ichimoku score of CCC is 0, the lowest score. The screen has no
+          # Ichimoku gate (D27), so CCC passes on D2.
+          - {ticker: CCC, as_of_date: "2025-01-02", ichimoku_score: 0}
       - input: ref('dim_ticker')
         rows:
           - {ticker: AAA, sector: Tech}
@@ -265,6 +277,7 @@ unit_tests:
         - {as_of_date: "2024-01-02", ticker: BBB, sector_rank: 1}
         - {as_of_date: "2024-01-02", ticker: CCC, sector_rank: 1}
         - {as_of_date: "2025-01-02", ticker: AAA, sector_rank: 1}
+        - {as_of_date: "2025-01-02", ticker: CCC, sector_rank: 1}
 
   - name: test_screen_history_uses_index_membership_on_each_date
     description: >
