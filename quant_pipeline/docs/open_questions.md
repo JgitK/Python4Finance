@@ -7,11 +7,13 @@ one, move it to the "Solved" section with the commit hash.
 
 ### Results
 
-- **How much of the alpha is the momentum premium (D25)?** After the
-  beta, the median window keeps an alpha of +6.17% a year. The rank on
-  the cumulative return is a momentum signal, and the regression of D25
-  has only the market factor. A regression with a momentum factor can
-  separate a factor premium from skill. The project has no factor data.
+- **Is the alpha that remains after momentum skill (D30)?** D30 found a
+  UMD loading near 0.4 to 0.5, significant in 88% of the windows. UMD
+  explains 25% to 45% of the one-factor alpha. A two-factor alpha of +5%
+  to +7% a year remains, but no window gives it a t of 1.96 or more. More
+  years of prices or a longer history of the method can decide it. The
+  Fama-French SMB and HML factors are in `data/french/` and nobody has
+  used them.
 
 - **The Ichimoku chart as a timing aid (D27).** D27 removed the gate.
   The user reads the chart and decides on the timing. Two questions
@@ -70,15 +72,6 @@ one, move it to the "Solved" section with the commit hash.
   does not deliver one. A ranking that is risk-adjusted but not the Sharpe
   ratio (the Sortino ratio, the return over the maximum drawdown) is the
   obvious next thing to measure.
-
-- **Is the momentum ranking of D22 only a factor tilt?** A ranking on the
-  trailing compound return is the classic momentum signal. A gain from it
-  is a known factor premium, not proof that this pipeline has skill. The
-  separation needs a factor regression of the portfolio returns on a
-  momentum factor, or a comparison with a plain momentum portfolio of the
-  same universe. Note that `07_factor_decomposition.R` in the repository
-  root does this kind of work for the R modules, and `quant_pipeline` has
-  no equivalent.
 
 - **Is the gain of a large portfolio only the equal-weight premium?** A
   random weight vector of 40 assets sits near equal weight, so a 40-stock
@@ -172,6 +165,14 @@ one, move it to the "Solved" section with the commit hash.
 - **Merge to `main`?** Not decided. See decision D3.
 
 ## Solved
+
+- **How much of the alpha is the momentum premium?** Measured by D30
+  (`519b44e`). The portfolio has a significant UMD loading in most
+  windows. UMD explains 32% of the median alpha and 45% of the mean alpha
+  with the French factor, and 25% and 28% with the in-house factor. The
+  alpha that remains is not significant in any window. This also answers
+  "Is the momentum ranking of D22 only a factor tilt?": it is mostly a
+  factor tilt plus market beta, and the residual is too noisy to call.
 
 - **Does the rank order of the candidates do any work?** Solved by D23
   (`612afe2`). Yes for the return, no for the Sharpe ratio. See the open
