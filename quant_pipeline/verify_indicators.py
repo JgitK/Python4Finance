@@ -24,7 +24,7 @@ import pandas as pd
 import yaml
 
 import run_pipeline
-from quant import backtest, factors, pipeline, universe, warehouse
+from quant import backtest, exact, factors, pipeline, universe, warehouse
 
 # Read the screen settings from the dbt project, so the two sides agree.
 with open(warehouse.DEFAULT_WAREHOUSE.parent / "dbt_project.yml") as _handle:
@@ -391,6 +391,42 @@ def verify_portfolio_stats(con) -> None:
           f"reported {result['sharpe']:.4f} vs {sharpe:.4f}")
 
 
+def verify_exact_optimizer(con) -> None:
+    """Check the exact optimizers of D29 on the live selection.
+
+    The Monte Carlo search and the exact solver weight the same stocks.
+    With no bounds, the exact Max Sharpe ratio must match or beat the best
+    random portfolio. With the default bounds, each weight must stay in
+    them, and pandas must give the same Sharpe ratio and the same CVaR.
+    """
+    params = pipeline.PortfolioParams()
+    live = run_pipeline.build_live_portfolio(con, params)
+    candidates = warehouse.read_candidates(con)
+    returns = warehouse.read_returns_matrix(con, candidates["ticker"].tolist())
+    sub = returns.tail(252).dropna(axis=1)[live["selected"]]
+
+    free = exact.solve(sub, "max_sharpe", 0.0, 1.0)
+    check("exact Max Sharpe matches or beats the Monte Carlo search",
+          free["sharpe"] >= live["sharpe"] - 1e-9,
+          f"exact {free['sharpe']:.4f} vs Monte Carlo {live['sharpe']:.4f}")
+
+    low, high = params.min_weight, params.max_weight
+    for objective in exact.OBJECTIVES:
+        result = exact.solve(sub, objective, low, high)
+        w = pd.Series(result["weights"])[sub.columns]
+        daily = sub @ w
+        sharpe = ((daily.mean() * 252 - 0.045)
+                  / (daily.std(ddof=1) * math.sqrt(252)))
+        tail = daily[daily <= daily.quantile(0.05)].mean()
+        ok = (abs(w.sum() - 1.0) < 1e-9 and w.min() >= low - 1e-9
+              and w.max() <= high + 1e-9
+              and abs(sharpe - result["sharpe"]) < 1e-9
+              and abs(tail - result["cvar_5"]) < 1e-12)
+        check(f"exact {objective} holds the bounds and its measures", ok,
+              f"weights {w.min():.3f} to {w.max():.3f}, Sharpe "
+              f"{result['sharpe']:.4f}, cvar_5 {result['cvar_5']:.4%}")
+
+
 # ---------------------------------------------------------------------------
 # No-look-ahead adversarial check.
 # ---------------------------------------------------------------------------
@@ -514,6 +550,7 @@ def main() -> int:
     verify_screen_history(con, tables)
     print("\n== Stats checks ==")
     verify_portfolio_stats(con)
+    verify_exact_optimizer(con)
     verify_no_look_ahead(con)
     print("\n== Momentum factor (D30) ==")
     verify_momentum_factor(con)

@@ -152,11 +152,27 @@ one, move it to the "Solved" section with the commit hash.
   the plan agree. The third option is the one that makes the measure
   honest, and nobody measured its cost yet.
 
-- **The Monte Carlo search is not exact.** It finds a Sharpe ratio a little
-  below the true maximum (2.90 against 3.00 on the old universe).
-  `scipy.optimize` can find the true maximum.
-- **The Sortino ratio uses two targets.** The downside deviation uses 0, but
-  the numerator subtracts the risk-free rate.
+- **The Sortino ratio uses two targets.** The downside deviation of dbt
+  uses 0, but the numerator subtracts the risk-free rate. The
+  `max_sortino` objective of D29 uses the daily risk-free rate for the
+  downside, so the two Sortino numbers of the project are not the same.
+- **Is the gain of option B the optimizer or the sector spread (D29)?**
+  The pool mode with 33 names beats SPY on the mean Sharpe ratio on two
+  date grids (0.88 and 0.87 against 0.80 and 0.81), with a beta of 0.75.
+  The result rises with the pool (0.67, 0.75, 0.83, 0.88 for 15, 20, 25
+  and 33). A larger pool reaches deeper into each sector and it lowers
+  the beta. The null benchmark of D23 can run in the pool mode, and an
+  equal weight of the same pool can isolate the optimizer. Neither is
+  measured.
+- **Which default for the optimizer and the size (D29)?** The user
+  decides. The pool of 33 gives the best Sharpe result and gives up
+  about half of the median excess return (+3.67% against +7.05%). The
+  exact solver with 10 stocks does not beat the Monte Carlo search out of
+  sample.
+- **Can the pool be larger than 33?** The sector cap applies to the
+  pool, so 11 sectors at 3 names give at most 33. A larger pool needs a
+  larger `max_per_sector`, which changes a second setting at the same
+  time.
 - **`fct_prices` and `int_bollinger` have no reader.** No model or script
   uses them.
 
@@ -173,6 +189,13 @@ one, move it to the "Solved" section with the commit hash.
   alpha that remains is not significant in any window. This also answers
   "Is the momentum ranking of D22 only a factor tilt?": it is mostly a
   factor tilt plus market beta, and the residual is too noisy to call.
+
+- **The Monte Carlo search is not exact.** Solved by D29. `quant/exact.py`
+  solves the Max Sharpe problem exactly, with bounds. On the live
+  selection with no bounds it gives 4.37 against 4.26 for the random
+  search. Out of sample, the exact weights do worse (mean Sharpe ratio
+  0.70 with no bounds, 0.76 with 2% to 25%, against 0.78). The default
+  stays the Monte Carlo search.
 
 - **Does the rank order of the candidates do any work?** Solved by D23
   (`612afe2`). Yes for the return, no for the Sharpe ratio. See the open

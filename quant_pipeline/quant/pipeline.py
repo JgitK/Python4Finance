@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 import pandas as pd
 
-from quant import capm, optimize, select_portfolio
+from quant import capm, exact, select_portfolio
 
 
 @dataclass
@@ -38,6 +38,17 @@ class PortfolioParams:
     # variable rank_metric holds the same choice for the screen, so a
     # change here needs the same change there. See decision D22.
     rank_metric: str = "cum_return"
+    # The weight optimizer (D29). monte_carlo is the random search, and
+    # exact solves the objective with the bounds on each weight. The
+    # bounds and the pool apply only to the exact optimizer. The pool
+    # mode lets the optimizer pick the count of stocks from pool_size
+    # names. See `quant.exact`.
+    optimizer: str = "monte_carlo"
+    objective: str = "max_sharpe"
+    min_weight: float = 0.02
+    max_weight: float = 0.25
+    size_mode: str = "fixed"
+    pool_size: int = 25
 
 
 # The points of the capital allocation line in the live output (D25).
@@ -152,17 +163,16 @@ def build_max_sharpe_portfolio(returns: pd.DataFrame,
     ]
     corr = returns.corr()
     selected = select_portfolio.greedy_low_correlation(
-        candidates, corr, params.target_size, params.max_per_sector,
-        params.max_avg_correlation,
+        candidates, corr, exact.selection_size(params),
+        params.max_per_sector, params.max_avg_correlation,
     )
     if not selected:
         return {"weights": {}, "selected": []}
 
-    result = optimize.optimize_max_sharpe(
-        returns[selected], params.n_portfolios, params.risk_free,
-        params.trading_days, params.seed,
-    )
-    result["selected"] = selected
+    # The optimizer of the settings (D29). In the pool mode it keeps only
+    # a part of the selection.
+    result = exact.optimize_weights(returns[selected], params)
+    result["selected"] = [t for t in selected if t in result["weights"]]
     return result
 
 

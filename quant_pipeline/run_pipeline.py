@@ -26,8 +26,9 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from quant import (allocate, backtest, factors, holding, null_benchmark,
-                   pipeline, results_log, universe, warehouse)
+from quant import (allocate, backtest, exact, factors, holding,
+                   null_benchmark, pipeline, results_log, universe,
+                   warehouse)
 
 HERE = Path(__file__).resolve().parent
 DBT_DIR = HERE / "dbt"
@@ -286,6 +287,35 @@ def make_parser() -> argparse.ArgumentParser:
                              "for example 90,120,150,180. Each window is "
                              "measured at each period. The default is "
                              f"{HOLDING_PERIOD} only.")
+    # The weight optimizer and the portfolio size. See decision D29.
+    parser.add_argument("--optimizer", default=default.optimizer,
+                        choices=list(exact.OPTIMIZERS),
+                        help="monte_carlo tries random weightings. exact "
+                             "solves the objective with the weight bounds. "
+                             f"The default is {default.optimizer}.")
+    parser.add_argument("--objective", default=default.objective,
+                        choices=list(exact.OBJECTIVES),
+                        help="The objective of the exact optimizer. The "
+                             f"default is {default.objective}.")
+    parser.add_argument("--min-weight", type=float,
+                        default=default.min_weight,
+                        help="The smallest weight of a stock in the exact "
+                             f"optimizer. The default is "
+                             f"{default.min_weight}.")
+    parser.add_argument("--max-weight", type=float,
+                        default=default.max_weight,
+                        help="The largest weight of a stock in the exact "
+                             f"optimizer. The default is "
+                             f"{default.max_weight}.")
+    parser.add_argument("--size-mode", default=default.size_mode,
+                        choices=list(exact.SIZE_MODES),
+                        help="fixed holds --target-size stocks. pool lets "
+                             "the exact optimizer pick the count from "
+                             "--pool-size stocks. The default is "
+                             f"{default.size_mode}.")
+    parser.add_argument("--pool-size", type=int, default=default.pool_size,
+                        help="The count of stocks in the pool of the pool "
+                             f"mode. The default is {default.pool_size}.")
     return parser
 
 
@@ -294,7 +324,13 @@ def params_from_args(args: argparse.Namespace) -> pipeline.PortfolioParams:
     return pipeline.PortfolioParams(n_portfolios=args.n_portfolios,
                                     target_size=args.target_size,
                                     max_per_sector=args.max_per_sector,
-                                    rank_metric=args.rank_metric)
+                                    rank_metric=args.rank_metric,
+                                    optimizer=args.optimizer,
+                                    objective=args.objective,
+                                    min_weight=args.min_weight,
+                                    max_weight=args.max_weight,
+                                    size_mode=args.size_mode,
+                                    pool_size=args.pool_size)
 
 
 def caps_label(args: argparse.Namespace) -> str:
@@ -382,6 +418,9 @@ def main() -> None:
           f"Sharpe {result['sharpe']:.2f}, "
           f"return {result['annual_return']:.1%}, "
           f"volatility {result['annual_volatility']:.1%}.")
+    if "pool" in result:
+        print(f"        the optimizer kept {len(selected)} of a pool of "
+              f"{len(result['pool'])} stocks in {result['rounds']} rounds.")
     print("        sector mix: "
           + ", ".join(f"{sector} {count}" for sector, count in mix.items()))
 
@@ -481,6 +520,10 @@ def main() -> None:
               f"average. Alpha: mean {summary['mean_alpha']:+.2%}, median "
               f"{summary['median_alpha']:+.2%}, positive in "
               f"{summary['win_alpha']:.1%} of the windows.")
+        print("         stocks held: " + ", ".join(
+            f"{size} in {count}"
+            for size, count in exact.count_distribution(many_windows).items())
+            + " windows.")
         # The two-factor regression of each window (D30).
         for name in ("french", "in_house"):
             if momentum[name] is None:
@@ -553,7 +596,9 @@ def main() -> None:
         row = results_log.format_row(
             run_date=dt.date.today().isoformat(),
             revision=results_log.git_revision(HERE), universe=universe_name,
-            caps=caps_label(args), rank_metric=args.rank_metric,
+            caps=caps_label(args),
+            rank_metric=" ".join(filter(None, [
+                args.rank_metric, exact.optimizer_label(params)])),
             n_candidates=len(candidates), live_sharpe=result["sharpe"],
             backtest=backtest_df, summary=summary,
             checkpoints=None if checkpoints is None
