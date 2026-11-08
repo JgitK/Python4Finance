@@ -24,7 +24,7 @@ import pandas as pd
 import yaml
 
 import run_pipeline
-from quant import backtest, pipeline, universe, warehouse
+from quant import backtest, factors, pipeline, universe, warehouse
 
 # Read the screen settings from the dbt project, so the two sides agree.
 with open(warehouse.DEFAULT_WAREHOUSE.parent / "dbt_project.yml") as _handle:
@@ -418,6 +418,74 @@ def verify_no_look_ahead(con) -> None:
           f"{len(base)} weights identical")
 
 
+def pandas_umd_legs(returns: pd.DataFrame, members: set[str],
+                    formation: pd.Timestamp, lookback: int, skip: int,
+                    quantile: float) -> tuple[set[str], set[str]]:
+    """Form the UMD legs of one date a second way, with log returns.
+
+    The signal is the sum of log(1 + r) over the formation window. The
+    order of the sum is the same as the order of the compound return.
+    """
+    position = returns.index.get_loc(formation)
+    window = returns.iloc[position - lookback + 1:position - skip + 1]
+    window = window[[t for t in window.columns if t in members]]
+    window = window.loc[:, window.notna().all()]
+    signal = np.log1p(window).sum().sort_values(ascending=False)
+    count = int(math.floor(len(signal) * quantile + 1e-9))
+    return set(signal.index[:count]), set(signal.index[-count:])
+
+
+def verify_momentum_factor(con) -> None:
+    """Check the momentum factor of D30.
+
+    1. SPY on the French market factor and the French UMD must give a beta
+       near 1, a UMD loading near 0 and an alpha near 0.
+    2. A second calculation of the in-house legs must give the same legs.
+    3. Absurd returns after a formation date must not change the legs of
+       that date or the factor up to that date.
+    """
+    returns = warehouse.read_returns_matrix(con)
+    coverage = warehouse.read_universe_coverage(con)
+    stocks = returns.drop(columns=[universe.BENCHMARK])
+
+    french = factors.load_french_factors()
+    if french is None:
+        print("      The French files are not in data/french. "
+              "Skip the SPY check.")
+    else:
+        spy = factors.spy_sanity_check(returns[universe.BENCHMARK], french)
+        check("SPY on the French factors gives beta 1, UMD 0, alpha 0",
+              spy["passed"],
+              f"beta {spy['beta']:.3f}, UMD {spy['umd_loading']:+.3f}, "
+              f"alpha {spy['alpha']:+.2%}, {spy['n_days']} days")
+
+    legs = factors.umd_legs(stocks, coverage)
+    worst = 0
+    for leg in legs:
+        members = factors._members_on(coverage, leg["formation_date"],
+                                      stocks.columns)
+        long, short = pandas_umd_legs(stocks, set(members),
+                                      leg["formation_date"], 252, 21, 0.3)
+        worst = max(worst, len(long ^ set(leg["long"])),
+                    len(short ^ set(leg["short"])))
+    check("UMD legs match a log-return calculation", worst == 0,
+          f"{len(legs)} formation dates, {worst} different stocks")
+
+    cut = legs[len(legs) // 2]["formation_date"]
+    base_umd = factors.build_umd(stocks, coverage)
+    tampered = stocks.copy()
+    tampered.loc[tampered.index > cut, :] = 5.0
+    tamper_legs = factors.umd_legs(tampered, coverage)
+    tamper_umd = factors.build_umd(tampered, coverage)
+    same_legs = ([leg for leg in legs if leg["formation_date"] <= cut]
+                 == [leg for leg in tamper_legs
+                     if leg["formation_date"] <= cut])
+    same_umd = tamper_umd[tamper_umd.index <= cut].equals(
+        base_umd[base_umd.index <= cut])
+    check("future data does not change the UMD factor", same_legs and same_umd,
+          f"cut at {cut.date()}")
+
+
 def backtest_holding() -> int:
     """Return the holding period of the backtest."""
     return run_pipeline.HOLDING_PERIOD
@@ -447,6 +515,8 @@ def main() -> int:
     print("\n== Stats checks ==")
     verify_portfolio_stats(con)
     verify_no_look_ahead(con)
+    print("\n== Momentum factor (D30) ==")
+    verify_momentum_factor(con)
     con.close()
 
     print("\n== Summary ==")
