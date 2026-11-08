@@ -103,6 +103,109 @@ def min_variance_weights(cov: np.ndarray, min_weight: float,
                   jac=lambda w: 2.0 * scaled @ w)
 
 
+def _annual_inputs(returns: pd.DataFrame, risk_free: float,
+                   trading_days: int) -> tuple[np.ndarray, np.ndarray]:
+    """Give the annual excess return and the annual covariance.
+
+    The formulas are those of `quant.optimize.portfolio_performance`.
+    """
+    excess = returns.mean().to_numpy() * trading_days - risk_free
+    cov = returns.cov().to_numpy() * trading_days
+    return excess, cov
+
+
+def _sharpe_of(w: np.ndarray, excess: np.ndarray, cov: np.ndarray) -> float:
+    """Give the Sharpe ratio of the weights. Give -inf for no risk."""
+    variance = float(w @ cov @ w)
+    if variance <= 0.0:
+        return -math.inf
+    return float(w @ excess) / math.sqrt(variance)
+
+
+def _tangency_by_reformulation(excess: np.ndarray, cov: np.ndarray,
+                               min_weight: float,
+                               max_weight: float) -> np.ndarray | None:
+    """Solve the convex form of the Max Sharpe problem.
+
+    Cornuejols and Tutuncu put y = kappa * w, with kappa > 0, and they fix
+    the excess return of y at 1. The problem then becomes: minimize
+    y' cov y, subject to excess' y = 1, y >= 0, and
+    min_weight * kappa <= y <= max_weight * kappa, with kappa = sum(y).
+    The weights are y / kappa.
+
+    This form needs a feasible portfolio with a positive excess return.
+    Return None when no such portfolio exists.
+    """
+    n = len(excess)
+    start_w = np.full(n, 1.0 / n)
+    best_return = float(start_w @ excess)
+    # A start point with a positive excess return. Move the money to the
+    # asset with the highest excess return, as far as the bounds allow.
+    order = np.argsort(-excess)
+    greedy = np.full(n, min_weight)
+    left = 1.0 - greedy.sum()
+    for i in order:
+        add = min(max_weight - min_weight, left)
+        greedy[i] += add
+        left -= add
+    if float(greedy @ excess) > best_return:
+        start_w, best_return = greedy, float(greedy @ excess)
+    if best_return <= 0.0:
+        return None
+
+    constraints = [
+        {"type": "eq", "fun": lambda y: y @ excess - 1.0,
+         "jac": lambda y: excess},
+        {"type": "ineq", "fun": lambda y: y - min_weight * y.sum(),
+         "jac": lambda y: np.eye(n) - min_weight},
+        {"type": "ineq", "fun": lambda y: max_weight * y.sum() - y,
+         "jac": lambda y: max_weight - np.eye(n)},
+    ]
+    result = minimize(
+        lambda y: y @ cov @ y, start_w / best_return,
+        jac=lambda y: 2.0 * cov @ y, method="SLSQP",
+        bounds=[(0.0, None)] * n, constraints=constraints,
+        options={"ftol": _FTOL, "maxiter": 1000},
+    )
+    y = np.clip(result.x, 0.0, None)
+    if y.sum() <= 0.0:
+        return None
+    return _clean(y / y.sum(), min_weight, max_weight)
+
+
+def max_sharpe_weights(excess: np.ndarray, cov: np.ndarray,
+                       min_weight: float, max_weight: float) -> np.ndarray:
+    """Find the weights with the highest Sharpe ratio inside the bounds.
+
+    `excess` is the annual return minus the risk-free rate, and `cov` is
+    the annual covariance. The convex reformulation gives the answer when
+    a portfolio with a positive excess return exists. A direct SLSQP
+    search on the ratio then starts from that answer, from equal weights
+    and from the minimum-variance weights. The function keeps the best
+    result. When every portfolio loses to cash, only the direct search
+    can give the answer.
+    """
+    excess = np.asarray(excess, dtype=float)
+    cov = np.asarray(cov, dtype=float)
+    n = len(excess)
+    check_bounds(n, min_weight, max_weight)
+    starts = [np.full(n, 1.0 / n), min_variance_weights(cov, min_weight,
+                                                        max_weight)]
+    tangency = _tangency_by_reformulation(excess, cov, min_weight,
+                                          max_weight)
+    if tangency is not None:
+        starts.insert(0, tangency)
+
+    def negative_sharpe(w: np.ndarray) -> float:
+        return -float(w @ excess) / math.sqrt(max(float(w @ cov @ w), 1e-300))
+
+    candidates = list(starts)
+    for start in starts:
+        candidates.append(_slsqp(negative_sharpe, start, min_weight,
+                                 max_weight))
+    return max(candidates, key=lambda w: _sharpe_of(w, excess, cov))
+
+
 def solve(returns: pd.DataFrame, objective: str, min_weight: float,
           max_weight: float, risk_free: float = 0.045,
           trading_days: int = 252) -> dict[str, Any]:
@@ -120,6 +223,10 @@ def solve(returns: pd.DataFrame, objective: str, min_weight: float,
     cov = returns.cov().to_numpy()
     if objective == "min_variance":
         weights = min_variance_weights(cov, min_weight, max_weight)
+    elif objective == "max_sharpe":
+        excess, annual_cov = _annual_inputs(returns, risk_free, trading_days)
+        weights = max_sharpe_weights(excess, annual_cov, min_weight,
+                                     max_weight)
     else:
         raise NotImplementedError(objective)
     return _result(returns, weights, objective, risk_free, trading_days)
