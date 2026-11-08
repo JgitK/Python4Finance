@@ -33,6 +33,8 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
+from quant import backtest, capm
+
 # The regression has 3 coefficients. It needs at least 2 more days to
 # estimate the variance of the residual with some freedom.
 MIN_DAYS = 5
@@ -310,3 +312,115 @@ def download_french(folder: Path = FRENCH_DIR,
             path.write_bytes(fetch(FRENCH_URL + name))
         paths.append(path)
     return paths
+
+
+
+def portfolio_two_factor(returns: pd.DataFrame, weights: dict[str, float],
+                         benchmark: str, umd: pd.Series,
+                         risk_free: float = 0.045,
+                         trading_days: int = 252) -> dict[str, Any]:
+    """Regress a portfolio with fixed weights on the market and on UMD.
+
+    Return the measures of `regress_two_factor`, and `capm_alpha`: the
+    one-factor alpha of `quant.capm` on the same days. The UMD series can
+    end before the returns. The two alphas must use the same days, or the
+    comparison mixes two periods.
+    """
+    daily = backtest.portfolio_daily_returns(returns, weights)
+    result = regress_two_factor(daily, returns[benchmark], umd, risk_free,
+                                trading_days)
+    common = pd.concat([daily, returns[benchmark], umd], axis=1,
+                       join="inner").dropna()
+    one = capm.regress_on_market(common.iloc[:, 0], common.iloc[:, 1],
+                                 risk_free, trading_days)
+    result["capm_alpha"] = one["alpha"]
+    result["capm_beta"] = one["beta"]
+    return result
+
+
+def window_two_factor(returns: pd.DataFrame, window: dict[str, Any],
+                      holding_period: int, benchmark: str, umd: pd.Series,
+                      risk_free: float = 0.045,
+                      trading_days: int = 252) -> dict[str, Any]:
+    """Regress one walk-forward window on the market and on UMD.
+
+    The window is a result of `quant.backtest.backtest_window`. The
+    function takes the same holding days as the backtest: the
+    `holding_period` days after the selection date. It holds the weights
+    of the window.
+    """
+    _, test = backtest.split_by_date(returns, window["selection_date"])
+    held = backtest.holding_window(test, holding_period)
+    result = portfolio_two_factor(held, window["weights"], benchmark, umd,
+                                  risk_free, trading_days)
+    return {"selection_date": pd.Timestamp(window["selection_date"]),
+            **result}
+
+
+def factor_table(returns: pd.DataFrame, windows: list[dict[str, Any]],
+                 holding_period: int, benchmark: str, umd: pd.Series,
+                 risk_free: float = 0.045,
+                 trading_days: int = 252) -> pd.DataFrame:
+    """Give one row of two-factor measures for each scored window.
+
+    A window that `quant.backtest.window_is_scored` rejects has no row.
+    """
+    rows = [window_two_factor(returns, window, holding_period, benchmark,
+                              umd, risk_free, trading_days)
+            for window in windows if backtest.window_is_scored(window)]
+    return pd.DataFrame(rows)
+
+
+def summarize_factor_table(table: pd.DataFrame) -> dict[str, Any]:
+    """Summarize the two-factor measures of many windows.
+
+    Return the count of the windows, the median and the mean momentum
+    loading, the share of the windows with a significant positive loading
+    (t at or above 1.96), the share with a significant loading of either
+    sign, the median and the mean of the one-factor and the two-factor
+    alpha, the share of the windows with a positive two-factor alpha, and
+    the share of the one-factor alpha that the momentum explains:
+    1 - two-factor alpha / one-factor alpha, for the mean and the median.
+
+    The windows overlap. A share is a measure, not a test of significance.
+    """
+    nothing = float("nan")
+    summary: dict[str, Any] = {
+        "n_windows": 0, "median_umd_loading": nothing,
+        "mean_umd_loading": nothing, "share_umd_positive_significant": nothing,
+        "share_umd_significant": nothing, "median_capm_alpha": nothing,
+        "mean_capm_alpha": nothing, "median_alpha": nothing,
+        "mean_alpha": nothing, "share_alpha_positive": nothing,
+        "explained_mean": nothing, "explained_median": nothing,
+    }
+    if table is None or table.empty:
+        return summary
+    rows = table.dropna(subset=["umd_loading", "umd_t", "alpha",
+                                "capm_alpha"])
+    summary["n_windows"] = int(len(rows))
+    if rows.empty:
+        return summary
+    loading = rows["umd_loading"].to_numpy(dtype=float)
+    t_stat = rows["umd_t"].to_numpy(dtype=float)
+    alpha = rows["alpha"].to_numpy(dtype=float)
+    one = rows["capm_alpha"].to_numpy(dtype=float)
+    summary.update({
+        "median_umd_loading": float(np.median(loading)),
+        "mean_umd_loading": float(loading.mean()),
+        "share_umd_positive_significant": float((t_stat >= T_SIGNIFICANT)
+                                                .mean()),
+        "share_umd_significant": float((np.abs(t_stat) >= T_SIGNIFICANT)
+                                       .mean()),
+        "median_capm_alpha": float(np.median(one)),
+        "mean_capm_alpha": float(one.mean()),
+        "median_alpha": float(np.median(alpha)),
+        "mean_alpha": float(alpha.mean()),
+        "share_alpha_positive": float((alpha > 0).mean()),
+    })
+    if summary["mean_capm_alpha"] != 0:
+        summary["explained_mean"] = (1.0 - summary["mean_alpha"]
+                                     / summary["mean_capm_alpha"])
+    if summary["median_capm_alpha"] != 0:
+        summary["explained_median"] = (1.0 - summary["median_alpha"]
+                                       / summary["median_capm_alpha"])
+    return summary

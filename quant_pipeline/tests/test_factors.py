@@ -380,3 +380,108 @@ def test_download_french_keeps_a_cached_file(tmp_path):
     assert len(calls) == 2
     for name in factors.FRENCH_FILES.values():
         assert (tmp_path / name).read_bytes() == b"new"
+
+
+# --- the regression of each backtest window -------------------------------
+
+def _stock_panel(days: int = 400) -> tuple[pd.DataFrame, pd.Series]:
+    """Give two stocks with a known loading, SPY, and the UMD series.
+
+    Each stock has a beta of 0.3, a UMD loading of 0.8 and a daily alpha
+    of 0.0002. So the portfolio has the same values for each weighting.
+    """
+    market, umd = _two_factors(days=days, seed=7)
+    x = _portfolio(market, umd, beta=0.3, loading=0.8, alpha_daily=0.0002)
+    y = _portfolio(market, umd, beta=0.3, loading=0.8, alpha_daily=0.0002)
+    return pd.DataFrame({"X": x, "Y": y, "SPY": market}), umd
+
+
+def _window(date, weights) -> dict:
+    return {"selection_date": pd.Timestamp(date), "weights": weights,
+            "portfolio": {"total_return": 0.1},
+            "benchmark": {"total_return": 0.05}}
+
+
+def test_portfolio_two_factor_gives_the_loading_and_both_alphas():
+    returns, umd = _stock_panel()
+    result = factors.portfolio_two_factor(returns, {"X": 0.4, "Y": 0.6},
+                                          "SPY", umd, RF, DAYS)
+    assert result["umd_loading"] == pytest.approx(0.8, abs=1e-10)
+    assert result["beta"] == pytest.approx(0.3, abs=1e-10)
+    assert result["alpha"] == pytest.approx(0.0002 * DAYS, abs=1e-10)
+    # The one-factor alpha uses the same days. Here it also holds the
+    # momentum return that the market does not explain.
+    one = capm.regress_on_market(0.4 * returns["X"] + 0.6 * returns["Y"],
+                                 returns["SPY"], RF, DAYS)
+    assert result["capm_alpha"] == pytest.approx(one["alpha"], abs=1e-12)
+
+
+def test_portfolio_two_factor_gives_the_capm_alpha_on_the_umd_days_only():
+    # The French file ends before the price data. The one-factor alpha
+    # must use the same days as the two-factor alpha, or the comparison
+    # mixes two periods.
+    returns, umd = _stock_panel()
+    short = umd.iloc[:250]
+    result = factors.portfolio_two_factor(returns, {"X": 1.0}, "SPY", short,
+                                          RF, DAYS)
+    one = capm.regress_on_market(returns["X"].iloc[:250],
+                                 returns["SPY"].iloc[:250], RF, DAYS)
+    assert result["n_days"] == 250
+    assert result["capm_alpha"] == pytest.approx(one["alpha"], abs=1e-12)
+
+
+def test_window_two_factor_uses_the_holding_window_after_the_date():
+    returns, umd = _stock_panel()
+    date = returns.index[99]
+    # Spoil every day up to the selection date. The holding window must
+    # not read those days.
+    spoiled = returns.copy()
+    spoiled.iloc[:100] = 0.5
+    row = factors.window_two_factor(spoiled, _window(date, {"X": 1.0}), 120,
+                                    "SPY", umd, RF, DAYS)
+    assert row["selection_date"] == date
+    assert row["n_days"] == 120
+    assert row["umd_loading"] == pytest.approx(0.8, abs=1e-10)
+
+
+def test_factor_table_skips_a_window_with_no_stock():
+    returns, umd = _stock_panel()
+    windows = [_window(returns.index[50], {"X": 1.0}),
+               _window(returns.index[60], {}),
+               _window(returns.index[70], {"Y": 1.0})]
+    table = factors.factor_table(returns, windows, 120, "SPY", umd, RF, DAYS)
+    assert list(table["selection_date"]) == [returns.index[50],
+                                             returns.index[70]]
+
+
+def test_summarize_factor_table_by_hand():
+    table = pd.DataFrame({
+        "umd_loading": [0.2, 0.4, 0.9, -0.1],
+        "umd_t": [1.0, 2.5, 4.0, -2.2],
+        "alpha": [0.02, 0.04, -0.02, 0.00],
+        "capm_alpha": [0.06, 0.10, 0.04, 0.00],
+    })
+    summary = factors.summarize_factor_table(table)
+    assert summary["n_windows"] == 4
+    assert summary["median_umd_loading"] == pytest.approx(0.3)
+    assert summary["mean_umd_loading"] == pytest.approx(0.35)
+    # Two windows have a significant positive loading (t >= 1.96). Three
+    # have a significant loading of either sign.
+    assert summary["share_umd_positive_significant"] == pytest.approx(0.5)
+    assert summary["share_umd_significant"] == pytest.approx(0.75)
+    assert summary["median_capm_alpha"] == pytest.approx(0.05)
+    assert summary["median_alpha"] == pytest.approx(0.01)
+    assert summary["mean_capm_alpha"] == pytest.approx(0.05)
+    assert summary["mean_alpha"] == pytest.approx(0.01)
+    # The momentum explains (0.05 - 0.01) / 0.05 = 80% of the mean alpha.
+    assert summary["explained_mean"] == pytest.approx(0.8)
+    assert summary["explained_median"] == pytest.approx(0.8)
+    # Two alphas are above 0 (0.02 and 0.04).
+    assert summary["share_alpha_positive"] == pytest.approx(0.5)
+
+
+def test_summarize_factor_table_with_no_rows_gives_nan():
+    summary = factors.summarize_factor_table(pd.DataFrame(
+        columns=["umd_loading", "umd_t", "alpha", "capm_alpha"]))
+    assert summary["n_windows"] == 0
+    assert np.isnan(summary["median_umd_loading"])
