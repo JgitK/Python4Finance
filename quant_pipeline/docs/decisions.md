@@ -22,6 +22,143 @@ Use this template for a new entry:
 
 ---
 
+## D30. Separate the momentum premium from the alpha
+
+- **Date:** 2026-11-07
+- **Role:** Protective measure, outside the core loop. It changes no
+  weight and no selection. It adds measures to the live run, to each
+  backtest window and to the many-window summary.
+- **Question:** The screen ranks the stocks on the trailing 252-day
+  compound return (D22). That is the classic momentum signal. D25 found a
+  median alpha of +8.60% a year against SPY alone. Is that alpha skill, or
+  is it the known momentum premium (UMD, "winners minus losers")?
+- **Options:**
+  1. The Ken French Data Library: the daily momentum factor and the daily
+     Fama-French three factors. It uses all NYSE, AMEX and NASDAQ stocks
+     of CRSP, with the dead stocks. It is independent of the project.
+  2. An in-house UMD from the prices of the project. It covers every day
+     of the price data. It has the survivorship bias of the project, and
+     it comes from the same universe as the portfolio.
+  3. Both. Use the French factor as the primary source and the in-house
+     factor as a second view. Compare the two series.
+- **Decision:** Option 3. The French site answered from this machine, so
+  the French files are in `data/french/` and git holds them. The French
+  factor is the primary source, because it has no survivorship bias and
+  it is not built from the universe of the portfolio. The French files
+  end on 2026-09-30 (the CRSP release 202609). The price data ends on
+  2026-10-30. So a window that ends after 2026-09-30 uses fewer days with
+  the French factor (158 days at minimum). The in-house factor covers
+  every day.
+- **The design:** `quant/factors.py` holds the functions.
+  - `regress_two_factor` regresses the excess return of a series on the
+    market excess return and on UMD with ordinary least squares. The
+    market excess return is SPY minus the fixed daily rate of 4.5%, the
+    same as `quant/capm.py`. UMD is a long-short return, so the function
+    does not subtract the rate from it. The function gives the annual
+    alpha (the daily intercept times 252), the beta, the UMD loading, the
+    OLS t statistic of each coefficient, the R squared and the count of
+    days.
+  - `portfolio_two_factor` also gives the one-factor alpha of
+    `capm.regress_on_market` on the same days. The two alphas must use
+    the same days, or the comparison mixes two periods.
+  - `umd_legs` and `build_umd` hold the in-house rule. On the last trading
+    day of each month, an eligible stock is an index member on that day
+    with a return on each day of the formation window. The signal is the
+    compound return from the close 252 rows back to the close 21 rows
+    back (12 months without the last month). The long leg holds the top
+    30% and the short leg holds the bottom 30%. The factor holds the legs
+    from the next trading day to the next formation date, with equal
+    weights. It reads no return after the formation date.
+  - `read_french_csv`, `load_french_factors` and `download_french` read
+    and cache the French files.
+  - `spy_sanity_check` regresses SPY minus the French risk-free rate on
+    the French market factor and the French UMD. It passes when the beta
+    is within 0.05 of 1, the UMD loading is within 0.05 of 0, and the
+    alpha is within 2% of 0.
+  - `run_pipeline.py` prints Step 3c (the source, the correlation, the
+    SPY check and the live view) and two summary blocks in Step 5b. The
+    backtest table keeps its columns and adds `umd_loading`, `umd_t` and
+    `two_factor_alpha`. The run writes `output/momentum_windows_french.csv`
+    and `output/momentum_windows_in_house.csv`.
+  - `verify_indicators.py` has three new checks: the SPY check, a second
+    calculation of the legs with log returns, and a tamper check of the
+    in-house factor.
+- **Tests and mutation checks:** 43 new tests in `tests/test_factors.py`.
+  The regression tests use a synthetic portfolio with known loadings
+  (for example 0.3 times the market plus 0.8 times UMD plus a known
+  alpha). The factor tests use a panel of 6 stocks and 12 days, and a
+  person can check its legs and its daily value (1.3%) by hand. 28
+  mutations ran. Each mutation made at least one test fail, after two
+  tests became stronger:
+  - A window that read 2 days past the skip passed the first tamper test.
+    The new test `test_umd_legs_use_no_return_after_the_formation_date`
+    reverses the winners and the losers after each cut day, in both
+    directions.
+  - A summary line that printed the median share as the mean share passed
+    the first line test, because the two values were equal. The test now
+    uses values that differ.
+  - The other mutations: subtract the rate from UMD, annualize with the
+    square root, use the wrong degrees of freedom, swap the beta and the
+    loading, drop the skip, swap the legs, hold from the formation day,
+    use future membership, fill a gap with 0, give the one-factor alpha
+    all the days, regress the train days, count a negative t as positive,
+    invert the explained share, score an empty window, skip the percent
+    conversion, keep -99.99, ignore the cache, remove the UMD condition of
+    the SPY check, use no French rate, use the fixed rate in the SPY
+    check, put the benchmark in a leg, always use the French source, cut
+    no lookback in the live view, and always print PASS.
+- **Evidence:** `sp500`, 10/10/3, `cum_return`, 85 windows with a step of
+  5 days, commit `519b44e`.
+
+  | Measure | French UMD | In-house UMD |
+  |---|---|---|
+  | UMD loading, median / mean | +0.41 / +0.45 | +0.50 / +0.57 |
+  | Windows with a significant positive loading (t at or above 1.96) | 88.2% | 92.9% |
+  | Alpha, market only, same days, median / mean | +9.77% / +9.84% | +8.60% / +9.50% |
+  | Alpha, market and UMD, median / mean | +6.65% / +5.41% | +6.43% / +6.87% |
+  | Share of the alpha that UMD explains, median / mean | 32% / 45% | 25% / 28% |
+  | Windows with a positive two-factor alpha | 61.2% | 61.2% |
+  | Windows with a two-factor alpha with t at or above 1.96 | 0.0% | 1.2% |
+  | Median t of the two-factor alpha | 0.28 | 0.31 |
+  | Mean beta, market only / market and UMD | 1.49 / 1.36 | 1.49 / 1.33 |
+
+  - The two UMD series have a daily correlation of 0.91 on 709 common
+    days. Over those days the French UMD earned 13.2% a year and the
+    in-house UMD earned 6.0% a year, with almost the same volatility
+    (16.4% and 16.6%). So the in-house factor did not show a higher
+    return here. The survivorship bias still pushes it up, but the
+    difference of the universes (all US stocks with value weights against
+    the S&P 500 with equal weights) is larger in this period.
+  - SPY check: beta 0.976, UMD loading +0.011, alpha -0.95% a year on 980
+    days. PASS. The UMD loading has a t of 3.5, because SPY follows the
+    market very closely, but its size is economically zero.
+  - Live, in-sample: the UMD loading is +0.03 (t 0.5) with the French
+    factor and +0.04 (t 0.8) with the in-house factor. The live energy and
+    health-care portfolio does not follow UMD over the last year. This is
+    in-sample, the same as the live alpha of +75%.
+- **What this says:**
+  1. **The portfolio is a momentum portfolio.** The loading is near 0.4
+     to 0.5 and it is significant in almost every window. This is
+     expected from a rank on the trailing return.
+  2. **Momentum explains a part of the alpha, not all of it.** UMD
+     removes 25% to 45% of the one-factor alpha, depending on the source
+     and the statistic. A two-factor alpha of +5% to +7% a year remains.
+  3. **The alpha that remains is not distinguishable from zero.** No
+     window with the French factor has a two-factor alpha with a t of
+     1.96 or more, and the median t is 0.28. The 85 windows overlap and
+     cover approximately two independent holding periods, so the share of
+     positive windows (61.2%) is not a test either.
+  4. **So the data cannot call the residual skill.** The honest reading
+     is: a large part of the excess return is beta (D25), a further part
+     is the momentum premium (D30), and the rest is too noisy to separate
+     from luck with 4 years of prices.
+- **Results:** The row of 2026-11-07 for commit `519b44e` with the note
+  "D30". The selection and the weights did not change, so the other
+  columns equal the D27 row.
+- **Commits:** `ae0047e`, `6878017`, `6b39120`, `9aa96e3`, `26f5ad2`,
+  `769831a`, `f9b4c5d`, `534b0c6`, `95c798d`, `b22c55a`, `0e89c81`,
+  `808369f`, `519b44e`
+
 ## D28. Keep the S&P 500 as the only universe for the product
 
 - **Date:** 2026-11-07

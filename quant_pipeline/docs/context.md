@@ -4,7 +4,7 @@ This file holds the context of the project and nothing else. It has no
 next steps and no plan. Read `handoff.md` beside it for the work that
 comes next.
 
-Last update: 2026-11-07. The docs describe commit `6acf4fa` on the branch
+Last update: 2026-11-07. The docs describe commit `519b44e` (D30) on the branch
 `dbt-duckdb-markowitz-pipeline`.
 
 ## Paste this into the new chat
@@ -154,9 +154,15 @@ two values and it has no default of its own.
 - **A large part of the excess return is beta (D25).** The realized
   beta of the portfolio is 1.41 on average over the 85 windows, so the
   portfolio takes more market risk than SPY. After the beta, the median
-  alpha is +6.17% a year and it is positive in 60.0% of the windows. The
-  regression has only the market factor, so the alpha can still be a
-  momentum premium.
+  alpha is +6.17% a year and it is positive in 60.0% of the windows.
+- **A part of the alpha is the momentum premium (D30).** A regression on
+  the market and on the French UMD factor gives a UMD loading with a
+  median of +0.41, significant in 88.2% of the 85 windows. The median
+  alpha falls from +9.77% to +6.65% and the mean from +9.84% to +5.41%
+  on the same days. No window has a two-factor alpha with a t of 1.96 or
+  more. An in-house UMD from the project prices gives the same picture
+  (correlation 0.91). So the excess return is beta, then momentum, then a
+  residual that the data cannot separate from luck.
 - **Two independent benchmarks agree.** SPY and the random order both say
   the same thing: the selection rule adds return, not risk-adjusted
   return.
@@ -178,7 +184,7 @@ two values and it has no default of its own.
   or no sector, so the survivorship bias that remains stays visible.
 - `run_pipeline.py` adds one row to `docs/results_log.md` with the commit
   hash, the caps and the rank metric.
-- The results log holds 50 rows. The Caps column and the Rank column say
+- The results log holds 51 rows. The Caps column and the Rank column say
   which settings made each row.
 
 ## What is not solved
@@ -209,10 +215,10 @@ These are facts about the state, not a plan.
   little below the true maximum. A 10 times larger search raised the
   in-sample figure from 4.64 to 4.99 and it moved the realized measure by
   almost nothing.
-- **The momentum premium is not separated from the skill.** A ranking on
-  the trailing compound return is the classic momentum signal, so the
-  gain of D22 can be a known factor premium. `quant_pipeline` has no
-  factor regression.
+- **The residual alpha is not decided (D30).** After the market and
+  momentum, an alpha of +5% to +7% a year remains, but it is not
+  significant in any window. The Fama-French SMB and HML factors are in
+  `data/french/` and nobody has used them.
 - **The overlapping windows.** The 85 windows share most of their days,
   and the valid dates cover approximately two independent holding
   periods. A percentile or a share is a measure, not a test of
@@ -285,7 +291,12 @@ question that is wrong when a part is wrong.
   reported a failure for it. Keep the script in step with a new setting.
 - `Nasdaq.csv` in the repository root is from early 2015. Do not use it.
 - The network allows `api.nasdaq.com` and `github.com`. `archive.org`
-  and `nasdaqtrader.com` are blocked.
+  and `nasdaqtrader.com` are blocked. The Ken French site
+  (`mba.tuck.dartmouth.edu`) answered on 2026-11-07 (D30).
+- The French files end one month or more before the price data. The
+  two-factor regression uses only the common days, so a late window has
+  fewer days. Compare a one-factor alpha and a two-factor alpha only on
+  the same days.
 - The API answers HTTP 200 for an error and it puts the error in the
   body. `nasdaq.rows_from_payload` reads the body.
 - A refusal of the API does not go in the cache. A symbol with no trades
@@ -301,7 +312,7 @@ question that is wrong when a part is wrong.
 
 | What | Where |
 |---|---|
-| Why each decision was made | `docs/decisions.md` (D1 to D28) |
+| Why each decision was made | `docs/decisions.md` (D1 to D30) |
 | How the results changed | `docs/results_log.md` (one row for each run) |
 | Problems that are not solved | `docs/open_questions.md` |
 | The work that comes next | `docs/handoff.md` |
@@ -310,6 +321,8 @@ question that is wrong when a part is wrong.
 | The rank metric, in two layers | `dbt/macros/screen.sql` (`rank_column`), `quant/pipeline.py` (`rank_candidates`) |
 | The portfolio selection | `quant/select_portfolio.py`, `quant/optimize.py` |
 | Beta, alpha and the capital allocation line | `quant/capm.py`, `pipeline.live_capm` |
+| The momentum factor and the two-factor regression | `quant/factors.py`, `run_pipeline.momentum_lines` |
+| The Ken French factor files (end 2026-09-30) | `data/french/` |
 | The share plan, whole or fractional | `quant/allocate.py`, `run_pipeline.share_plan` |
 | The random-order null benchmark | `quant/null_benchmark.py` |
 | The rule for a large price move | `quant/large_moves.py`, `classify_large_moves.py` |
@@ -319,9 +332,9 @@ question that is wrong when a part is wrong.
 
 ## The state of the checks
 
-218 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
+261 Python tests pass. `dbt build` for `sp500` gives PASS=89 and 2
 warnings, for `cum_return` and for `sharpe`. `verify_indicators.py`
-passes every check. A fresh sparse clone of the branch reproduces the
+passes every check, with three momentum checks since D30. A fresh sparse clone of the branch reproduces the
 build, the tests and the live run exactly.
 
 The `nasdaq` and `both` universes add a third warning, for a member with
