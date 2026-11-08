@@ -295,3 +295,88 @@ def test_build_umd_with_too_few_stocks_gives_no_factor():
     umd = factors.build_umd(_panel()[["A", "F"]], _members(["A", "F"]),
                             LOOKBACK, SKIP, QUANTILE)
     assert umd.empty
+
+
+# --- the Ken French data --------------------------------------------------
+
+MOM_TEXT = """This file was created by using the 202609 CRSP database.  It
+contains a momentum factor.
+
+Missing data are indicated by -99.99 or -999.
+
+,Mom
+20260928,   1.63
+20260929,  -0.31
+20260930, -99.99
+
+Copyright 2026 Eugene F. Fama and Kenneth R. French
+"""
+
+FF3_TEXT = """This file was created by using the 202609 CRSP database.
+
+,Mkt-RF,SMB,HML,RF
+20260928,    0.50,   -0.01,   -0.50,    0.01
+20260929,   -0.21,   -0.01,   -0.50,    0.01
+
+Copyright 2026 Eugene F. Fama and Kenneth R. French
+"""
+
+
+def test_read_french_csv_reads_percent_as_a_decimal():
+    frame = factors.read_french_csv(MOM_TEXT)
+    assert list(frame.columns) == ["umd"]
+    assert frame.index[0] == pd.Timestamp("2026-09-28")
+    assert frame.loc["2026-09-28", "umd"] == pytest.approx(0.0163)
+    assert frame.loc["2026-09-29", "umd"] == pytest.approx(-0.0031)
+
+
+def test_read_french_csv_gives_nan_for_a_missing_value():
+    frame = factors.read_french_csv(MOM_TEXT)
+    assert np.isnan(frame.loc["2026-09-30", "umd"])
+
+
+def test_read_french_csv_names_the_three_factor_columns():
+    frame = factors.read_french_csv(FF3_TEXT)
+    assert list(frame.columns) == ["mkt_rf", "smb", "hml", "rf"]
+    assert frame.loc["2026-09-28", "mkt_rf"] == pytest.approx(0.005)
+    assert frame.loc["2026-09-29", "rf"] == pytest.approx(0.0001)
+    assert len(frame) == 2
+
+
+def _write_zip(path, name: str, text: str) -> None:
+    import zipfile
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(name, text)
+
+
+def test_load_french_factors_joins_the_two_files(tmp_path):
+    _write_zip(tmp_path / factors.FRENCH_FILES["momentum"],
+               "F-F_Momentum_Factor_daily.csv", MOM_TEXT)
+    _write_zip(tmp_path / factors.FRENCH_FILES["three_factor"],
+               "F-F_Research_Data_Factors_daily.csv", FF3_TEXT)
+    frame = factors.load_french_factors(tmp_path)
+    # Only the dates in both files with a value in each column stay.
+    assert list(frame.index) == [pd.Timestamp("2026-09-28"),
+                                 pd.Timestamp("2026-09-29")]
+    assert {"umd", "mkt_rf", "rf"} <= set(frame.columns)
+
+
+def test_load_french_factors_gives_none_without_the_files(tmp_path):
+    assert factors.load_french_factors(tmp_path) is None
+
+
+def test_download_french_keeps_a_cached_file(tmp_path):
+    calls = []
+
+    def fetch(url: str) -> bytes:
+        calls.append(url)
+        return b"new"
+
+    for name in factors.FRENCH_FILES.values():
+        (tmp_path / name).write_bytes(b"old")
+    factors.download_french(tmp_path, fetch=fetch)
+    assert calls == []
+    factors.download_french(tmp_path, fetch=fetch, refresh=True)
+    assert len(calls) == 2
+    for name in factors.FRENCH_FILES.values():
+        assert (tmp_path / name).read_bytes() == b"new"

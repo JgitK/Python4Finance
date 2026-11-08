@@ -26,7 +26,9 @@ All the functions use simple daily returns, the same as the backtest.
 from __future__ import annotations
 
 import math
-from typing import Any
+import zipfile
+from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -215,3 +217,96 @@ def build_umd(returns: pd.DataFrame, members: pd.DataFrame | None,
     if not pieces:
         return pd.Series(dtype=float, name="umd")
     return pd.concat(pieces).dropna().rename("umd")
+
+
+
+# The Ken French Data Library. The files are free to use with a citation.
+FRENCH_URL = ("https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/"
+              "ftp/")
+FRENCH_FILES = {
+    "momentum": "F-F_Momentum_Factor_daily_CSV.zip",
+    "three_factor": "F-F_Research_Data_Factors_daily_CSV.zip",
+}
+# The project keeps a copy of the files here. Git holds the copy.
+FRENCH_DIR = Path(__file__).resolve().parents[1] / "data" / "french"
+# The French files mark a missing value with one of these numbers.
+_FRENCH_MISSING = (-99.99, -999.0)
+_FRENCH_NAMES = {"Mom": "umd", "Mkt-RF": "mkt_rf", "SMB": "smb",
+                 "HML": "hml", "RF": "rf"}
+
+
+def read_french_csv(text: str) -> pd.DataFrame:
+    """Read the first daily table of a Ken French CSV file.
+
+    The file has lines of text, then a header line that starts with a
+    comma, then one line for each day (YYYYMMDD, values in percent), then
+    a blank line. The function gives the values as decimals, with a date
+    index. It names the columns umd, mkt_rf, smb, hml and rf. A value of
+    -99.99 or -999 is missing, so it becomes NaN.
+    """
+    lines = text.splitlines()
+    start = next(number for number, line in enumerate(lines)
+                 if line.startswith(","))
+    names = [_FRENCH_NAMES.get(name.strip(), name.strip().lower())
+             for name in lines[start].split(",")[1:]]
+    dates, rows = [], []
+    for line in lines[start + 1:]:
+        cells = [cell.strip() for cell in line.split(",")]
+        if len(cells[0]) != 8 or not cells[0].isdigit():
+            break
+        dates.append(pd.Timestamp(cells[0]))
+        rows.append([float(cell) for cell in cells[1:]])
+    frame = pd.DataFrame(rows, index=pd.DatetimeIndex(dates), columns=names)
+    frame = frame.mask(frame.isin(_FRENCH_MISSING))
+    return frame / 100.0
+
+
+def _read_zip(path: Path) -> pd.DataFrame:
+    with zipfile.ZipFile(path) as archive:
+        name = next(n for n in archive.namelist()
+                    if n.lower().endswith(".csv"))
+        text = archive.read(name).decode("latin-1")
+    return read_french_csv(text)
+
+
+def load_french_factors(folder: Path = FRENCH_DIR) -> pd.DataFrame | None:
+    """Read the French momentum factor and the three factors from a folder.
+
+    Return one frame with the columns umd, mkt_rf, smb, hml and rf, on the
+    dates that hold every value. Return None when a file is not in the
+    folder.
+    """
+    folder = Path(folder)
+    paths = [folder / FRENCH_FILES[key]
+             for key in ("momentum", "three_factor")]
+    if not all(path.exists() for path in paths):
+        return None
+    frames = [_read_zip(path) for path in paths]
+    return pd.concat(frames, axis=1, join="inner").dropna()
+
+
+def _fetch(url: str) -> bytes:
+    import requests
+    response = requests.get(url, timeout=60)
+    response.raise_for_status()
+    return response.content
+
+
+def download_french(folder: Path = FRENCH_DIR,
+                    fetch: Callable[[str], bytes] | None = None,
+                    refresh: bool = False) -> list[Path]:
+    """Download the two French files into a folder.
+
+    Keep a file that is already in the folder, unless `refresh` is True.
+    Return the paths of the files.
+    """
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    fetch = fetch or _fetch
+    paths = []
+    for name in FRENCH_FILES.values():
+        path = folder / name
+        if refresh or not path.exists():
+            path.write_bytes(fetch(FRENCH_URL + name))
+        paths.append(path)
+    return paths
