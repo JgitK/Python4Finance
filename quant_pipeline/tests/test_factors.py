@@ -485,3 +485,46 @@ def test_summarize_factor_table_with_no_rows_gives_nan():
         columns=["umd_loading", "umd_t", "alpha", "capm_alpha"]))
     assert summary["n_windows"] == 0
     assert np.isnan(summary["median_umd_loading"])
+
+
+# --- the SPY sanity check -------------------------------------------------
+
+def _french_frame(days: int = 500) -> pd.DataFrame:
+    market, umd = _two_factors(days=days, seed=11)
+    return pd.DataFrame({"umd": umd, "mkt_rf": market - 0.0001,
+                         "rf": 0.0001}, index=market.index)
+
+
+def test_spy_sanity_check_passes_for_the_market_itself():
+    french = _french_frame()
+    spy = french["mkt_rf"] + french["rf"]
+    check = factors.spy_sanity_check(spy, french)
+    assert check["beta"] == pytest.approx(1.0, abs=1e-10)
+    assert check["umd_loading"] == pytest.approx(0.0, abs=1e-10)
+    assert check["alpha"] == pytest.approx(0.0, abs=1e-10)
+    assert check["passed"]
+
+
+def test_spy_sanity_check_fails_for_a_momentum_fund():
+    french = _french_frame()
+    spy = french["mkt_rf"] + french["rf"] + 0.5 * french["umd"]
+    check = factors.spy_sanity_check(spy, french)
+    assert check["umd_loading"] == pytest.approx(0.5, abs=1e-10)
+    assert not check["passed"]
+
+
+def test_spy_sanity_check_fails_for_a_fund_with_alpha():
+    french = _french_frame()
+    spy = french["mkt_rf"] + french["rf"] + 0.10 / DAYS
+    assert not factors.spy_sanity_check(spy, french)["passed"]
+
+
+def test_spy_sanity_check_subtracts_the_french_risk_free_rate():
+    # A fund that holds only cash at the French rate has a beta of 0 and
+    # an alpha of 0. A check that subtracts the fixed rate of 4.5% gives
+    # an alpha of approximately -2% for the same fund.
+    french = _french_frame()
+    check = factors.spy_sanity_check(french["rf"] + 0.0, french)
+    assert check["alpha"] == pytest.approx(0.0, abs=1e-12)
+    assert check["beta"] == pytest.approx(0.0, abs=1e-12)
+    assert not check["passed"]

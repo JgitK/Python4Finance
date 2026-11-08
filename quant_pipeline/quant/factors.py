@@ -424,3 +424,33 @@ def summarize_factor_table(table: pd.DataFrame) -> dict[str, Any]:
         summary["explained_median"] = (1.0 - summary["median_alpha"]
                                        / summary["median_capm_alpha"])
     return summary
+
+
+
+# The limits of the SPY sanity check. SPY holds the 500 largest US stocks
+# and the French market holds all of them, so the beta is near 1 and not
+# exactly 1. SPY also pays a fee of 0.09% a year.
+SPY_BETA_TOLERANCE = 0.05
+SPY_UMD_TOLERANCE = 0.05
+SPY_ALPHA_TOLERANCE = 0.02
+
+
+def spy_sanity_check(spy: pd.Series, french: pd.DataFrame,
+                     trading_days: int = 252) -> dict[str, Any]:
+    """Regress SPY on the French market factor and the French UMD.
+
+    SPY is the market, so the result must give a beta near 1, a momentum
+    loading near 0 and an alpha near 0. The function subtracts the daily
+    French risk-free rate from SPY, because the French market factor uses
+    that rate. Return the measures of `regress_two_factor` and `passed`.
+    """
+    frame = pd.concat([pd.Series(spy, name="spy"),
+                       french[["mkt_rf", "umd", "rf"]]],
+                      axis=1, join="inner").dropna()
+    result = regress_two_factor(frame["spy"] - frame["rf"], frame["mkt_rf"],
+                                frame["umd"], 0.0, trading_days)
+    result["passed"] = bool(
+        abs(result["beta"] - 1.0) <= SPY_BETA_TOLERANCE
+        and abs(result["umd_loading"]) <= SPY_UMD_TOLERANCE
+        and abs(result["alpha"]) <= SPY_ALPHA_TOLERANCE)
+    return result
