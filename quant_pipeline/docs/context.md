@@ -29,8 +29,9 @@ Why Markowitz does not help here:
 - The optimizer puts the most weight on the largest upward errors
   (error maximisation, Michaud 1989). The in-sample Sharpe ratio of 5.32
   against a realized 0.88 shows it. 1/N beats mean-variance out of
-  sample (DeMiguel, Garlappi and Uppal, 2009), and D33 repeats that
-  result.
+  sample (DeMiguel, Garlappi and Uppal, 2009), and D33 gives the same
+  result. The windows overlap, so the gap of D33 is inside the noise.
+  The safe result is that the optimizer is not better.
 - The screen ranks on the past return, and the optimizer uses the same
   return as its forecast. That is a selection bias.
 - In the CAPM the market portfolio is on the efficient frontier, so SPY
@@ -237,7 +238,9 @@ two values and it has no default of its own.
   low beta of option B (0.75) comes from its weights: the same names at
   equal weight have a beta of 0.92. The realized volatility of option B
   is 18.6% against 16.7% for SPY. The in-sample 11.3% is not a result.
-  So the wide pool across the sectors gives the gain.
+  So the wide pool across the sectors gives the gain. The windows
+  overlap, so these gaps are inside the noise. The measurement shows
+  that the optimizer is not better, not that equal weight is better.
 - **Two independent benchmarks agree.** SPY and the random order both say
   the same thing: the selection rule adds return, not risk-adjusted
   return.

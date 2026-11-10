@@ -172,9 +172,12 @@ one, move it to the "Solved" section with the commit hash.
   its sign is not stable. The windows overlap, so these gaps are inside
   the noise of the grid.
 - **Which default for the optimizer and the size (D29)?** The user
-  decides. D33 shows that an equal weight of the same pool matches or
-  beats the exact optimizer on every measure except the beta. The pool of 33 gives the best Sharpe result and gives up
-  about half of the median excess return (+3.67% against +7.05%). The
+  decides. D33 shows that an equal weight of the same pool matches
+  option B on the mean Sharpe ratio and has a higher median excess
+  return. Its beta and its volatility are higher (1.00 against 0.75, and
+  19.6% against 18.6%). The windows overlap, so the gaps are inside the
+  noise. The pool of 33 gives the best Sharpe result and gives up about
+  half of the median excess return (+3.67% against +7.05%). The
   exact solver with 10 stocks does not beat the Monte Carlo search out of
   sample.
 - **Can the pool be larger than 33?** The sector cap applies to the

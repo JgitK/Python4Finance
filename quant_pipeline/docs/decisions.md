@@ -46,7 +46,9 @@ Use this template for a new entry:
     (Michaud, 1989). The in-sample Sharpe ratio is 5.32 and the realized
     one is 0.88. The exact solver does worse than the random search
     (D29). Equal weights on the same names beat the optimizer weights
-    (D33). This agrees with DeMiguel, Garlappi and Uppal (2009).
+    (D33). The windows overlap, so this gap is inside the noise. The safe
+    result is that the optimizer is not better. This agrees with
+    DeMiguel, Garlappi and Uppal (2009).
   - The screen ranks on the past return, and the optimizer uses the same
     past return as the forecast. So the estimates have a selection bias.
   - The user proposed a ranking window from 1 month to 5 years. A
@@ -58,11 +60,11 @@ Use this template for a new entry:
     stability and the walk-forward result of each window.
 - **Results:** No number changed. The validation code of D16 to D33
   becomes the assumption checks and the honest scorecard of the tool.
-- **Commits:** see the git log for this entry.
+- **Commits:** `1b4448c`.
 
 ---
 
-## D33. Equal-weight controls for option B: the pool does the work, not the weights
+## D33. Equal-weight controls for option B: the optimizer is not better than equal weight
 
 - **Date:** 2026-11-08
 - **Role:** Protective measure, outside the core loop. It adds two
@@ -111,8 +113,9 @@ Use this template for a new entry:
   3. `equal_weight` gives unequal weights.
   4. The guard accepts `kept-equal` in the fixed mode.
   5. The log label drops `kept-equal`.
-- **Evidence:** `sp500`, 10/10/3, `cum_return`, commit `0899ed3`, run with `--skip-dbt` on a warehouse that this clone built
-  (PASS=89, WARN=2). The four arms use the same dates and the same
+- **Evidence:** `sp500`, 10/10/3, `cum_return`, commit `0899ed3`. The
+  runs use `--skip-dbt` on a warehouse that this clone built (PASS=89,
+  WARN=2). The four arms use the same dates and the same
   screen. The kept names of EW-kept are the names of B in 100% of the
   windows. "Vol" is the mean realized annual volatility of the windows.
   SPY has a mean Sharpe ratio of 0.80 and a volatility of 16.7%.
@@ -151,15 +154,16 @@ Use this template for a new entry:
   | EW-kept | 33 | +0.21 | 82.4% | +8.69% | +6.74% |
 
 - **What this says:**
-  1. **The wide pool gives the Sharpe result, not the optimizer.** Equal
+  1. **The wide pool gives the Sharpe result, not the optimizer (inside
+     the noise, see point 5).** Equal
      weight on all 33 names gives a mean Sharpe ratio of 0.88 (step 5)
      and 0.90 (step 3). Option B gives 0.88 and 0.87. EW-pool also beats
      SPY on the return and on the Sharpe ratio in more windows, and its
      median excess return is higher (+5.01% against +3.67%). With a pool
      of 20, EW-pool beats B on both grids.
-  2. **The weights of the optimizer remove value.** On the same names,
-     1/k beats the `max_sharpe` weights on the mean Sharpe ratio in all
-     four cells (+0.04 to +0.09) and on the median excess return in all
+  2. **The weights of the optimizer remove value (inside the noise, see
+     point 5).** On the same names, 1/k beats the `max_sharpe` weights on
+     the mean Sharpe ratio in all four cells (+0.05 to +0.09) and on the median excess return in all
      four (+2 to +3 points). B beats EW-kept on the Sharpe ratio in fewer
      than half of the windows. This is the same lesson as D29 point 1: a
      better in-sample optimum gives a worse out-of-sample result.
@@ -177,8 +181,8 @@ Use this template for a new entry:
      weight is better. It shows that the optimizer is not better.
 - **Results:** No default changed. Eight rows in the results log (the
   four controls on step 5 and on step 3).
-- **Commits:** `0899ed3` (the code and the tests), and the next commit
-  (the documents).
+- **Commits:** `0899ed3` (the code and the tests) and `445f607` (the
+  documents).
 
 ## D32. Measure the rank order of option B against a random order
 
@@ -194,7 +198,7 @@ Use this template for a new entry:
   1. Run the null of D23 in the pool mode, with the same screen, the same
      sector cap, the same correlation gate and the same exact optimizer.
   2. Weight the same pool equally. This isolates the optimizer, not the
-     rank order. It stays open.
+     rank order. D33 does this.
 - **Decision:** Option 1.
 - **The code:** `run_random_selection` already respects the pool mode.
   `build_max_sharpe_portfolio` puts the candidates in a random order
@@ -254,8 +258,9 @@ Use this template for a new entry:
      mean Sharpe ratio, and **172 of 200 beat SPY at 0.80**. The null
      median is 0.87, which is almost the method's 0.88. So the gain over
      SPY comes from the steps that the null keeps: the spread of 3 names
-     in each of 11 sectors, the correlation gate, and the exact optimizer
-     that drops names. It does not come from the cum_return rank.
+     in each of 11 sectors and the correlation gate. It does not come from
+     the cum_return rank. D33 shows that the optimizer weights do not add
+     to it.
   2. **With a pool of 20, the rank order hurts the Sharpe ratio.** The
      method sits at the 25th percentile, and the null median (0.81) beats
      SPY while the method (0.75) does not.
@@ -266,15 +271,16 @@ Use this template for a new entry:
      reach the median of the method with a pool of 33.
   4. **The open question of D29 is partly answered.** The gain is not
      the rank order. This null cannot separate the sector spread from the
-     optimizer, because both stay the same in each draw. An equal weight
-     of the same pool (option 2) can separate them.
+     optimizer, because both stay the same in each draw. D33 separates
+     them: equal weight on the pool gives the same mean Sharpe ratio as
+     option B.
 - **A note on the percentiles:** The 85 windows overlap, so a percentile
   is a measure of this sample of windows, not a test of significance
   (D23, D31).
 - **What this does not change:** The defaults stay Monte Carlo with 10
   stocks. The user decides on option B.
 - **Results:** 2 rows in `results_log.md`.
-- **Commits:** `0e3cfdb`, and the commit of this entry.
+- **Commits:** `0e3cfdb` (the tests) and `f5ab2b6` (the documents).
 
 ---
 

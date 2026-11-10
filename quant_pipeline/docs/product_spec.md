@@ -46,7 +46,7 @@ past prices. The optimizer uses the estimates as facts.
    The project shows this: the in-sample Sharpe ratio is 5.32 and the
    realized one is 0.88. The exact solver does worse than the random
    search (D29). Equal weights beat the optimizer weights on the same
-   names (D33). DeMiguel, Garlappi and Uppal (2009) found that no
+   names (D33), inside the noise of the overlapping windows. DeMiguel, Garlappi and Uppal (2009) found that no
    mean-variance method of 14 beat 1/N out of sample.
 3. **The same data is used two times.** The screen selects the stocks
    with the highest past return. The optimizer then uses that past return
