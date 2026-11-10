@@ -232,3 +232,33 @@ def test_summarize_windows_without_capm_gives_nan_for_beta():
         [_window("2025-01-02", 0.20, 1.50, 0.10, 1.00)])
     assert math.isnan(summary["mean_beta"])
     assert math.isnan(summary["mean_alpha"])
+
+
+# --- windows_table ---------------------------------------------------------
+
+def _table_window(date: str, weights: dict, port: float, bench: float) -> dict:
+    """Build one window dict with the keys that backtest_window gives."""
+    return {"selection_date": pd.Timestamp(date), "weights": weights,
+            "portfolio": {"total_return": port, "sharpe": port * 10},
+            "benchmark": {"total_return": bench, "sharpe": bench * 10},
+            "sharpe_diff": (port - bench) * 10,
+            "capm": {"beta": 1.2, "alpha": 0.03}}
+
+
+def test_windows_table_gives_one_row_for_each_scored_window():
+    windows = [
+        _table_window("2025-02-10", {"AAA": 1.0}, 0.10, 0.05),
+        _table_window("2024-06-10", {"AAA": 1.0}, 0.02, 0.04),
+        # A window with no stock is not a result. The table drops it.
+        _table_window("2025-01-06", {}, 0.0, 0.03),
+    ]
+    table = backtest.windows_table(windows)
+    assert list(table.columns) == [
+        "selection_date", "portfolio_return", "portfolio_sharpe",
+        "benchmark_return", "benchmark_sharpe", "n_stocks"]
+    # The rows are in date order.
+    assert [str(d) for d in table["selection_date"]] == [
+        "2024-06-10", "2025-02-10"]
+    assert table["portfolio_return"].tolist() == [0.02, 0.10]
+    assert table["benchmark_sharpe"].tolist() == pytest.approx([0.4, 0.5])
+    assert table["n_stocks"].tolist() == [1, 1]

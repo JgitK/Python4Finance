@@ -141,6 +141,27 @@ def window_is_scored(window: dict[str, Any]) -> bool:
                 and np.isfinite(window["benchmark"]["total_return"]))
 
 
+def windows_table(windows: list[dict[str, Any]]) -> pd.DataFrame:
+    """Give one row for each scored window, in date order.
+
+    The table holds the return and the Sharpe ratio of the portfolio and
+    of the benchmark. A chart of all the windows reads this table.
+    """
+    rows = [
+        {"selection_date": w["selection_date"].date(),
+         "portfolio_return": w["portfolio"]["total_return"],
+         "portfolio_sharpe": w["portfolio"]["sharpe"],
+         "benchmark_return": w["benchmark"]["total_return"],
+         "benchmark_sharpe": w["benchmark"]["sharpe"],
+         "n_stocks": len(w["weights"])}
+        for w in windows if window_is_scored(w)
+    ]
+    columns = ["selection_date", "portfolio_return", "portfolio_sharpe",
+               "benchmark_return", "benchmark_sharpe", "n_stocks"]
+    table = pd.DataFrame(rows, columns=columns)
+    return table.sort_values("selection_date").reset_index(drop=True)
+
+
 def summarize_windows(windows: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize many walk-forward windows against the benchmark.
 

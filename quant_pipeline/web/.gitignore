@@ -1,0 +1,20 @@
+# Dependencies
+/node_modules
+
+# Next.js build output
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# Logs and local files
+npm-debug.log*
+.DS_Store
+.env*.local
+.vercel
+
+# Do not ignore the data folders. public/data/ and public/data-fixture/
+# are part of the app.
+!/public/data/
+!/public/data-fixture/

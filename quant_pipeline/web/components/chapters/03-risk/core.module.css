@@ -1,0 +1,167 @@
+/* Local styles for chapters 3, 4 and 5. The shared classes (.win, .pane-btn,
+   .chip-btn, .pane-select, .mono) come from app/globals.css. */
+
+.message {
+  margin: auto;
+  font-family: var(--font-mono), monospace;
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  padding: 24px;
+}
+
+.fill {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.fill > svg,
+.fill > canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+/* The sparkline card of chapter 3. */
+.spark { display: flex; flex-direction: column; gap: 3px; white-space: nowrap; width: 196px; }
+.sparkHead { overflow: hidden; }
+.sparkSector { overflow: hidden; text-overflow: ellipsis; }
+.sparkHead { display: flex; align-items: center; gap: 6px; }
+.sparkHead strong { font-size: 12.5px; }
+.sparkSector { color: var(--ink-soft); font-size: 11px; }
+.sparkNums { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+/* A footer line: a legend or a readout. */
+.footRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.footNote { font-size: 12px; color: var(--ink-soft); }
+.footNote strong, .readout strong { color: var(--ink); font-family: var(--font-mono), monospace; font-weight: 600; }
+
+.readout {
+  font-family: var(--font-mono), monospace;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Controls in a pane body: one row above the chart. */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-bottom: 8px;
+  font-family: var(--font-mono), monospace;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+.controls label { display: inline-flex; align-items: center; gap: 6px; }
+.slider {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono), monospace;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.slider + .slider { margin-top: 6px; }
+.slider input[type="range"] { width: 100%; accent-color: var(--sage-deep); min-width: 0; }
+.sliderLabel { min-width: 92px; }
+.sliderValue { min-width: 64px; text-align: right; color: var(--ink); }
+.hidden { visibility: hidden; }
+
+/* A swatch line for a legend. */
+.key { display: inline-flex; align-items: center; gap: 6px; }
+.keyLine { width: 18px; height: 0; border-top: 2px solid currentColor; display: inline-block; }
+.keyDash { width: 18px; height: 0; border-top: 2px dashed currentColor; display: inline-block; }
+.gradient { width: 90px; height: 8px; border-radius: 4px; display: inline-block; }
+
+/* The count of dots of the cloud, top right of the chart. */
+.counter {
+  position: absolute;
+  top: 2px;
+  right: 8px;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 1px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* Chapter 5: the cloud and the weights side by side, or stacked when narrow. */
+.split { flex: 1; min-height: 0; display: flex; gap: 12px; }
+.split.stack { flex-direction: column; gap: 6px; }
+.split > .fill { min-width: 0; }
+.weights {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  border-left: 1px dashed var(--line-soft);
+  padding-left: 12px;
+  overflow-y: auto;
+}
+.stack .weights {
+  width: auto;
+  border-left: 0;
+  padding-left: 0;
+  border-top: 1px dashed var(--line-soft);
+  padding-top: 6px;
+  max-height: 38%;
+}
+.weightsHead { font-family: var(--font-mono), monospace; }
+.weightsHead strong { color: var(--ink); font-size: 12.5px; display: block; }
+.weightsList { list-style: none; display: grid; gap: 3px; }
+.stack .weights { overflow: hidden; gap: 4px; }
+.stack .weightsHead { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+.segBar { display: flex; gap: 2px; height: 10px; }
+.segBar > span { display: block; min-width: 2px; height: 10px; border-radius: 3px; }
+.weightRow {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.weightRow .tick { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); overflow: hidden; }
+.weightRow .val { text-align: right; color: var(--ink); }
+.track { height: 8px; position: relative; }
+.bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 8px;
+  border-radius: 0 4px 4px 0;
+  transition: width 450ms var(--ease);
+}
+
+.btnRow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+/* A part of a footer that only shows when the pane has room (the ticker
+   labels and the hover card name the sector on a phone). */
+.wideOnly { display: contents; }
+
+@media (max-width: 940px) {
+  .wideOnly { display: none; }
+  .sliderLabel { min-width: 70px; }
+  .controls { margin-bottom: 4px; gap: 4px 10px; }
+  .footRow { gap: 4px 10px; font-size: 11px; }
+}

@@ -22,6 +22,39 @@ Use this template for a new entry:
 
 ---
 
+## D35. The user interface is a scrollytelling web page in Next.js
+
+- **Date:** 2026-11-09
+- **Role:** A product choice. It changes no default of the pipeline.
+- **Question:** D34 left the user interface open: Streamlit, or the old
+  R Shiny app.
+- **Options:**
+  1. Streamlit. It is the fastest path from the Python code.
+  2. The R Shiny app in `webapp/`.
+  3. A static web page with Next.js, React and D3. Python writes JSON
+     files, and the browser does the interactive math.
+- **Decision:** Option 3. The user asked for a page that teaches the
+  decision process by scroll, with the look of the personal site.
+  `docs/web_plan.md` holds the plan, and `web/` holds the app. The page
+  has seven chapters: pick the stocks, Ichimoku, risk and return,
+  correlation, the Monte Carlo frontier, the share plan, and the trust
+  checks of D34.
+- **Evidence:** `quant/export_web.py` writes the data of 156 tickers as
+  of 2026-10-30. The 5-year window has no stock, because the prices
+  start in late 2022. The scorecard of the page reads only output files.
+  `run_pipeline.py --many-windows` now writes
+  `output/walk_forward_windows.csv`. A second run with
+  `--optimizer exact --objective equal_weight` gives the equal-weight
+  rows on the same dates.
+- **Results:** On 85 windows, same settings: the optimizer has a mean
+  Sharpe ratio of 0.78, equal weight of the same 10 stocks 0.87, SPY
+  0.80, and the median of 200 random orders 0.66. The optimizer is at
+  the 89th percentile of the random orders on the mean Sharpe ratio.
+  The windows overlap, so the result is that the optimizer is not
+  better than equal weight (as in D33). 374 Python tests and 90
+  TypeScript tests pass, and `npm run build` passes.
+- **Commits:** See `git log -- quant_pipeline/web`.
+
 ## D34. Change the aim: an honest Markowitz tool, not a method that beats SPY
 
 - **Date:** 2026-11-09

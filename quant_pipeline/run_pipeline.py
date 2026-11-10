@@ -514,6 +514,9 @@ def main() -> None:
             backtest_returns, many_dates, HOLDING_PERIOD, build,
             universe.BENCHMARK, params.risk_free, params.trading_days)
         summary = backtest.summarize_windows(many_windows)
+        # One row for each window, for the scorecard chart of the web page.
+        backtest.windows_table(many_windows).to_csv(
+            OUTPUT_DIR / "walk_forward_windows.csv", index=False)
         print(f"Step 5b: ran {summary['n_windows']} windows with a step of "
               f"{args.window_step} days. "
               f"{summary['n_scored']} hold a result.")
