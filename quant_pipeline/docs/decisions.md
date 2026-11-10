@@ -22,6 +22,46 @@ Use this template for a new entry:
 
 ---
 
+## D34. Change the aim: an honest Markowitz tool, not a method that beats SPY
+
+- **Date:** 2026-11-09
+- **Role:** A change of the product aim. It changes no code and no
+  default.
+- **Question:** D22 to D33 tested many ways to beat SPY on a
+  risk-adjusted measure. None of them did it, except a wide pool, and an
+  equal weight of that pool does as well (D32, D33). The user asked why
+  Markowitz does not help, and what to do with the project.
+- **Options:**
+  1. Continue to search for a setting that beats SPY.
+  2. Change the aim. Build an interactive tool that follows Markowitz,
+     shows the uncertainty of the inputs, and shows when the method
+     breaks its assumptions.
+- **Decision:** Option 2. `docs/product_spec.md` holds the spec.
+- **Evidence:**
+  - Markowitz needs known expected returns and a known covariance. The
+    project estimates them from past prices. The standard error of an
+    annual mean is approximately the volatility divided by the square root
+    of the years: ±30% for one year of a stock with a volatility of 30%.
+  - The optimizer puts the most weight on the largest upward errors
+    (Michaud, 1989). The in-sample Sharpe ratio is 5.32 and the realized
+    one is 0.88. The exact solver does worse than the random search
+    (D29). Equal weights on the same names beat the optimizer weights
+    (D33). This agrees with DeMiguel, Garlappi and Uppal (2009).
+  - The screen ranks on the past return, and the optimizer uses the same
+    past return as the forecast. So the estimates have a selection bias.
+  - The user proposed a ranking window from 1 month to 5 years. A
+    different window does not remove the error. A short window has a
+    larger error (±104% for 1 month). The windows also measure different
+    effects: short-term reversal at 1 month, momentum at 3 to 12 months,
+    and long-term reversal at 3 to 5 years. The spec keeps the window
+    choice, and it shows the error range, the known effect, the rank
+    stability and the walk-forward result of each window.
+- **Results:** No number changed. The validation code of D16 to D33
+  becomes the assumption checks and the honest scorecard of the tool.
+- **Commits:** see the git log for this entry.
+
+---
+
 ## D33. Equal-weight controls for option B: the pool does the work, not the weights
 
 - **Date:** 2026-11-08

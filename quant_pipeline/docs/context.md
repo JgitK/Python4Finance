@@ -4,14 +4,54 @@ This file holds the context of the project and nothing else. It has no
 next steps and no plan. Read `handoff.md` beside it for the work that
 comes next.
 
-Last update: 2026-11-07. The docs describe the merge of D29, D30 and D31
-on the branch `dbt-duckdb-markowitz-pipeline`.
+Last update: 2026-11-09. The docs describe D32 and D33 and the change of
+aim in D34, on the branch `dbt-duckdb-markowitz-pipeline`.
+
+## The aim of the product (D34)
+
+The project no longer tries to beat SPY. The tool builds a Markowitz
+portfolio and shows how much the user can trust it: the error range of
+each input, a cloud of bootstrap frontiers, warning lights for each
+assumption, and an honest scorecard against equal weight, SPY and the
+random-order null. `docs/product_spec.md` holds the spec. The sections
+below describe the measurements that led to this aim.
+
+Why Markowitz does not help here:
+
+- Markowitz needs known expected returns and a known covariance. The
+  tool estimates them from past prices, and the optimizer uses the
+  estimates as facts.
+- The expected return is the weak input. Its standard error is
+  approximately the volatility divided by the square root of the years
+  of data: ±104% for 1 month, ±30% for 1 year, ±13% for 5 years, for a
+  stock with a volatility of 30%. The covariance becomes accurate much
+  faster.
+- The optimizer puts the most weight on the largest upward errors
+  (error maximisation, Michaud 1989). The in-sample Sharpe ratio of 5.32
+  against a realized 0.88 shows it. 1/N beats mean-variance out of
+  sample (DeMiguel, Garlappi and Uppal, 2009), and D33 repeats that
+  result.
+- The screen ranks on the past return, and the optimizer uses the same
+  return as its forecast. That is a selection bias.
+- In the CAPM the market portfolio is on the efficient frontier, so SPY
+  is a hard benchmark for a small set of stocks.
+- Markowitz is a risk tool. Minimum variance, Ledoit-Wolf shrinkage,
+  Black-Litterman and risk parity trust the mean less, and they work
+  better in practice.
+
+The user wants a ranking window from 1 month to 5 years. The window does
+not remove the error, and each window measures a different effect:
+short-term reversal at 1 month, momentum at 3 to 12 months, long-term
+reversal at 3 to 5 years. The spec keeps the choice and shows the error,
+the effect, the rank stability and the walk-forward result of each
+window.
 
 ## Paste this into the new chat
 
 > Read `quant_pipeline/docs/context.md` in the repository
 > JgitK/Python4Finance, branch `dbt-duckdb-markowitz-pipeline`. Then read
-> `docs/decisions.md` and the last rows of `docs/results_log.md`.
+> `docs/product_spec.md`, `docs/decisions.md` and the last rows of
+> `docs/results_log.md`.
 
 ## What the project is
 
@@ -185,6 +225,19 @@ two values and it has no default of its own.
   0.80 with a pool of 33 (0.87 against 0.81 on the step of 3 days), 61.2%
   of the windows on the Sharpe ratio, and a beta of 0.75. The median
   excess return falls from +7.05% to +3.67%. The defaults did not change.
+- **The rank order does not earn the Sharpe result of option B (D32).**
+  The null of D23 in the pool mode, 200 draws: the real pool of 33 sits
+  at the 59th percentile of the mean Sharpe ratio (null median 0.87),
+  and 172 of 200 random pools beat SPY. With a pool of 20 it sits at the
+  25th percentile. The median excess return sits at the 86th percentile.
+- **The optimizer weights do not help (D33).** Equal weight on all 33
+  names gives a mean Sharpe ratio of 0.88 (0.90 on the step of 3), the
+  same as option B, and a higher median excess (+5.01% against +3.67%).
+  Equal weight on the names that option B keeps gives 0.96 (0.92). The
+  low beta of option B (0.75) comes from its weights: the same names at
+  equal weight have a beta of 0.92. The realized volatility of option B
+  is 18.6% against 16.7% for SPY. The in-sample 11.3% is not a result.
+  So the wide pool across the sectors gives the gain.
 - **Two independent benchmarks agree.** SPY and the random order both say
   the same thing: the selection rule adds return, not risk-adjusted
   return.
@@ -335,7 +388,8 @@ question that is wrong when a part is wrong.
 
 | What | Where |
 |---|---|
-| Why each decision was made | `docs/decisions.md` (D1 to D33) |
+| The product spec (D34) | `docs/product_spec.md` |
+| Why each decision was made | `docs/decisions.md` (D1 to D34) |
 | How the results changed | `docs/results_log.md` (one row for each run) |
 | Problems that are not solved | `docs/open_questions.md` |
 | The work that comes next | `docs/handoff.md` |
