@@ -19,3 +19,7 @@ npm-debug.log*
 !/public/data/
 !/public/data-fixture/
 .env*
+
+# The root .gitignore ignores every lib/ folder (a Python template).
+# Keep the app code in lib/.
+!/lib/
