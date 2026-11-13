@@ -109,10 +109,54 @@ Use this template for a new entry:
   5. **The paper does not test this.** Its mean forecast is synthetic,
      with an information coefficient of 0.15 that uses future returns.
      This project uses a real forecast, the past year.
+- **The momentum regression (a follow-up of point 4):** The windows
+  overlap, so each arm becomes one daily series: on each day, the mean
+  return of every window that holds on that day (the overlapping
+  portfolios of Jegadeesh and Titman, 1993). The difference "arm minus
+  EW-pool" is then a long-short series. Each series is regressed on the
+  market and on UMD. The t statistics use Newey-West errors with 20
+  lags. The series cover 600 days, and 578 to 580 of them have French
+  data. Annual alphas:
+
+  | Series | Step | Market-only alpha (t) | Market + French UMD alpha (t) | UMD loading (t) | Market + in-house UMD alpha (t) |
+  |---|---|---|---|---|---|
+  | EW-pool | 5 | +2.71% (0.46) | +1.68% (0.28) | +0.13 (3.7) | +2.17% (0.37) |
+  | robust stderr | 5 | +11.66% (1.34) | +6.99% (0.81) | +0.31 (6.1) | +10.56% (1.21) |
+  | max_sharpe - EW | 5 | +4.38% (1.02) | +2.85% (0.66) | +0.00 (0.1) | +4.45% (1.03) |
+  | robust none - EW | 5 | +8.34% (1.76) | +5.27% (1.16) | +0.18 (5.8) | +7.75% (1.61) |
+  | **robust stderr - EW** | 5 | **+8.95% (1.81)** | **+5.31% (1.18)** | **+0.18 (6.4)** | +8.39% (1.66) |
+  | robust stderr - EW | 3 | +6.87% (1.51) | +4.23% (0.94) | +0.18 (6.0) | +5.91% (1.30) |
+
+  What the regression says:
+  1. **Momentum explains approximately 40% of the gain over equal
+     weight.** French UMD takes the alpha of the difference from +8.95%
+     to +5.31% (step 5), and from +6.87% to +4.23% (step 3). The UMD
+     loading of the difference is +0.18 with t near 6. It is the
+     strongest coefficient in the table.
+  2. **The rest is not significant.** No alpha of a difference reaches
+     t = 2, before or after UMD. After French UMD, the t statistic is
+     0.9 to 1.2.
+  3. **max_sharpe adds no momentum.** Its difference from EW has a UMD
+     loading of 0.00. Its weights lower the beta (-0.24), and they do
+     not tilt toward winners. The robust form tilts toward winners,
+     because it maximizes the mean at a fixed risk.
+  4. **`stderr` and `none` are the same in this view** (+5.31% against
+     +5.27% after UMD). The Sharpe gain of `stderr` in the table above
+     comes from a lower volatility inside each window, not from a
+     higher return.
+  5. **The in-house UMD explains less** (+8.39% after it). It uses the
+     stocks of the project, with their survivorship bias, so the French
+     factor is the primary result, as in D30.
+  6. **The verdict:** the robust forecasts give a portfolio that leans
+     on the momentum premium more than equal weight does. After that
+     premium, the remaining edge is +4% to +5% a year with a t statistic
+     near 1. That is not evidence of skill over equal weight.
+  The script ran outside the repository, from the builder of
+  `run_pipeline.py`, at commit `c698c89`.
 - **Results:** No default changed. Six rows in the results log (three
   robust arms on step 5 and on step 3).
-- **Commits:** `f2d2221` (the code and the tests) and the commit of this
-  entry.
+- **Commits:** `f2d2221` (the code and the tests), `c698c89` (this entry)
+  and the commit of the momentum regression.
 
 ## D35. The user interface is a scrollytelling web page in Next.js
 
