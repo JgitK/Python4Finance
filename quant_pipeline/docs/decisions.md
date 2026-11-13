@@ -22,6 +22,98 @@ Use this template for a new entry:
 
 ---
 
+## D36. Test the robust forecasts of Boyd et al. against equal weight
+
+- **Date:** 2026-11-12
+- **Role:** Protective measure, outside the core loop. It adds one
+  objective behind a switch. It changes no default.
+- **Question:** Boyd, Johansson, Kahn, Schiele and Schmelzer (2024),
+  "Markowitz Portfolio Construction at Seventy", section 3.5, make the
+  forecasts robust. Does that make the optimizer beat equal weight on
+  the same pool, which D33 showed that `max_sharpe` cannot do?
+- **Options:**
+  1. Robust inputs in the Max Sharpe ratio. A ratio with a worst-case
+     return that is negative for most stocks has no clear meaning.
+  2. The form of the paper: maximize the worst-case return under a limit
+     on the worst-case risk. The paper sets the limit at 10% a year.
+  3. Option 2 with the limit at the worst-case risk of 1/n on the same
+     stocks.
+- **Decision:** Option 3. The limit needs no new parameter, and 1/n is
+  always feasible. So the test asks one question: at the risk of equal
+  weight, do the robust forecasts give a better portfolio?
+- **The design:**
+  - `exact.OBJECTIVES` holds `robust`. The problem is: maximize
+    (mu - rho)' w, subject to w' (Sigma + varrho s s') w <= the same
+    value at 1/n, a sum of 1 and the weight bounds. For long-only
+    weights, this is equation 17 of the paper. SLSQP starts at 1/n, and
+    the function keeps 1/n when the solve does not improve on it.
+  - `--rho-rule` gives rho. `none` is 0. `paper` is the 20th percentile
+    of |mu| (section 5.2). `stderr` is the standard error of each annual
+    mean, the volatility divided by the square root of the years.
+  - `--varrho` gives the covariance uncertainty. The default is 0.02, as
+    in the paper.
+  - **A uniform rho does nothing to a long-only portfolio.** The weights
+    sum to 1, so (mu - c)' w = mu' w - c. The paper uses shorts and
+    leverage, where rho' |w| is a real penalty. Here only a rho that
+    differs by stock can change the weights. A test holds this.
+- **Tests and mutation checks:** 23 tests in `tests/test_robust.py`. The
+  parametrized bounds test of `test_exact_pipeline.py` also runs
+  `robust`. The tests came first and failed for the missing code. Nine
+  mutations, and each one failed a test: the standard error times the
+  square root, no varrho term, a solver that ignores rho, a risk limit
+  that ignores varrho (this one passed at first, so a test now checks
+  that the limit binds on the worst-case risk), a pipeline that drops
+  `rho_rule`, a label that drops the settings, no varrho guard, the
+  median for `paper`, and a solver that always gives 1/n.
+- **Evidence:** `sp500`, 10/10/3, `cum_return`, the pool mode with 33
+  names, 2% to 25%, commit `f2d2221`, `--skip-dbt` on the warehouse of
+  2026-11-09. All arms ran at this commit on the same windows. "Head to
+  head" is the share of the windows where the arm beats EW-pool on the
+  Sharpe ratio. The range is a 95% block bootstrap of the mean Sharpe
+  gain over EW-pool, with blocks of 36 windows (one holding period).
+
+  | Arm | Step | Mean Sharpe | Median excess | Head to head | Gain over EW | 95% range | Stocks | UMD |
+  |---|---|---|---|---|---|---|---|---|
+  | EW-pool | 5 | 0.88 | +5.01% | | | | 33.0 | +0.15 |
+  | B (max_sharpe) | 5 | 0.88 | +3.67% | 52.9% | +0.00 | -0.20 to +0.20 | 11.3 | +0.18 |
+  | robust none, 0 | 5 | 0.94 | +5.70% | 57.6% | +0.06 | -0.08 to +0.20 | 8.8 | +0.36 |
+  | robust paper, 0.02 | 5 | 0.95 | +5.55% | 58.8% | +0.07 | -0.08 to +0.22 | 8.7 | +0.36 |
+  | **robust stderr, 0.02** | 5 | **1.03** | **+7.64%** | **62.4%** | **+0.15** | -0.05 to +0.32 | 7.3 | +0.36 |
+  | EW-pool | 3 | 0.90 | +4.46% | | | | 33.0 | |
+  | B (max_sharpe) | 3 | 0.87 | +3.60% | 50.4% | -0.04 | -0.25 to +0.17 | 11.2 | |
+  | robust none, 0 | 3 | 0.91 | +5.77% | 53.9% | +0.01 | -0.16 to +0.20 | 9.0 | |
+  | robust paper, 0.02 | 3 | 0.92 | +5.62% | 55.3% | +0.02 | -0.14 to +0.20 | 8.9 | |
+  | **robust stderr, 0.02** | 3 | **0.97** | +5.73% | **59.6%** | **+0.07** | -0.12 to +0.25 | 7.2 | |
+
+  SPY has a mean Sharpe ratio of 0.80 (step 5) and 0.81 (step 3). The
+  paper asks for a change of 20% in each parameter. varrho 0.016 and
+  0.024 give 1.03 and 1.03, and varrho 0 gives 1.01 (step 5).
+- **What this says:**
+  1. **The robust form is the first optimizer that beats equal weight on
+     both date grids, and the gain is not proven.** The `stderr` arm
+     leads EW-pool by +0.15 and +0.07 in the mean Sharpe ratio and wins
+     60% to 62% of the windows. Every 95% range includes 0.
+  2. **The uncertainty of the mean does the work, not the covariance.**
+     varrho moves the result by 0.02 at most. `paper` matches `none`
+     within the noise of the solver, as the algebra says. `stderr` adds
+     +0.06 to +0.09 over `none`. It cuts the weight of the stocks with a
+     high volatility, so the signal becomes approximately mu - s.
+  3. **Part of the gain is the change of form.** `none` already beats
+     `max_sharpe` (+0.06 and +0.04). The risk limit of 1/n holds the
+     optimizer at the risk of equal weight. `max_sharpe` is free to
+     move along the frontier.
+  4. **The gain carries more momentum.** The UMD loading doubles from
+     +0.15 to +0.36, and the portfolio holds about 7 names, not 33. So a
+     part of the gain can be the known momentum premium of D30, not
+     skill. The mean is still the sample mean of one year.
+  5. **The paper does not test this.** Its mean forecast is synthetic,
+     with an information coefficient of 0.15 that uses future returns.
+     This project uses a real forecast, the past year.
+- **Results:** No default changed. Six rows in the results log (three
+  robust arms on step 5 and on step 3).
+- **Commits:** `f2d2221` (the code and the tests) and the commit of this
+  entry.
+
 ## D35. The user interface is a scrollytelling web page in Next.js
 
 - **Date:** 2026-11-09
