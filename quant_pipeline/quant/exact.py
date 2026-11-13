@@ -17,6 +17,10 @@ The four objectives are:
   of Rockafellar and Uryasev gives it.
 - `equal_weight`: 1/n for each stock. This is a control, not an optimizer
   (D33). In the pool mode, no stock drops, so it holds the whole pool.
+- `robust`: the robust Markowitz problem of Boyd et al. (2024), section
+  3.5 (D36). It maximizes the worst-case return (mu - rho)' w. The
+  worst-case risk w' (Sigma + varrho s s') w must stay at or below the
+  worst-case risk of equal weight on the same stocks.
 
 The setting `kept_weighting` of the pool mode has two values. `objective`
 keeps the weights of the last solve. `equal` keeps the names that the
@@ -35,8 +39,10 @@ import pandas as pd
 from scipy.optimize import linprog, minimize
 
 OBJECTIVES = ("max_sharpe", "min_variance", "max_sortino", "min_cvar",
-              "equal_weight")
+              "equal_weight", "robust")
 KEPT_WEIGHTINGS = ("objective", "equal")
+# The rules that give rho, the uncertainty of each annual mean (D36).
+RHO_RULES = ("none", "paper", "stderr")
 
 # The tolerance of the bound check. A sum of exactly 1 is feasible.
 _BOUND_TOLERANCE = 1e-12
@@ -324,6 +330,86 @@ def min_cvar_weights(scenarios: np.ndarray, min_weight: float,
     return _clean(result.x[:n], min_weight, max_weight)
 
 
+def mean_uncertainty(mu: np.ndarray, cov: np.ndarray, n_days: int,
+                     rule: str, trading_days: int = 252) -> np.ndarray:
+    """Give rho, the half-width of the range of each annual mean.
+
+    - `none`: 0. The forecast is a fact.
+    - `paper`: the 20th percentile of |mu| for every stock, as in section
+      5.2 of the paper. For a long-only, fully invested portfolio this
+      only shifts the objective, so it does not change the weights.
+    - `stderr`: the standard error of each annual mean, which is the
+      annual volatility divided by the square root of the years of data.
+    """
+    mu = np.asarray(mu, dtype=float)
+    if rule == "none":
+        return np.zeros(len(mu))
+    if rule == "paper":
+        return np.full(len(mu), float(np.quantile(np.abs(mu), 0.20)))
+    if rule == "stderr":
+        vols = np.sqrt(np.diag(np.asarray(cov, dtype=float)))
+        return vols / math.sqrt(n_days / trading_days)
+    raise ValueError(f"rho_rule must be one of {', '.join(RHO_RULES)}, "
+                     f"not {rule!r}.")
+
+
+def worst_case_variance(w: np.ndarray, cov: np.ndarray,
+                        varrho: float) -> float:
+    """Give the worst-case variance of equation 17 of the paper.
+
+    Each covariance can move by varrho * s_i * s_j. The worst case adds
+    varrho * (s' |w|)^2 to the variance.
+    """
+    w = np.asarray(w, dtype=float)
+    cov = np.asarray(cov, dtype=float)
+    vols = np.sqrt(np.diag(cov))
+    return float(w @ cov @ w + varrho * (vols @ np.abs(w)) ** 2)
+
+
+def robust_weights(mu: np.ndarray, rho: np.ndarray, cov: np.ndarray,
+                   varrho: float, min_weight: float,
+                   max_weight: float) -> np.ndarray:
+    """Maximize the worst-case return at the worst-case risk of 1/n.
+
+    The problem is: maximize (mu - rho)' w, subject to
+    worst_case_variance(w) <= worst_case_variance(1/n), the weights sum
+    to 1, and each weight is inside the bounds. The weights are long only,
+    so the worst-case variance is w' (Sigma + varrho s s') w, which is
+    smooth. Equal weight is feasible, so SLSQP starts from it. The
+    function keeps the best feasible point of the start and the solve.
+    """
+    mu = np.asarray(mu, dtype=float)
+    cov = np.asarray(cov, dtype=float)
+    n = len(mu)
+    check_bounds(n, min_weight, max_weight)
+    if min_weight < 0.0:
+        raise ValueError("The robust objective is long only.")
+    vols = np.sqrt(np.diag(cov))
+    # Divide by the trace, so the tolerances mean the same for each input.
+    scale = float(np.trace(cov))
+    worst = (cov + varrho * np.outer(vols, vols)) / scale
+    signal = mu - np.asarray(rho, dtype=float)
+    start = np.full(n, 1.0 / n)
+    limit = float(start @ worst @ start)
+
+    result = minimize(
+        lambda w: -float(signal @ w), start, jac=lambda w: -signal,
+        method="SLSQP", bounds=[(min_weight, max_weight)] * n,
+        constraints=[
+            {"type": "eq", "fun": lambda w: w.sum() - 1.0,
+             "jac": lambda w: np.ones_like(w)},
+            {"type": "ineq", "fun": lambda w: limit - w @ worst @ w,
+             "jac": lambda w: -2.0 * worst @ w},
+        ],
+        options={"ftol": _FTOL, "maxiter": 1000},
+    )
+    solved = _clean(result.x, min_weight, max_weight)
+    if float(solved @ worst @ solved) <= limit * (1.0 + 1e-6) and \
+            float(signal @ solved) > float(signal @ start):
+        return solved
+    return start
+
+
 def equal_weights(returns: pd.DataFrame, risk_free: float = 0.045,
                   trading_days: int = 252) -> dict[str, Any]:
     """Give 1/n to each stock of the frame, with the measures of `solve`.
@@ -343,12 +429,14 @@ def equal_weights(returns: pd.DataFrame, risk_free: float = 0.045,
 
 def solve(returns: pd.DataFrame, objective: str, min_weight: float,
           max_weight: float, risk_free: float = 0.045,
-          trading_days: int = 252) -> dict[str, Any]:
+          trading_days: int = 252, rho_rule: str = "stderr",
+          varrho: float = 0.02) -> dict[str, Any]:
     """Find the exact weights of one objective.
 
     Return the weights by ticker, the annual return, the annual volatility
     and the Sharpe ratio. The measures use the same formulas as
-    `quant.optimize.portfolio_performance`.
+    `quant.optimize.portfolio_performance`. Only the objective `robust`
+    uses `rho_rule` and `varrho`.
     """
     if objective not in OBJECTIVES:
         raise ValueError(
@@ -373,6 +461,13 @@ def solve(returns: pd.DataFrame, objective: str, min_weight: float,
         weights = max_sortino_weights(returns.to_numpy(), min_weight,
                                       max_weight, risk_free, trading_days,
                                       starts)
+    elif objective == "robust":
+        mu = returns.mean().to_numpy() * trading_days
+        annual_cov = cov * trading_days
+        rho = mean_uncertainty(mu, annual_cov, len(returns), rho_rule,
+                               trading_days)
+        weights = robust_weights(mu, rho, annual_cov, varrho, min_weight,
+                                 max_weight)
     else:
         weights = min_cvar_weights(returns.to_numpy(), min_weight,
                                    max_weight)
@@ -473,6 +568,13 @@ def check_settings(params: Any) -> None:
             raise ValueError("The monte_carlo optimizer has no weight "
                              "bounds, so it cannot use the pool mode. Use "
                              "--optimizer exact.")
+    rule = getattr(params, "rho_rule", "stderr")
+    if rule not in RHO_RULES:
+        raise ValueError(f"rho_rule must be one of {', '.join(RHO_RULES)}, "
+                         f"not {rule!r}.")
+    varrho = getattr(params, "varrho", 0.02)
+    if not 0.0 <= varrho < 1.0:
+        raise ValueError(f"varrho must be in [0, 1), not {varrho}.")
     kept = getattr(params, "kept_weighting", "objective")
     if kept not in KEPT_WEIGHTINGS:
         raise ValueError(f"kept_weighting must be one of "
@@ -510,7 +612,7 @@ def optimize_weights(returns: pd.DataFrame, params: Any) -> dict[str, Any]:
 
     def solver(frame: pd.DataFrame, low: float, high: float):
         return solve(frame, params.objective, low, high, params.risk_free,
-                     params.trading_days)
+                     params.trading_days, params.rho_rule, params.varrho)
 
     if params.size_mode == "pool":
         result = prune_pool(returns, solver, params.min_weight,
@@ -544,7 +646,10 @@ def optimizer_label(params: Any) -> str:
             else "fixed")
     low = round(params.min_weight * 100, 6)
     high = round(params.max_weight * 100, 6)
-    label = f"exact {params.objective} {low:g}-{high:g}% {size}"
+    objective = params.objective
+    if objective == "robust":
+        objective += f"(rho={params.rho_rule},varrho={params.varrho:g})"
+    label = f"exact {objective} {low:g}-{high:g}% {size}"
     if params.kept_weighting == "equal":
         label += " kept-equal"
     return label

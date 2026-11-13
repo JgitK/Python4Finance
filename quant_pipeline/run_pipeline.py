@@ -323,6 +323,17 @@ def make_parser() -> argparse.ArgumentParser:
                              "optimizer in the pool mode. equal keeps the "
                              "same stocks and gives each the same weight. "
                              f"The default is {default.kept_weighting}.")
+    # The robust objective. See decision D36.
+    parser.add_argument("--rho-rule", default=default.rho_rule,
+                        choices=list(exact.RHO_RULES),
+                        help="The uncertainty of each mean for the robust "
+                             "objective: none, paper (the 20th percentile "
+                             "of |mu|) or stderr (the standard error of "
+                             f"each mean). The default is {default.rho_rule}.")
+    parser.add_argument("--varrho", type=float, default=default.varrho,
+                        help="The uncertainty of the covariance for the "
+                             "robust objective. The default is "
+                             f"{default.varrho}.")
     return parser
 
 
@@ -338,7 +349,9 @@ def params_from_args(args: argparse.Namespace) -> pipeline.PortfolioParams:
                                     max_weight=args.max_weight,
                                     size_mode=args.size_mode,
                                     pool_size=args.pool_size,
-                                    kept_weighting=args.kept_weighting)
+                                    kept_weighting=args.kept_weighting,
+                                    rho_rule=args.rho_rule,
+                                    varrho=args.varrho)
 
 
 def caps_label(args: argparse.Namespace) -> str:

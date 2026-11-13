@@ -53,6 +53,11 @@ class PortfolioParams:
     # keeps the weights of the solver. equal gives 1/k to each of the k
     # stocks. This is a control that tests the weights of the optimizer.
     kept_weighting: str = "objective"
+    # The robust objective of Boyd et al. (2024), section 3.5 (D36).
+    # rho_rule gives the uncertainty of each mean, and varrho gives the
+    # uncertainty of the covariance. Only the objective robust uses them.
+    rho_rule: str = "stderr"
+    varrho: float = 0.02
 
 
 # The points of the capital allocation line in the live output (D25).
