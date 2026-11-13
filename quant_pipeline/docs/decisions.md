@@ -151,12 +151,23 @@ Use this template for a new entry:
      on the momentum premium more than equal weight does. After that
      premium, the remaining edge is +4% to +5% a year with a t statistic
      near 1. That is not evidence of skill over equal weight.
-  The script ran outside the repository, from the builder of
-  `run_pipeline.py`, at commit `c698c89`.
+  The first run of the regression used a script outside the repository.
+  `momentum_vs_equal_weight.py` and `quant/overlap.py` now hold it, and
+  they give the same numbers to the last digit. Run
+  `python momentum_vs_equal_weight.py --window-step 5` after a dbt
+  build. It writes `output/momentum_vs_equal_weight.csv`.
+  `tests/test_overlap.py` holds 17 tests. They came first and failed for
+  the missing module. Ten mutations: nine failed a test. The tenth
+  replaced `cross + cross.T` with `2 * cross` in the Newey-West sum. No
+  test can catch it, because the diagonal of B C B equals the diagonal
+  of B C' B when B is symmetric, so the standard errors do not change.
+  A test that compares the sum with a double loop over the pairs of
+  days stays as an independent check.
 - **Results:** No default changed. Six rows in the results log (three
   robust arms on step 5 and on step 3).
-- **Commits:** `f2d2221` (the code and the tests), `c698c89` (this entry)
-  and the commit of the momentum regression.
+- **Commits:** `f2d2221` (the code and the tests), `c698c89` (this
+  entry), `9683596` (the momentum regression) and the commit of the
+  regression script.
 
 ## D35. The user interface is a scrollytelling web page in Next.js
 

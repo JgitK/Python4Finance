@@ -57,6 +57,7 @@ quant_pipeline/
 │   ├── optimize.py     Markowitz Max Sharpe optimization.
 │   ├── allocate.py     Weights to whole shares.
 │   ├── backtest.py     Walk-forward backtest.
+│   ├── overlap.py      Overlapping daily series and the momentum regression.
 │   └── pipeline.py     Join the select and optimize steps.
 ├── data/               The raw prices as a Parquet file. dbt reads it.
 ├── docs/               The decisions, the results log, and the open questions.
@@ -70,6 +71,7 @@ quant_pipeline/
 │   └── tests/          Singular tests for uniqueness and consistency.
 ├── tests/              The pytest suite for the Python layer.
 ├── run_pipeline.py     Run the whole pipeline end to end.
+├── momentum_vs_equal_weight.py  Measure the momentum in the gain over equal weight (D36).
 └── verify_indicators.py  Check the numbers against an independent calculation.
 ```
 
